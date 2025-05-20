@@ -12,11 +12,11 @@ import { generateKey } from "../storage/keyManager";
  */
 export function registerGenerateKeyCommand(app: App, plugin: Plugin) {
   plugin.addCommand({
-    id: "generate-access-key",            // 🔑 Internal ID for the command
-    name: "Generate Access Key",          // 📋 Name shown in the command palette
+    id: "generate-access-key",            // Internal ID for the command
+    name: "Generate Access Key",          // Name shown in the command palette
     callback: () => {
-      const noteId = "test-note";         // 🧪 Replace with your actual note ID
-      const accessType = "edit";          // 🧪 Can also be "view" or "admin"
+      const noteId = "test-note";         // Replace with your actual note ID
+      const accessType = "edit";          // Can also be "view" or "admin"
 
       const key = generateKey(noteId, accessType);
 
