@@ -1,7 +1,25 @@
+import { Modal, App } from "obsidian";
 import type MyPlugin from "../main";
 
+export class SettingsModal extends Modal {
+	plugin: MyPlugin;
+
+	constructor(app: App, plugin: MyPlugin) {
+		super(app);
+		this.plugin = plugin;
+	}
+
+	onOpen() {
+		renderSettingsPage(this.contentEl, this.plugin);
+	}
+
+	onClose() {
+		this.contentEl.empty();
+	}
+}
+
 export function renderSettingsPage(container: HTMLElement, plugin: MyPlugin) {
-	container.empty(); // clear popup content
+	container.empty();
 
 	// Title
 	container.createEl("h2", { text: "Settings" });
@@ -12,19 +30,17 @@ export function renderSettingsPage(container: HTMLElement, plugin: MyPlugin) {
 		placeholder: "Enter or generate key...",
 	});
 
-	// Button to generate key
 	const generateBtn = container.createEl("button", { text: "Generate" });
 	generateBtn.onclick = () => {
-		keyInput.value = generateRandomKey(); // put random key in box
+		keyInput.value = generateRandomKey();
 	};
 
-	// Input for note name
 	const noteInput = container.createEl("input", {
 		type: "text",
 		placeholder: "Note name...",
 	});
 
-	// Create access type checkboxes
+	// Access checkboxes
 	const accessTypes = ["View", "Edit", "View and Comment", "Edit w/ Approval"];
 	const checkboxes: Record<string, HTMLInputElement> = {};
 	const accessDiv = container.createDiv();
@@ -39,21 +55,21 @@ export function renderSettingsPage(container: HTMLElement, plugin: MyPlugin) {
 		checkboxes[type] = checkbox;
 	});
 
-	// Add the inputs and buttons to the screen
-	container.appendChild(keyInput);
-	container.appendChild(generateBtn);
-	container.appendChild(noteInput);
-	container.appendChild(accessDiv);
+	container.append(keyInput, generateBtn, noteInput, accessDiv);
 
 	// Navigation buttons
 	const listBtn = container.createEl("button", { text: "List of keys" });
 	const linkBtn = container.createEl("button", { text: "Link Note" });
 
-	container.appendChild(listBtn);
-	container.appendChild(linkBtn);
+	container.append(listBtn, linkBtn);
+
+	// Import and show the KeyListModal when clicking list
+	listBtn.onclick = async () => {
+		const { KeyListModal } = await import("./key_list_page02");
+		new KeyListModal(plugin.app, plugin).open();
+	};
 }
 
-// Simple random key maker
 function generateRandomKey(): string {
 	return Math.random().toString(36).slice(2, 10);
 }
