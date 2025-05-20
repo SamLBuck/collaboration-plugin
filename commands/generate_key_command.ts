@@ -16,7 +16,7 @@ plugin.addCommand({
     name: "Generate Access Key",          // Name shown in the command palette
     callback: () => {
       const noteId = "test-note";         // Replace with your actual note ID
-      const accessType = "edit";          // Can also be "view" or "admin"
+      const accessType = "view";
 
        const key = generateKey(noteId, accessType);
 
