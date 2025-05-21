@@ -1,5 +1,3 @@
-// add_key_command.ts
-
 import { App, Modal, Notice, Plugin } from "obsidian";
 import { addKey, generateKey } from "../storage/keyManager";
 
@@ -25,7 +23,6 @@ class AddKeyModal extends Modal {
 
     contentEl.createEl("h2", { text: "Add a New Key" });
 
-    // Create an input field to manually enter a key
     this.inputEl = contentEl.createEl("input", {
       type: "text",
       placeholder: "Enter a new key name (or leave blank for random)",
@@ -50,7 +47,7 @@ class AddKeyModal extends Modal {
       return;
     }
 
-    const success = addKey(keyName);
+    const success = await addKey(this.app, keyName);
     if (success) {
       new Notice(`Key "${keyName}" added successfully.`);
       this.close();
@@ -60,9 +57,8 @@ class AddKeyModal extends Modal {
   }
 
   async addRandomKey() {
-    // Using default 'noteId' and 'accessType' for random key generation
-    const newKey = generateKey("defaultNote", "admin");
-    const success = addKey(newKey);
+    const newKey = await generateKey(this.app, "defaultNote", "admin");
+    const success = await addKey(this.app, newKey);
     if (success) {
       new Notice(`Random Key "${newKey}" added successfully.`);
       this.close();
@@ -71,3 +67,4 @@ class AddKeyModal extends Modal {
     }
   }
 }
+
