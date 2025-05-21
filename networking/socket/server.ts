@@ -1,11 +1,27 @@
 import WebSocket from "ws";
+import { App, MarkdownView } from "obsidian";
 
+
+
+function getCurrentFileText(app: App): string | null {
+	const view = app.workspace.getActiveViewOfType(MarkdownView);
+	if (view) {
+		return view.editor.getValue();
+	}
+	return null;
+}
+
+export async function startWebSocketServer(app: App, ip: string, port: number) {
 
 const sharedNotes = new Map([
   ["test", "# This is a shared note from the creator vaul."]
 ]);
 
-const wss = new WebSocket.Server({ port: 3010 });
+const noteText = getCurrentFileText(app);
+sharedNotes.set("my-shared-note", noteText ?? "Empty note");
+
+
+const wss = new WebSocket.Server({ port: port });
 
 wss.on("connection", (socket) => {
   console.log("Viewer connected");
@@ -33,3 +49,4 @@ wss.on("connection", (socket) => {
 });
 
 console.log("Server running at ws://localhost:3010");
+}
