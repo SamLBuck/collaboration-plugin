@@ -40,9 +40,10 @@ export class KeyListModal extends Modal {
 		const keyInput = contentEl.createEl("input", { placeholder: "Key name..." });
 		const noteInput = contentEl.createEl("input", { placeholder: "Note name..." });
 		const accessSelect = contentEl.createEl("select");
-		["View", "Edit", "View and Comment", "Edit w/ Approval"].forEach((type) => {
+		["View"].forEach((type) => {
 			accessSelect.createEl("option", { text: type });
 		});
+        //, "Edit", "Comment", "Edit w/ Approval" will come later
 
 		const addBtn = contentEl.createEl("button", { text: "Add Key" });
 		addBtn.onclick = () => {
