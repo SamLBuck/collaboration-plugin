@@ -1,3 +1,4 @@
+import { requestNoteFromPeer } from 'networking/socket/client';
 import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
 
 interface MyPluginSettings {
@@ -34,6 +35,21 @@ export default class MyPlugin extends Plugin {
 			name: 'Update Version',
 				// TODO
 		});
+		  this.addCommand({
+			id: "pull-note-from-peer",
+			name: "Pull Note from Peer (ws://localhost:3010)",
+			callback: async () => {
+			  try {
+				const content = await requestNoteFromPeer("ws://localhost:3010", "test");
+				const file = await this.app.vault.create("Pulled Note.md", content);
+				new Notice("Note pulled and created.");
+			  } catch (e) {
+				new Notice("Failed to pull note: " + e);
+			  }
+			}
+		  });
+		  
+		  
 		this.addSettingTab(new SampleSettingTab(this.app, this));
 
 		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
