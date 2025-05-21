@@ -68,6 +68,12 @@ export class SettingsModal extends Modal {
 			const { KeyListModal } = await import("./key_list_page02");
 			new KeyListModal(this.app, this.plugin).open();
 		};
+
+		linkBtn.onclick = async () => {
+			const { LinkNoteModal } = await import("./link_note_page03");
+			new LinkNoteModal(this.app, this.plugin).open();
+		};
+		
 	}
 
 	private generateRandomKey(): string {
