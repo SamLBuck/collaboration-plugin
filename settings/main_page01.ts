@@ -1,6 +1,7 @@
 import { Modal, App } from "obsidian";
 import type MyPlugin from "../main";
 
+
 export class SettingsModal extends Modal {
 	plugin: MyPlugin;
 
@@ -32,7 +33,7 @@ export class SettingsModal extends Modal {
 
 		const generateBtn = container.createEl("button", { text: "Generate" });
 		generateBtn.onclick = () => {
-			keyInput.value = this.generateRandomKey();
+			//keyInput.value = this.generateKey();
 		};
 
 		const noteInput = container.createEl("input", {
@@ -76,8 +77,5 @@ export class SettingsModal extends Modal {
 		
 	}
 
-	private generateRandomKey(): string {
-		return Math.random().toString(36).slice(2, 10);
-	}
 }
 

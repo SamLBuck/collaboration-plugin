@@ -6,10 +6,18 @@ import { requestNoteFromPeer } from './networking/socket/client';
 
 interface MyPluginSettings {
   mySetting: string;
+  keys: keyArray[];
 }
 
+interface keyArray{
+	keys: string; 
+}	
+
 const DEFAULT_SETTINGS: MyPluginSettings = {
-  mySetting: 'default',
+	keys: [
+		{ keys: "obs-collab://192.168.1.42:3010/note/test" }
+	],
+	mySetting: ''
 };
 
 export default class MyPlugin extends Plugin {
