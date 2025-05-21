@@ -1,5 +1,3 @@
-// delete_key_command.ts
-
 import { App, Modal, Notice, Plugin } from "obsidian";
 import { deleteKey, listKeys } from "../storage/keyManager";
 
@@ -18,9 +16,9 @@ class DeleteKeyModal extends Modal {
     super(app);
   }
 
-  onOpen() {
+  async onOpen() {
     const { contentEl } = this;
-    const keys = listKeys();
+    const keys = await listKeys(this.app);
 
     contentEl.createEl("h2", { text: "Delete a Key" });
 
@@ -33,8 +31,8 @@ class DeleteKeyModal extends Modal {
 
     keys.forEach((key) => {
       const button = listContainer.createEl("button", { text: `Delete "${key}"` });
-      button.onclick = () => {
-        const success = deleteKey(key);
+      button.onclick = async () => {
+        const success = await deleteKey(this.app, key);
         if (success) {
           new Notice(`Key "${key}" deleted successfully.`);
         } else {
@@ -49,4 +47,5 @@ class DeleteKeyModal extends Modal {
     this.contentEl.empty();
   }
 }
+
 
