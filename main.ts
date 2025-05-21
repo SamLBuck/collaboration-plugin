@@ -4,6 +4,7 @@ import { registerAddKeyCommand } from './commands/add_key_command';
 import { registerDeleteKeyCommand } from './commands/delete_key_command';
 import { requestNoteFromPeer } from './networking/socket/client';
 import { PullConfirmationModal } from './settings/pull_confirmation_modal';
+import { PluginSettingsTab } from "./settings/plugin_setting_tab";
 
 interface MyPluginSettings {
   mySetting: string;
@@ -95,6 +96,7 @@ export default class MyPlugin extends Plugin {
 
     // Plugin settings tab
     this.addSettingTab(new SampleSettingTab(this.app, this));
+	this.addSettingTab(new PluginSettingsTab(this.app, this));
 
     // Register any global events if needed
     this.registerDomEvent(document, 'click', (evt: MouseEvent) => {});
