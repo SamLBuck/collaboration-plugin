@@ -1,10 +1,10 @@
 import { App, Plugin, PluginSettingTab, Setting, Modal, Notice } from 'obsidian';
-import { registerGenerateKeyCommand } from './commands/generate_key_command';
-import { registerAddKeyCommand } from './commands/add_key_command';
-import { registerDeleteKeyCommand } from './commands/delete_key_command';
+import { registerGenerateKeyCommand } from './utils/generate_key_command';
+import { registerAddKeyCommand } from './utils/add_key_command';
+import { registerDeleteKeyCommand } from './utils/delete_key_command';
 import { requestNoteFromPeer } from './networking/socket/client';
-import { PullConfirmationModal } from './settings/pull_confirmation_modal';
-import { PluginSettingsTab } from "./settings/plugin_setting_tab";
+import { startWebSocketServer } from './networking/socket/server';
+
 
 interface MyPluginSettings {
   mySetting: string;
@@ -55,21 +55,49 @@ export default class MyPlugin extends Plugin {
       const { LinkNoteModal } = await import('./settings/link_note_page03');
       new LinkNoteModal(this.app, this).open();
     });
+	this.addCommand({
+		id: "generate-share-key",
+		name: "Generate Share Key",
+		callback: async () => {
+		  const ip = await this.getUserIp("Enter your IP address:");
+		  const key = "my-shared-note";
+		  const shareLink = `obs-collab://${ip}:3010/note/${key}`;
+		  startWebSocketServer(this.app, shareLink, 3010); // should be called before sharing
+		  //const ip = await this.getUserIp("Enter your IP address:");
+		  await navigator.clipboard.writeText(shareLink);
+		  new Notice("Share key copied to clipboard");
+		}
+	  });
 
     // Pull note from peer command
-    this.addCommand({
-      id: "pull-note-from-peer",
-      name: "Pull Note from Peer (ws://localhost:3010)",
-      callback: async () => {
-        try {
-          const content = await requestNoteFromPeer("ws://localhost:3010", "test");
-          const file = await this.app.vault.create("Pulled Note.md", content);
-          new Notice("Note pulled and created.");
-        } catch (e) {
-          new Notice("Failed to pull note: " + e);
-        }
-      }
-    });
+	this.addCommand({
+		id: "pull-note-from-peer",
+		name: "Pull Note from Peer",
+		callback: async () => {
+		  const shareKey = window.prompt("Paste the share key:");
+		  if (!shareKey) return;
+	  
+		  try {
+			const { ip, port, key } = parseShareKey(shareKey);
+			const wsUrl = `ws://${ip}:${port}`;
+			const content = await requestNoteFromPeer(wsUrl, key);
+			await this.app.vault.create("Pulled Note.md", content);
+			new Notice("Note pulled and created.");
+		  } catch (e) {
+			new Notice("Failed to pull note: " + e);
+		  }
+		}
+	  });
+
+	  function parseShareKey(shareKey: string): { ip: string; port: number; key: string } {
+		const match = shareKey.match(/^obs-collab:\/\/([\d.]+):(\d+)\/note\/(.+)$/);
+		if (!match) throw new Error("Invalid share key format");
+		return { ip: match[1], port: parseInt(match[2]), key: match[3] };
+	  }
+	
+		  
+	//const content = await requestNoteFromPeer("ws://localhost:3010", "test");
+
 
     // Publish version command
     this.addCommand({
@@ -80,23 +108,8 @@ export default class MyPlugin extends Plugin {
       },
     });
 
-	this.addCommand({
-		id: "db-pull-request",
-		name: "Pull Note from Database",
-		callback: () => {
-			new PullConfirmationModal(this.app, async (key, note) => {
-				// Here you would implement the logic to pull the note from the DB using the key & note
-				new Notice(`Pulling data with key: ${key} and note: ${note}`);
-				// Example placeholder:
-				// const content = await yourPullFunction(key, note);
-				// await this.app.vault.create(`${note}.md`, content);
-			}).open();
-		}
-	});	
-
     // Plugin settings tab
     this.addSettingTab(new SampleSettingTab(this.app, this));
-	this.addSettingTab(new PluginSettingsTab(this.app, this));
 
     // Register any global events if needed
     this.registerDomEvent(document, 'click', (evt: MouseEvent) => {});
@@ -104,7 +117,13 @@ export default class MyPlugin extends Plugin {
     // Background task
     this.registerInterval(window.setInterval(() => console.log('Interval running'), 5 * 60 * 1000));
   }
-
+  async getUserIp(promptText: string): Promise<string> {
+	return await new Promise((resolve) => {
+	  const ip = window.prompt(promptText, "192.168.1.42");
+	  resolve(ip ?? "127.0.0.1");
+	});
+  }
+  
   onunload() {
     new Notice('Plugin is unloading!');
     this.publishVersion();
@@ -151,3 +170,5 @@ class SampleSettingTab extends PluginSettingTab {
       );
   }
 }
+
+
