@@ -3,6 +3,8 @@ import { registerGenerateKeyCommand } from './commands/generate_key_command';
 import { registerAddKeyCommand } from './commands/add_key_command';
 import { registerDeleteKeyCommand } from './commands/delete_key_command';
 import { requestNoteFromPeer } from './networking/socket/client';
+import { PullConfirmationModal } from './settings/pull_confirmation_modal';
+import { PluginSettingsTab } from "./settings/plugin_setting_tab";
 
 interface MyPluginSettings {
   mySetting: string;
@@ -78,8 +80,23 @@ export default class MyPlugin extends Plugin {
       },
     });
 
+	this.addCommand({
+		id: "db-pull-request",
+		name: "Pull Note from Database",
+		callback: () => {
+			new PullConfirmationModal(this.app, async (key, note) => {
+				// Here you would implement the logic to pull the note from the DB using the key & note
+				new Notice(`Pulling data with key: ${key} and note: ${note}`);
+				// Example placeholder:
+				// const content = await yourPullFunction(key, note);
+				// await this.app.vault.create(`${note}.md`, content);
+			}).open();
+		}
+	});	
+
     // Plugin settings tab
     this.addSettingTab(new SampleSettingTab(this.app, this));
+	this.addSettingTab(new PluginSettingsTab(this.app, this));
 
     // Register any global events if needed
     this.registerDomEvent(document, 'click', (evt: MouseEvent) => {});
