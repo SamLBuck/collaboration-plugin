@@ -9,7 +9,7 @@ export function registerGenerateKeyCommand(app: App, plugin: Plugin) {
       const noteId = "test-note";
       const accessType = "view";
 
-      const key = await generateKey(app, noteId, accessType);
+      const key = await generateKey(this.plugin, noteId, accessType); // Pass plugin to generateKey
 
       if (key) {
         new Notice(`Key created: ${key}`);
@@ -19,4 +19,5 @@ export function registerGenerateKeyCommand(app: App, plugin: Plugin) {
     },
   });
 }
+
 

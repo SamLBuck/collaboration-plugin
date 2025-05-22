@@ -1,24 +1,28 @@
 import { App, Modal, Notice, Plugin } from "obsidian";
 import { deleteKey, listKeys } from "../storage/keyManager";
+import MyPlugin from "../main"; // Import MyPlugin
 
-export function registerDeleteKeyCommand(plugin: Plugin) {
+export function registerDeleteKeyCommand(plugin: MyPlugin) {  // Use MyPlugin here
   plugin.addCommand({
     id: "delete-key",
     name: "Delete a Stored Key",
     callback: () => {
-      new DeleteKeyModal(plugin.app).open();
+      new DeleteKeyModal(plugin).open();  // Pass MyPlugin here
     },
   });
 }
 
 class DeleteKeyModal extends Modal {
-  constructor(app: App) {
-    super(app);
+  plugin: MyPlugin;  // Use MyPlugin here
+
+  constructor(plugin: MyPlugin) {
+    super(plugin.app);
+    this.plugin = plugin;
   }
 
   async onOpen() {
     const { contentEl } = this;
-    const keys = await listKeys(this.app);
+    const keys = await listKeys(this.plugin); // Use MyPlugin to list keys
 
     contentEl.createEl("h2", { text: "Delete a Key" });
 
@@ -29,10 +33,10 @@ class DeleteKeyModal extends Modal {
 
     const listContainer = contentEl.createEl("div");
 
-    keys.forEach((key) => {
+    keys.forEach((key: string) => {
       const button = listContainer.createEl("button", { text: `Delete "${key}"` });
       button.onclick = async () => {
-        const success = await deleteKey(this.app, key);
+        const success = await deleteKey(this.plugin, key); // Pass MyPlugin to deleteKey
         if (success) {
           new Notice(`Key "${key}" deleted successfully.`);
         } else {
@@ -47,5 +51,6 @@ class DeleteKeyModal extends Modal {
     this.contentEl.empty();
   }
 }
+
 
 

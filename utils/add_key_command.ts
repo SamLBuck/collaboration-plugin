@@ -1,21 +1,24 @@
 import { App, Modal, Notice, Plugin } from "obsidian";
 import { addKey, generateKey } from "../storage/keyManager";
+import MyPlugin from "../main"; // Import MyPlugin
 
-export function registerAddKeyCommand(plugin: Plugin) {
+export function registerAddKeyCommand(plugin: MyPlugin) {  // Use MyPlugin here
   plugin.addCommand({
     id: "add-key",
     name: "Add a Key to Collection",
     callback: () => {
-      new AddKeyModal(plugin.app).open();
+      new AddKeyModal(plugin).open();  // Pass MyPlugin here
     },
   });
 }
 
 class AddKeyModal extends Modal {
   inputEl: HTMLInputElement;
+  plugin: MyPlugin;  // Use MyPlugin here
 
-  constructor(app: App) {
-    super(app);
+  constructor(plugin: MyPlugin) {
+    super(plugin.app);
+    this.plugin = plugin;
   }
 
   onOpen() {
@@ -47,7 +50,7 @@ class AddKeyModal extends Modal {
       return;
     }
 
-    const success = await addKey(this.app, keyName);
+    const success = await addKey(this.plugin, keyName); // Pass MyPlugin instance
     if (success) {
       new Notice(`Key "${keyName}" added successfully.`);
       this.close();
@@ -57,8 +60,8 @@ class AddKeyModal extends Modal {
   }
 
   async addRandomKey() {
-    const newKey = await generateKey(this.app, "defaultNote", "admin");
-    const success = await addKey(this.app, newKey);
+    const newKey = await generateKey(this.plugin, "defaultNote", "admin"); // Pass MyPlugin instance
+    const success = await addKey(this.plugin, newKey); // Pass MyPlugin instance
     if (success) {
       new Notice(`Random Key "${newKey}" added successfully.`);
       this.close();
@@ -67,4 +70,6 @@ class AddKeyModal extends Modal {
     }
   }
 }
+
+
 
