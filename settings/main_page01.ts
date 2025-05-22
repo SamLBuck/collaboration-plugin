@@ -1,81 +1,190 @@
-import { Modal, App } from "obsidian";
-import type MyPlugin from "../main";
+// settings/main_page01.ts
 
+import { App, Modal, Setting, TextComponent, TextAreaComponent, ButtonComponent, Notice } from 'obsidian';
+import MyPlugin, { KeyItem } from '../main'; // Import your main plugin class and KeyItem
+import { generateKey, addKey } from '../storage/keyManager'; // Import generateKey and addKey
 
 export class SettingsModal extends Modal {
-	plugin: MyPlugin;
+    plugin: MyPlugin;
 
-	constructor(app: App, plugin: MyPlugin) {
-		super(app);
-		this.plugin = plugin;
-	}
+    keyInput: TextComponent;
+    noteInput: TextComponent;
+    accessTypeView: HTMLInputElement;
+    accessTypeEdit: HTMLInputElement;
+    accessTypeViewAndComment: HTMLInputElement;
+    accessTypeEditWithApproval: HTMLInputElement;
 
-	onOpen() {
-		this.renderSettingsPage(); // show settings inside modal
-	}
+    constructor(app: App, plugin: MyPlugin) {
+        super(app);
+        this.plugin = plugin;
+    }
 
-	onClose() {
-		this.contentEl.empty(); // clean up when closing
-	}
+    onOpen() {
+        console.log('SettingsModal: Opening main settings page.');
+        const { contentEl } = this;
+        contentEl.empty();
 
-	private renderSettingsPage() {
-		const container = this.contentEl;
-		container.empty();
+        contentEl.createEl('h2', { text: 'Collaboration Settings' });
 
-		// Title
-		container.createEl("h2", { text: "Settings" });
+        // --- Key Section ---
+        new Setting(contentEl)
+            .setName('Key ID') // Changed name for clarity
+            .setDesc('This is the unique ID for the key.')
+            .addText(text => {
+                this.keyInput = text;
+                text.setPlaceholder('Leave blank for auto-generate')
+                    .setValue('');
+            });
 
-		// Input for key
-		const keyInput = container.createEl("input", {
-			type: "text",
-			placeholder: "Enter or generate key...",
-		});
+        // --- Note Section ---
+        new Setting(contentEl)
+            .setName('Note Name') // Changed name for clarity
+            .setDesc('The note this key will be associated with.')
+            .addText(text => {
+                this.noteInput = text;
+                text.setPlaceholder('Suggest Current Note...')
+                    .setValue(this.app.workspace.getActiveFile()?.basename || '');
+            })
+            .addButton(button => {
+                button.setIcon('refresh-cw')
+                    .setTooltip('Suggest Current Note')
+                    .onClick(() => {
+                        this.noteInput.setValue(this.app.workspace.getActiveFile()?.basename || '');
+                        new Notice('Suggested current note!');
+                    });
+            });
 
-		const generateBtn = container.createEl("button", { text: "Generate" });
-		generateBtn.onclick = () => {
-			//keyInput.value = this.generateKey();
-		};
+        // --- Access Type Section ---
+        const accessTypeSetting = new Setting(contentEl)
+            .setName('Access Type')
+            .setDesc('Select the type of access this key grants for the note.');
 
-		const noteInput = container.createEl("input", {
-			type: "text",
-			placeholder: "Note name...",
-		});
+        const checkboxContainer = accessTypeSetting.controlEl.createDiv({ cls: 'access-type-checkboxes' });
+        checkboxContainer.style.display = 'flex';
+        checkboxContainer.style.flexDirection = 'column';
+        checkboxContainer.style.gap = '8px';
 
-		// Access checkboxes
-		const accessTypes = ["View", "Edit", "View and Comment", "Edit w/ Approval"];
-		const checkboxes: Record<string, HTMLInputElement> = {};
-		const accessDiv = container.createDiv();
-		accessDiv.createEl("h3", { text: "Access Type" });
+        const createCheckbox = (name: string, description: string, checked: boolean = false): HTMLInputElement => {
+            const wrapper = checkboxContainer.createDiv({ cls: 'checkbox-wrapper' });
+            const checkbox = wrapper.createEl('input', { type: 'checkbox', cls: 'access-type-checkbox' });
+            const label = wrapper.createEl('label', { text: name, cls: 'access-type-label' });
+            label.prepend(checkbox);
+            checkbox.checked = checked;
 
-		accessTypes.forEach((type) => {
-			const label = accessDiv.createEl("label", { text: type });
-			const checkbox = document.createElement("input");
-			checkbox.type = "checkbox";
-			label.prepend(checkbox);
-			accessDiv.appendChild(label);
-			checkboxes[type] = checkbox;
-		});
+            checkbox.onchange = (evt) => {
+                const targetCheckbox = evt.target as HTMLInputElement;
+                if (targetCheckbox.checked) {
+                    [this.accessTypeView, this.accessTypeEdit, this.accessTypeViewAndComment, this.accessTypeEditWithApproval].forEach(cb => {
+                        if (cb && cb !== targetCheckbox) {
+                            cb.checked = false;
+                        }
+                    });
+                    new Notice(`Access type selected: ${name}`);
+                }
+            };
+            return checkbox;
+        };
 
-		container.append(keyInput, generateBtn, noteInput, accessDiv);
+        this.accessTypeView = createCheckbox('View', 'Allows viewing the note.');
+        this.accessTypeEdit = createCheckbox('Edit', 'Allows editing the note.', true);
+        this.accessTypeViewAndComment = createCheckbox('View and Comment', 'Allows viewing and adding comments.');
+        this.accessTypeEditWithApproval = createCheckbox('Edit w/ Approval', 'Allows editing, but changes require approval.');
 
-		// Navigation buttons
-		const listBtn = container.createEl("button", { text: "List of keys" });
-		const linkBtn = container.createEl("button", { text: "Link Note" });
+        // --- Generate and Add Key Button ---
+        new Setting(contentEl)
+            .setName('Generate and Add Key')
+            .setDesc('Creates a new unique key based on inputs and adds it to your collection.')
+            .addButton(button => {
+                button.setButtonText('Generate & Add')
+                    .setCta()
+                    .onClick(async () => {
+                        const noteName = this.keyInput.getValue().trim();
+                        const accessType = this.getSelectedAccessType();
+                        const customKeyId = this.keyInput.getValue().trim(); // Get user-entered key ID if any
 
-		container.append(listBtn, linkBtn);
+                        if (!noteName || !accessType) {
+                            new Notice('Please provide a Note Name and select an Access Type.', 4000);
+                            return;
+                        }
 
-		// Show KeyListModal when clicking list
-		listBtn.onclick = async () => {
-			const { KeyListModal } = await import("./key_list_page02");
-			new KeyListModal(this.app, this.plugin).open();
-		};
+                        let newKeyItem: KeyItem;
 
-		linkBtn.onclick = async () => {
-			const { LinkNoteModal } = await import("./link_note_page03");
-			new LinkNoteModal(this.app, this.plugin).open();
-		};
-		
-	}
+                        if (customKeyId) { // If user provided a key ID, use it for manual add
+                            newKeyItem = { id: customKeyId, note: noteName, access: accessType };
+                            // Add key to manager (will check for duplicates and save)
+                            await addKey(this.plugin, newKeyItem);
+                            this.close(); // Close modal after adding
+                        } else { // Generate a new key
+                            // Generate the KeyItem
+                            newKeyItem = await generateKey(this.plugin, noteName, accessType);
+                            // Add the generated KeyItem to manager (will save)
+                            await addKey(this.plugin, newKeyItem);
+                            this.keyInput.setValue(newKeyItem.id); // Show generated key in the input
+                            this.close(); // Close modal after adding
+                        }
+                    });
+            });
 
+
+        // --- Navigation Buttons ---
+        const navButtonContainer = contentEl.createDiv({ cls: 'settings-nav-buttons' });
+        navButtonContainer.style.display = 'flex';
+        navButtonContainer.style.justifyContent = 'space-between';
+        navButtonContainer.style.marginTop = '20px';
+
+        // Use a container for the buttons on the left
+        const leftButtons = navButtonContainer.createDiv();
+        new Setting(leftButtons)
+            .addButton(button => {
+                button.setButtonText('List of keys')
+                    .onClick(async () => {
+                        const { KeyListModal } = await import('./key_list_page02');
+                        this.close();
+                        new KeyListModal(this.app, this.plugin).open();
+                    });
+            });
+
+        // Use a container for the buttons on the right
+        const rightButtons = navButtonContainer.createDiv();
+        new Setting(rightButtons)
+            .addButton(button => {
+                button.setButtonText('Link Note')
+                    .onClick(async () => {
+                        const { LinkNoteModal } = await import('./link_note_page03');
+                        this.close();
+                        new LinkNoteModal(this.app, this.plugin).open();
+                    });
+            });
+
+        // Append the button containers to the nav container
+        navButtonContainer.appendChild(leftButtons);
+        navButtonContainer.appendChild(rightButtons);
+
+
+        // Basic styling for better appearance within the modal
+        contentEl.querySelectorAll('.setting-item').forEach(item => {
+            (item as HTMLElement).style.marginBottom = '15px';
+        });
+        // Adjust width of text inputs within settings
+        contentEl.querySelectorAll('input[type="text"]').forEach(input => {
+            (input as HTMLElement).style.width = 'calc(100% - 120px)'; // Adjust width to leave space for label
+        });
+        contentEl.querySelector('select')!.style.width = 'calc(100% - 120px)'; // Adjust width for select box
+
+
+    }
+
+    onClose() {
+        console.log('SettingsModal: Closing main settings page.');
+        const { contentEl } = this;
+        contentEl.empty();
+    }
+
+    getSelectedAccessType(): string | null {
+        if (this.accessTypeView.checked) return 'View';
+        if (this.accessTypeEdit.checked) return 'Edit';
+        if (this.accessTypeViewAndComment.checked) return 'View and Comment';
+        if (this.accessTypeEditWithApproval.checked) return 'Edit w/ Approval';
+        return null;
+    }
 }
-
