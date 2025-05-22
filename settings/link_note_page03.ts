@@ -1,62 +1,70 @@
-import { Modal, App, TFile, normalizePath, Notice } from "obsidian";
-import type MyPlugin from "../main";
-import { SettingsModal } from "./main_page01";
+import { App, Modal, Setting, TextComponent, ButtonComponent, Notice } from 'obsidian';
+import MyPlugin from '../main';
 
 export class LinkNoteModal extends Modal {
-	plugin: MyPlugin;
+    plugin: MyPlugin;
+    linkNoteKeyInput: TextComponent; // Reference to the input field
 
-	constructor(app: App, plugin: MyPlugin) {
-		super(app);
-		this.plugin = plugin;
-	}
+    constructor(app: App, plugin: MyPlugin) {
+        super(app);
+        this.plugin = plugin;
+    }
 
-	onOpen() {
-		const { contentEl } = this;
-		contentEl.empty();
+    onOpen() {
+        const { contentEl } = this;
+        contentEl.empty();
+        contentEl.createEl('h2', { text: 'Link / Pull a Collaborative Note' });
+        contentEl.createEl('p', { text: 'Use this section to link to or pull a shared note from a peer.' });
 
-		contentEl.createEl("h2", { text: "Link Note" });
+        new Setting(contentEl)
+            .setName('Share Key / Password')
+            .setDesc('Enter the key/password for the shared note you want to link.')
+            .addText(text => {
+                this.linkNoteKeyInput = text;
+                text.setPlaceholder('e.g., mysecretkey123');
+            });
 
-		// Input field for the key
-		const keyInput = contentEl.createEl("input", {
-			type: "text",
-			placeholder: "Enter key for note...",
-		});
+        new Setting(contentEl)
+            .addButton(button => {
+                button.setButtonText('Pull Note')
+                    .setCta()
+                    .onClick(() => {
+                        const key = this.linkNoteKeyInput.getValue().trim();
+                        if (!key) {
+                            new Notice('Please enter a Share Key / Password to pull a note.', 3000);
+                            return;
+                        }
+                        new Notice(`Attempting to pull note with key: ${key}. Functionality coming soon!`, 5000);
+                    });
+            });
 
-		// Button to link & create note
-		const linkBtn = contentEl.createEl("button", {
-			text: "Link & Create Note",
-		});
-		linkBtn.onclick = async () => {
-			const key = keyInput.value.trim();
-			if (!key) {
-				new Notice("Please enter a valid key.");
-				return;
-			}
+        new Setting(contentEl)
+            .addButton(button => {
+                button.setButtonText('Generate Shareable Link (Copy to Clipboard)')
+                    .onClick(() => {
+                        const password = this.linkNoteKeyInput.getValue().trim();
+                        if (!password) {
+                            new Notice('Please enter a Share Key / Password first to generate a link.', 3000);
+                            return;
+                        }
+                        const dummyIp = '192.168.1.42'; // Replace with your actual IP/hostname or discovery logic
+                        const dummyPort = 3010; // Replace with your actual port
+                        const shareLink = `obs-collab://${dummyIp}:${dummyPort}/note/${password}`;
+                        navigator.clipboard.writeText(shareLink);
+                        new Notice(`Share Link copied: ${shareLink}`, 6000);
+                    });
+            });
 
-			const fileName = `Shared-${key}.md`;
-			const filePath = normalizePath(fileName);
+        // Add a close button
+        new Setting(contentEl)
+            .addButton(button => {
+                button.setButtonText("Close")
+                    .onClick(() => this.close());
+            });
+    }
 
-			try {
-				let file = this.app.vault.getAbstractFileByPath(filePath);
-				if (!file) {
-					file = await this.app.vault.create(filePath, `# Shared Note for Key: ${key}\n`);
-				}
-				this.app.workspace.openLinkText(filePath, "/", true);
-				this.close();
-			} catch (err) {
-				console.error("Failed to create or open note:", err);
-			}
-		};
-
-		// Back button
-		const backBtn = contentEl.createEl("button", { text: "⬅ Back" });
-		backBtn.onclick = () => {
-			this.close();
-			new SettingsModal(this.app, this.plugin).open();
-		};
-	}
-
-	onClose() {
-		this.contentEl.empty();
-	}
+    onClose() {
+        const { contentEl } = this;
+        contentEl.empty();
+    }
 }

@@ -1,16 +1,10 @@
-// settings/key_list_page02.ts
-
-import { Modal, App, Notice } from "obsidian";
-import type MyPlugin from "../main";
-import { KeyItem } from "../main"; // Import KeyItem interface
-import { SettingsModal } from "./main_page01";
-// FIX: Add generateKey to the import list
-import { addKey, deleteKey, listKeys, generateKey } from "../storage/keyManager"; // Import keyManager functions
+import { App, Modal, Setting, ButtonComponent, TextComponent, Notice } from 'obsidian';
+import MyPlugin, { KeyItem } from '../main';
+import { listKeys, deleteKey, generateKey, addKey } from '../storage/keyManager'; // Ensure these are imported
 
 export class KeyListModal extends Modal {
     plugin: MyPlugin;
 
-    // References to input elements for adding a new key
     private newKeyIdInput: HTMLInputElement;
     private newNoteNameInput: HTMLInputElement;
     private newAccessTypeSelect: HTMLSelectElement;
@@ -20,107 +14,141 @@ export class KeyListModal extends Modal {
         this.plugin = plugin;
     }
 
-    async onOpen() {
+    onOpen() {
         const { contentEl } = this;
-        contentEl.empty();
-        contentEl.createEl("h2", { text: "Key List" });
+        contentEl.empty(); // Clear existing content
 
-        // Get keys directly from plugin's settings (persistent storage)
+        contentEl.createEl('h2', { text: 'All Collaboration Keys' });
+
+        // Create a dedicated container for the key list display
+        const keyListDisplayContainer = contentEl.createDiv({ cls: 'key-list-display-container' });
+        this.renderKeyList(keyListDisplayContainer); // Pass this container to render the list into it
+
+        // Render the "Manually Add New Key" section below the list
+        this.renderAddKeySection(contentEl);
+
+        // Add a close button at the bottom of the modal
+        new Setting(contentEl)
+            .addButton(button => {
+                button.setButtonText("Close")
+                    .onClick(() => this.close());
+            });
+    }
+
+    async renderKeyList(containerToRenderInto: HTMLElement): Promise<void> {
+        containerToRenderInto.empty(); // Clear content of the specific list container
+
         const currentKeys = await listKeys(this.plugin);
 
         if (currentKeys.length === 0) {
-            contentEl.createEl("p", { text: "No keys currently stored." });
+            containerToRenderInto.createEl('p', { text: 'No keys currently stored.' });
         } else {
-            // List all keys from plugin.settings
             currentKeys.forEach((keyItem: KeyItem) => {
-                const row = contentEl.createDiv({ cls: "key-row" });
-                row.createSpan({
-                    text: `ID: ${keyItem.id} | Note: ${keyItem.note} | Access: ${keyItem.access}`,
-                });
+                const keyRow = containerToRenderInto.createDiv({ cls: 'key-row' });
+                keyRow.style.display = 'flex';
+                keyRow.style.justifyContent = 'space-between';
+                keyRow.style.alignItems = 'center';
+                keyRow.style.padding = '8px 0';
+                keyRow.style.borderBottom = '1px solid var(--background-modifier-border)';
 
-                const delBtn = row.createEl("button", { text: "Delete key" });
-                delBtn.onclick = async () => {
-                    await deleteKey(this.plugin, keyItem.id);
-                    this.onOpen(); // Re-render the list after deletion
-                };
+                keyRow.createSpan({
+                    text: `Key: ${keyItem.id.substring(0, 8)}... | Note: ${keyItem.note} | Access: ${keyItem.access}`,
+                    cls: 'key-display-text'
+                }).style.flexGrow = '1';
+
+                const deleteButton = new ButtonComponent(keyRow)
+                    .setButtonText('Delete')
+                    .setClass('mod-warning')
+                    .onClick(async () => {
+                        if (confirm(`Are you sure you want to delete key for "${keyItem.note}" (${keyItem.access})?`)) {
+                            await deleteKey(this.plugin, keyItem.id);
+                            new Notice(`Key for "${keyItem.note}" deleted.`, 3000);
+                            this.renderKeyList(containerToRenderInto); // Re-render the list after deletion
+                        }
+                    });
             });
         }
+    }
 
-        // Add key form
-        contentEl.createEl("h3", { text: "Add New Key" });
-        this.newKeyIdInput = contentEl.createEl("input", { placeholder: "Key ID (leave empty to generate)..." });
-        this.newNoteNameInput = contentEl.createEl("input", { placeholder: "Note name..." });
-        this.newNoteNameInput.value = this.app.workspace.getActiveFile()?.basename || ''; // Suggest current note
+    private renderAddKeySection(containerEl: HTMLElement): void {
+        const addKeySection = containerEl.createDiv({ cls: 'add-key-section' });
+        addKeySection.createEl("h3", { text: "Manually Add New Key" });
 
-        this.newAccessTypeSelect = contentEl.createEl("select");
-        const accessTypes = ["View", "Edit", "View and Comment", "Edit w/ Approval"];
-        accessTypes.forEach((type) => {
-            const option = this.newAccessTypeSelect.createEl("option", { text: type });
-            option.value = type;
-        });
-        this.newAccessTypeSelect.value = "Edit"; // Default selection
+        new Setting(addKeySection)
+            .setName("Key / Password")
+            .setDesc("Enter the key string directly. Leave empty to auto-generate.")
+            .addText(text => {
+                this.newKeyIdInput = text.inputEl;
+                text.setPlaceholder("e.g., your-custom-password");
+            });
 
-        const addBtn = contentEl.createEl("button", { text: "Add Key" });
-        addBtn.onclick = async () => {
-            const keyId = this.newKeyIdInput.value.trim();
-            const noteName = this.newNoteNameInput.value.trim();
-            const accessType = this.newAccessTypeSelect.value;
+        new Setting(addKeySection)
+            .setName("Note Name")
+            .setDesc("The note associated with this key.")
+            .addText(text => {
+                this.newNoteNameInput = text.inputEl;
+                text.setPlaceholder("e.g., My Shared Document")
+                    .setValue(this.app.workspace.getActiveFile()?.basename || '');
+            });
 
-            if (!keyId && !noteName) {
-                new Notice("Please enter a Note name for the new key, or a Key ID.", 3000);
-                return;
-            }
+        new Setting(addKeySection)
+            .setName("Access Type")
+            .setDesc("Select the access level.")
+            .addDropdown(dropdown => {
+                this.newAccessTypeSelect = dropdown.selectEl;
+                dropdown.addOption("View", "View");
+                dropdown.addOption("Edit", "Edit");
+                dropdown.addOption("View and Comment", "View and Comment");
+                dropdown.addOption("Edit w/ Approval", "Edit w/ Approval");
+                dropdown.setValue("Edit");
+            });
 
-            if (!accessType) {
-                new Notice("Please select an Access Type.", 3000);
-                return;
-            }
+        new Setting(addKeySection)
+            .addButton(button => {
+                button.setButtonText("Add Key")
+                    .setCta()
+                    .onClick(async () => {
+                        const keyId = this.newKeyIdInput.value.trim();
+                        const noteName = this.newNoteNameInput.value.trim();
+                        const accessType = this.newAccessTypeSelect.value;
 
-            // FIX: Declare newKeyItem to correctly allow null
-            let newKeyItem: KeyItem | null = null; // Initialize to null
+                        if (!noteName) {
+                            new Notice("Please provide a Note Name for the new key.", 3000);
+                            return;
+                        }
+                        if (!accessType) {
+                            new Notice("Please select an Access Type.", 3000);
+                            return;
+                        }
 
-            if (keyId) {
-                 // Manual add: if key ID is provided, use it
-                newKeyItem = { id: keyId, note: noteName || "Manual Note", access: accessType };
-            } else {
-                // Auto-generate: if key ID is empty, generate one
-                // FIX: Call generateAndAddKey helper function directly
-                newKeyItem = await this.generateAndAddKey(noteName, accessType);
-            }
-            
-            // FIX: Add check for null before proceeding
-            if (newKeyItem) {
-                await addKey(this.plugin, newKeyItem);
-                this.newKeyIdInput.value = ''; // Clear inputs
-                this.newNoteNameInput.value = '';
-                this.onOpen(); // Re-render the list to show the new key
-            } else {
-                // If generateAndAddKey returned null, a notice would have already been shown
-                console.warn("Key generation failed, not adding key.");
-            }
-        };
+                        let newKeyItem: KeyItem | null = null;
+                        if (keyId) {
+                            newKeyItem = { id: keyId, note: noteName, access: accessType };
+                        } else {
+                            newKeyItem = await generateKey(this.plugin, noteName, accessType);
+                        }
 
-        // Back button
-        const backBtn = contentEl.createEl("button", { text: "⬅ Back" });
-        backBtn.onclick = () => {
-            this.close();
-            new SettingsModal(this.app, this.plugin).open();
-        };
+                        if (newKeyItem) {
+                            const success = await addKey(this.plugin, newKeyItem);
+                            if (success) {
+                                new Notice(`Key added: ${newKeyItem.id.substring(0, 8)}...`, 3000);
+                                this.newKeyIdInput.value = ''; // Clear key input
+                                this.newNoteNameInput.value = this.app.workspace.getActiveFile()?.basename || ''; // Reset note name
+                                // Re-render the key list, passing the correct container for the list
+                                const keyListDisplayContainer = containerEl.querySelector('.key-list-display-container') as HTMLElement;
+                                if (keyListDisplayContainer) {
+                                    this.renderKeyList(keyListDisplayContainer);
+                                }
+                            } else {
+                                new Notice("Failed to add key. It might already exist (password collision).", 4000);
+                            }
+                        }
+                    });
+            });
     }
 
     onClose() {
-        this.contentEl.empty();
-    }
-
-    // Helper to generate and add key for this modal's specific flow
-    private async generateAndAddKey(noteName: string, accessType: string): Promise<KeyItem | null> {
-        try {
-            // FIX: Call generateKey directly from imported function
-            const newKeyItem = await generateKey(this.plugin, noteName, accessType);
-            return newKeyItem;
-        } catch (error) {
-            new Notice(`Failed to generate key: ${error.message}`, 4000);
-            return null;
-        }
+        const { contentEl } = this;
+        contentEl.empty();
     }
 }
