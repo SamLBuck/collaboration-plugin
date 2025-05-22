@@ -1,3 +1,4 @@
+// main.ts
 import {
     App,
     Plugin,
@@ -12,8 +13,12 @@ import { registerDeleteKeyCommand } from './utils/delete_key_command';
 import { requestNoteFromPeer } from './networking/socket/client';
 import { startWebSocketServer } from './networking/socket/server';
 import { PluginSettingsTab } from './settings/plugin_setting_tab';
+// We don't need to import SettingsModal at the top anymore if this specific icon won't open it.
+// If your 'settings' icon still opens it, that import is fine.
 
-// *** UPDATED: This now describes each key with ID, Note, and Access ***
+import { generateKey, addKey } from './storage/keyManager'; // <--- Ensure these are imported for this action
+
+
 export interface KeyItem {
     id: string; // This is the unique key string itself, like "obs-collab://..."
     note: string; // The note name associated with the key
@@ -28,7 +33,6 @@ interface MyPluginSettings {
 const DEFAULT_SETTINGS: MyPluginSettings = {
     mySetting: '',
     keys: [
-        // *** UPDATED: Default key now includes note and access ***
         { id: 'obs-collab://192.168.1.42:3010/note/test', note: 'Default Shared Note', access: 'View' },
     ],
 };
@@ -44,11 +48,43 @@ export default class MyPlugin extends Plugin {
         registerAddKeyCommand(this);
         registerDeleteKeyCommand(this);
 
-        this.addRibbonIcon('key', 'Generate Key', () => {
-            new Notice('Generate a new key!');
+        // --- CHANGE STARTS HERE for 'key' ribbon icon ---
+        this.addRibbonIcon('key', 'Generate Key for Active Note', async () => {
+            const activeFile = this.app.workspace.getActiveFile();
+            const noteName = activeFile ? activeFile.basename : 'No Active Note'; // Get name of current note, or say "No Active Note"
+            const accessType = 'Edit'; // Default access type for quick generation
+
+            if (!activeFile) {
+                new Notice("No active note open to generate a key for. Please open a note.", 4000);
+                return;
+            }
+
+            try {
+                // Generate the KeyItem (this includes the unique ID, note name, and access type)
+                const newKeyItem = await generateKey(this, noteName, accessType);
+
+                // Add this new KeyItem to the plugin's permanent storage and save it
+                const success = await addKey(this, newKeyItem);
+
+                if (success) {
+                    new Notice(`Generated & Stored:\n${newKeyItem.id}\nFor Note: "${newKeyItem.note}" (Access: ${newKeyItem.access})`, 6000);
+                } else {
+                    // Our 'addKey' function already shows a notice if the key already exists,
+                    // but this 'else' is a fallback for other unexpected issues.
+                    new Notice('Failed to add generated key. It might already exist.', 4000);
+                }
+            } catch (error) {
+                console.error("Error generating or adding key:", error);
+                new Notice(`Error generating key: ${error.message}`, 5000);
+            }
         }).addClass('my-plugin-ribbon-class');
+        // --- CHANGE ENDS HERE ---
+
 
         this.addRibbonIcon('settings', 'Settings', async () => {
+            // This icon will still open your main settings modal.
+            // You might want to move the import of SettingsModal inside this callback
+            // if you remove the general import from the top of the file.
             const { SettingsModal } = await import('./settings/main_page01');
             new SettingsModal(this.app, this).open();
         });
