@@ -3,7 +3,7 @@ import type MyPlugin from "../main";
 import { SettingsModal } from "./main_page01";
 
 // You can replace this with real settings or storage later
-let keyData = [
+export let keyData = [
 	{ key: "abc123", note: "Project Plan", access: "View" },
 	{ key: "xyz789", note: "Team Notes", access: "Edit" },
 ];

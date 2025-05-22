@@ -2,9 +2,22 @@ import { App, Plugin, PluginSettingTab, Setting, Modal, Notice } from 'obsidian'
 import { registerGenerateKeyCommand } from './utils/generate_key_command';
 import { registerAddKeyCommand } from './utils/add_key_command';
 import { registerDeleteKeyCommand } from './utils/delete_key_command';
-import { requestNoteFromPeer } from './networking/socket/client';
-import { startWebSocketServer } from './networking/socket/server';
+import { registerNoteWithPeer, requestNoteFromPeer } from './networking/socket/client';
 import { PluginSettingsTab } from "./settings/plugin_setting_tab";
+import { parseShareKey } from "./utils/parse_key";
+import { FileSystemAdapter } from "obsidian";
+//const { startWebSocketServer } = require("./networking/socket/server.cjs");
+const { spawn } = require("child_process");
+import * as path from "path";
+import * as fs from "fs";
+const noteRegistry = require("./networking/socket/dist/noteRegistry.cjs");
+import { tempKeyInputModal } from "./settings/tempKeyInputModal";
+import { tempIPInputModal } from "./settings/tempIPInputModal";
+import { getLocalIP } from "./utils/get-ip"
+
+
+
+
 
 
 interface MyPluginSettings {
@@ -23,11 +36,17 @@ const DEFAULT_SETTINGS: MyPluginSettings = {
 	mySetting: ''
 };
 
+console.log("[Collab Plugin] Plugin script loaded");
+
+
 export default class MyPlugin extends Plugin {
   settings: MyPluginSettings;
 
   async onload() {
     await this.loadSettings();
+
+	console.log("[Collab Plugin] Plugin onload() started");
+
 
     // Register key commands
     registerGenerateKeyCommand(this.app, this);
@@ -60,72 +79,194 @@ export default class MyPlugin extends Plugin {
 		id: "generate-share-key",
 		name: "Generate Share Key",
 		callback: async () => {
-		  const ip = await this.getUserIp("Enter your IP address:");
-		  const key = "my-shared-note";
-		  const shareLink = `obs-collab://${ip}:3010/note/${key}`;
-		  startWebSocketServer(this.app, shareLink, 3010); // should be called before sharing
 		  //const ip = await this.getUserIp("Enter your IP address:");
-		  await navigator.clipboard.writeText(shareLink);
+		  const key = "my-shared-note";
+		  //const shareLink = `obs-collab://${ip}:3010/note/${key}`;
+		  //startWebSocketServer(this.app, shareLink, 3010); // should be called before sharing
+		  //const ip = await this.getUserIp("Enter your IP address:");
+		  //await navigator.clipboard.writeText(shareLink);
 		  new Notice("Share key copied to clipboard");
 		}
 	  });
 
     // Pull note from peer command
-	this.addCommand({
-		id: "pull-note-from-peer",
-		name: "Pull Note from Peer",
+	  this.addCommand({
+		id: "pull-test-note-from-peer",
+		name: "Pull Test Note from Server Registry (localhost)",
 		callback: async () => {
-		  const shareKey = window.prompt("Paste the share key:");
-		  if (!shareKey) return;
-	  
+			console.log("[Plugin] Starting requestNoteFromPeer for key 'TestNote'");
 		  try {
-			const { ip, port, key } = parseShareKey(shareKey);
-			const wsUrl = `ws://${ip}:${port}`;
-			const content = await requestNoteFromPeer(wsUrl, key);
-			await this.app.vault.create("Pulled Note.md", content);
-			new Notice("Note pulled and created.");
-		  } catch (e) {
-			new Notice("Failed to pull note: " + e);
+			const content = await requestNoteFromPeer("ws://localhost:3010", "key");
+	  
+			console.log("[Plugin] Note content received:", content);
+
+			await this.app.vault.create("Pulled Test Note.md", content);
+			new Notice("Note pulled and created");
+		  } catch (err) {
+			console.error("Failed to pull note:", err);
+			new Notice("Failed to pull note");
 		  }
 		}
 	  });
+	  this.addCommand({
+		id: "pull-note-from-peer-modal",
+		name: "Pull Note from Server Registry (enter key)",
+		callback: () => {
+		  new tempKeyInputModal(this.app, async (key: string) => {
+			try {
+			  const content = await requestNoteFromPeer("ws://localhost:3010", key);
+			  await this.app.vault.create(`${key}.md`, content);
+			  new Notice(`Note '${key}' pulled and created.`);
+			} catch (err) {
+			  console.error("Failed to pull note:", err);
+			  new Notice(`Failed to pull note: ${err}`);
+			}
+		  }).open();
+		},
+	  });
 
-	  function parseShareKey(shareKey: string): { ip: string; port: number; key: string } {
-		const match = shareKey.match(/^obs-collab:\/\/([\d.]+):(\d+)\/note\/(.+)$/);
-		if (!match) throw new Error("Invalid share key format");
-		return { ip: match[1], port: parseInt(match[2]), key: match[3] };
-	  }
+	  this.addCommand({
+		id: "pull-note-from-peer-modal",
+		name: "Pull Note from Server Registry (enter key and IP)",
+		callback: () => {
+		  new tempIPInputModal(this.app, async (ip: string, key: string) => {
+			try {
+			  const content = await requestNoteFromPeer("ws://" + ip + ":" + "3010", key);
+			  await this.app.vault.create(`${key}.md`, content);
+			  new Notice(`Note '${key}' pulled and created.`);
+			} catch (err) {
+			  console.error("Failed to pull note:", err);
+			  new Notice(`Failed to pull note: ${err}`);
+			}
+		  }).open();
+		},
+	  });
+
+	  
+
+	  
+	  	
 	
-		  
-	//const content = await requestNoteFromPeer("ws://localhost:3010", "test");
+	this.addCommand({
+		id: "start-websocket-server",
+		name: "Start WebSocket Server",
+		callback: () => {
+		  const adapter = this.app.vault.adapter;
+		  if (!(adapter instanceof FileSystemAdapter)) {
+			new Notice("Vault path not accessible.");
+			return;
+		  }
+	  
+		  const vaultPath = adapter.getBasePath();
+		  const serverPath = path.join(
+			vaultPath,
+			".obsidian",
+			"plugins",
+			"collaboration-plugin",
+			"networking",
+			"socket",
+			"dist",
+			"server.cjs"
+		  );
+		  if (!fs.existsSync(serverPath)) {
+			console.error("[Plugin] server.cjs file not found at:", serverPath);
+			return;
+		  }
+		  console.log("[Plugin] Launching server at:", serverPath);
+	  
+		  const subprocess = spawn("node", [serverPath], {
+			shell: false,
+			//detached: false
+		  });
+	  
+		  subprocess.stdout.on("data", (data: { toString: () => any; }) => {
+			console.log("[WS Server]:", data.toString());
+		  });
+	  
+		  subprocess.stderr.on("data", (err: { toString: () => any; }) => {
+			console.error("[WS Server Error]:", err.toString());
+		  });
+	  
+		  subprocess.on("exit", (code: any) => {
+			console.log(`[WS Server] Exited with code ${code}`);
+		  });
+	  
+		  new Notice("Started WebSocket server.");
+		}
+	  });
 
 
-    // Publish version command
-    this.addCommand({
-      id: 'publish',
-      name: 'Update Version',
-      callback: () => {
-        this.publishVersion();
-      },
-    });
+	  this.addCommand({
+		id: "share-current-note",
+		name: "Register Active Note",
+		callback: async () => {
+		  const file = this.app.workspace.getActiveFile();
+		  if (!file) {
+			new Notice("No active file.");
+			return;
+		  }
+		  const content = await this.app.vault.read(file);
+		  const key = file.basename;
+	  
+		  registerNoteWithPeer("ws://localhost:3010", key, content); //
+	  
+		  new Notice(`Note '${key}' sent to peer for sharing.`);
+		}
+	  });
 
-    // Plugin settings tab
-    //this.addSettingTab(new SampleSettingTab(this.app, this));
-	this.addSettingTab(new PluginSettingsTab(this.app, this));
+	  this.addCommand({
+		id: "list-shared-note-keys",
+		name: "List Shared Note Keys from server registry",
+		callback: async () => {
+		  const ip = "localhost"; // or use a modal to get user input
+		  const socket = new WebSocket(`ws://${ip}:3010`);
+	  
+		  socket.onopen = () => {
+			socket.send(JSON.stringify({ type: "list-keys" }));
+		  };
+	  
+		  socket.onmessage = (event) => {
+			try {
+			  const message = JSON.parse(event.data.toString());
+	  
+			  if (message.type === "key-list") {
+				const keys = message.payload.keys;
+				console.log("[Plugin] Keys in peer registry:", keys);
+				navigator.clipboard.writeText(keys.join(", "));
+				new Notice("Copied keys to clipboard: " + keys.join(", "));
 
 
-    // Register any global events if needed
-    this.registerDomEvent(document, 'click', (evt: MouseEvent) => {});
+				socket.close();
+			  } else {
+				new Notice("Unexpected response type");
+			  }
+			} catch (err) {
+			  console.error("Failed to parse response:", err);
+			}
+		  };
+	  
+		  socket.onerror = (err) => {
+			console.error("Failed to connect to peer:", err);
+			new Notice("Connection error.");
+		  };
+		}
+	  });
 
-    // Background task
-    this.registerInterval(window.setInterval(() => console.log('Interval running'), 5 * 60 * 1000));
-  }
-  async getUserIp(promptText: string): Promise<string> {
-	return await new Promise((resolve) => {
-	  const ip = window.prompt(promptText, "192.168.1.42");
-	  resolve(ip ?? "127.0.0.1");
-	});
-  }
+	  this.addCommand({
+		id: "show-local-ip",
+		name: "Show This Computer's Local IP",
+		callback: async () => {
+		  const ip = getLocalIP();
+		  await navigator.clipboard.writeText(ip);
+		  console.log("Copied Local IP Address to clipboard:", ip);
+		  new Notice("Copied Local IP Address to clipboard:: " + ip);
+		}
+	  });
+	  
+	  
+	}
+
+	  
   
   onunload() {
     new Notice('Plugin is unloading!');
@@ -173,5 +314,3 @@ class SampleSettingTab extends PluginSettingTab {
       );
   }
 }
-
-
