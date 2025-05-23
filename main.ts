@@ -29,9 +29,9 @@ export type NoteRegistry = Record<string, string>; // key => content
 
 
 export interface KeyItem {
-    id: string; 
-    note: string; 
-    access: string; 
+    id: string;
+    note: string;
+    access: string;
 }
 interface noteRegistry {
     key: string;
@@ -44,40 +44,40 @@ interface MyPluginSettings {
 }
 
 const DEFAULT_SETTINGS: MyPluginSettings = {
-	mySetting: 'default',
-	keys: [
-		{ id: 'defaultpass123', note: 'Default Shared Note', access: 'View' },
-	],
-	registry: [], 
+    mySetting: 'default',
+    keys: [
+        { id: 'defaultpass123', note: 'Default Shared Note', access: 'View' },
+    ],
+    registry: [],
 };
 
 export function getNoteRegistry(plugin: MyPlugin): noteRegistry[] {
-	return plugin.settings?.registry ?? [];
+    return plugin.settings?.registry ?? [];
 }
 
 export async function updateNoteRegistry(plugin: MyPlugin, key: string, content: string) {
-	let registry = getNoteRegistry(plugin);
+    let registry = getNoteRegistry(plugin);
 
-	const existingIndex = registry.findIndex(item => item.key === key);
-	if (existingIndex !== -1) {
-		registry[existingIndex].content = content;
-	} else {
-		registry.push({ key, content });
-	}
+    const existingIndex = registry.findIndex(item => item.key === key);
+    if (existingIndex !== -1) {
+        registry[existingIndex].content = content;
+    } else {
+        registry.push({ key, content });
+    }
 
-	plugin.settings.registry = registry;
-	await plugin.saveSettings();
+    plugin.settings.registry = registry;
+    await plugin.saveSettings();
 }
 
 export async function deleteNoteFromRegistry(plugin: MyPlugin, key: string) {
-	let registry = getNoteRegistry(plugin);
-	registry = registry.filter(item => item.key !== key);
-	plugin.settings.registry = registry;
-	await plugin.saveSettings();
+    let registry = getNoteRegistry(plugin);
+    registry = registry.filter(item => item.key !== key);
+    plugin.settings.registry = registry;
+    await plugin.saveSettings();
 }
 export function getNoteContentByKey(plugin: MyPlugin, key: string): string | undefined {
-	const registry = getNoteRegistry(plugin);
-	return registry.find(item => item.key === key)?.content;
+    const registry = getNoteRegistry(plugin);
+    return registry.find(item => item.key === key)?.content;
 }
 
 
@@ -85,8 +85,8 @@ export function getNoteContentByKey(plugin: MyPlugin, key: string): string | und
 export default class MyPlugin extends Plugin {
     settings: MyPluginSettings;
 
-  async onload() {
-    await this.loadSettings();
+    async onload() {
+        await this.loadSettings();
 
         registerGenerateKeyCommand(this.app, this);
         registerAddKeyCommand(this);
@@ -97,7 +97,7 @@ export default class MyPlugin extends Plugin {
 
 
         // Ribbon icon for quick key generation for the active note (direct action)
-        this.addRibbonIcon('key', 'Generate Key for Active Note', async () => {      
+        this.addRibbonIcon('key', 'Generate Key for Active Note', async () => {
             const activeFile = this.app.workspace.getActiveFile();
             const noteName = activeFile ? activeFile.basename : 'No Active Note';
             const accessType = 'Edit';
@@ -120,22 +120,21 @@ export default class MyPlugin extends Plugin {
             }
         }).addClass('my-plugin-ribbon-class');
 
-this.addRibbonIcon('settings', 'Open Collaboration Settings', () => {
-    (this.app as any).setting.open();
-    (this.app as any).setting.openTabById(PluginSettingsTab.PLUGIN_ID);
-});
+// Removed the 'settings' ribbon icon as requested.
+// Users can still access plugin settings via Obsidian's main Settings -> Community Plugins.
+
 this.addRibbonIcon('list', 'View All Collaboration Keys', () => {
-    new KeyListModal(this.app, this).open(); 
+    new KeyListModal(this.app, this).open();
 });
 this.addRibbonIcon('link', 'Link / Pull a Collaborative Note', () => {
-    new LinkNoteModal(this.app, this).open(); 
+    new LinkNoteModal(this.app, this).open();
 });
 this.addSettingTab(new PluginSettingsTab(this.app, this));
 }
 
-  onunload() {
-    new Notice('Plugin is unloading!');
-  }
+    onunload() {
+        new Notice('Plugin is unloading!');
+    }
     async loadSettings() {
         this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
     }
