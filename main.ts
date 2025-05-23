@@ -169,7 +169,7 @@ export default class MyPlugin extends Plugin {
 			"server.cjs"
 		  );
 		  if (!fs.existsSync(serverPath)) {
-			console.error("[Plugin] server.cjs file not found at:", serverPath);
+			console.error("[Plugin] server.cjs file not found at:", serverPath); // doesn't work on computer that is not mine
 			return;
 		  }
 		  console.log("[Plugin] Launching server at:", serverPath);
