@@ -1,6 +1,7 @@
-import { App, PluginSettingTab, Setting, ButtonComponent, TextComponent, Notice, DropdownComponent } from 'obsidian';
+import { App, PluginSettingTab, Setting, ButtonComponent, TextComponent, Notice, DropdownComponent, TFile } from 'obsidian';
 import MyPlugin, { KeyItem, getNoteRegistry, updateNoteRegistry, deleteNoteFromRegistry } from '../main';
 import { generateKey, addKey, listKeys, deleteKey } from '../storage/keyManager';
+import { requestNoteFromPeer } from '../networking/socket/client';
 
 type SettingsPage = 'main' | 'keyList' | 'linkNote';
 
@@ -127,9 +128,9 @@ export class PluginSettingsTab extends PluginSettingTab {
             .setDesc('Select the type of access this key grants for the note.');
 
         const checkboxContainer = accessTypeSetting.controlEl.createDiv({ cls: 'access-type-checkboxes' });
-        checkboxContainer.style.display = 'flex'; // These are now handled by CSS
-        checkboxContainer.style.flexDirection = 'column'; // These are now handled by CSS
-        checkboxContainer.style.gap = '8px'; // These are now handled by CSS
+        checkboxContainer.style.display = 'flex';
+        checkboxContainer.style.flexDirection = 'column';
+        checkboxContainer.style.gap = '8px';
 
         const createCheckbox = (name: string, checked: boolean = false): HTMLInputElement => {
             const wrapper = checkboxContainer.createDiv({ cls: 'checkbox-wrapper' });
@@ -164,9 +165,9 @@ export class PluginSettingsTab extends PluginSettingTab {
         this.accessTypeEditWithApproval = createCheckbox('Edit w/ Approval', false);
 
         const navButtonContainer = containerEl.createDiv({ cls: 'settings-nav-buttons' });
-        navButtonContainer.style.display = 'flex'; // These are now handled by CSS
-        navButtonContainer.style.justifyContent = 'space-between'; // These are now handled by CSS
-        navButtonContainer.style.marginTop = '20px'; // These are now handled by CSS
+        navButtonContainer.style.display = 'flex';
+        navButtonContainer.style.justifyContent = 'space-between';
+        navButtonContainer.style.marginTop = '20px';
 
         const leftButtons = navButtonContainer.createDiv();
         new Setting(leftButtons)
@@ -192,7 +193,7 @@ export class PluginSettingsTab extends PluginSettingTab {
         navButtonContainer.appendChild(rightButtons);
 
         containerEl.querySelectorAll('.setting-item').forEach(item => {
-            (item as HTMLElement).style.marginBottom = '15px'; // Adjust spacing if needed, can be moved to CSS
+            (item as HTMLElement).style.marginBottom = '15px';
         });
     }
 
@@ -219,43 +220,54 @@ export class PluginSettingsTab extends PluginSettingTab {
                     });
             });
 
-        const keyListDisplayContainer = containerEl.createDiv({ cls: 'key-list-container' }); // Use new container class
-        await this.renderKeyListContent(keyListDisplayContainer); // Call helper to render list
+        const keyListDisplayContainer = containerEl.createDiv({ cls: 'key-list-container' });
+        await this.renderKeyListContent(keyListDisplayContainer);
 
         // Render the "Manually Add New Key" section below the list
-        this.renderAddKeySection(containerEl, keyListDisplayContainer); // Pass container for re-rendering
+        this.renderAddKeySection(containerEl, keyListDisplayContainer);
 
         // Display the note registry for server-shared notes
         containerEl.createEl("h3", { text: "Server Shared Notes (Registry)" });
-        const registryDisplayContainer = containerEl.createDiv({ cls: 'note-registry-container' }); // Use new container class
+        const registryDisplayContainer = containerEl.createDiv({ cls: 'note-registry-container' });
         this.renderNoteRegistryContent(registryDisplayContainer);
     }
 
     // Helper function to render the key list (used by both modal and settings tab if refactored)
     private async renderKeyListContent(containerToRenderInto: HTMLElement): Promise<void> {
-        containerToRenderInto.empty(); // Clear content of the specific list container
+        containerToRenderInto.empty();
 
         const currentKeys = await listKeys(this.plugin);
 
         if (currentKeys.length === 0) {
-            containerToRenderInto.createEl('p', { text: 'No keys currently stored.', cls: 'empty-list-message' }); // Use new class
+            containerToRenderInto.createEl('p', { text: 'No keys currently stored.', cls: 'empty-list-message' });
         } else {
             const listHeader = containerToRenderInto.createDiv({ cls: 'key-list-header' });
-            listHeader.style.gridTemplateColumns = '1fr 2fr 1.5fr 0.5fr'; // Adjust column widths (consistent with CSS)
-            listHeader.createSpan({ text: 'Key (Partial)' });
+            listHeader.style.gridTemplateColumns = '2.8fr 1.5fr 1fr 0.7fr'; // Consistent with CSS
+            listHeader.createSpan({ text: 'Key (Full)' }); // Changed header text
             listHeader.createSpan({ text: 'Note Name' });
             listHeader.createSpan({ text: 'Access Type' });
             listHeader.createSpan({ text: 'Actions' });
 
             currentKeys.forEach((keyItem: KeyItem) => {
                 const keyRow = containerToRenderInto.createDiv({ cls: 'key-list-row' });
-                keyRow.style.gridTemplateColumns = '1fr 2fr 1.5fr 0.5fr'; // Consistent with CSS
+                keyRow.style.gridTemplateColumns = '2.8fr 1.5fr 1fr 0.7fr'; // Consistent with CSS
                 
-                keyRow.createSpan({ text: keyItem.id.substring(0, 8) + '...', cls: 'key-id-display' });
-                keyRow.createSpan({ text: keyItem.note, cls: 'note-name-display' });
-                keyRow.createSpan({ text: keyItem.access, cls: 'access-type-display' });
+                // NEW: Wrap content in a div with .field-content-box for styling
+                keyRow.createDiv({ text: keyItem.id, cls: ['key-id-display', 'field-content-box'] });
+                keyRow.createDiv({ text: keyItem.note, cls: ['note-name-display', 'field-content-box'] });
+                keyRow.createDiv({ text: keyItem.access, cls: ['access-type-display', 'field-content-box'] });
 
                 const actionsDiv = keyRow.createDiv({ cls: 'key-actions' });
+                
+                // NEW: Copy button
+                new ButtonComponent(actionsDiv)
+                    .setIcon('copy') // Obsidian's built-in copy icon
+                    .setTooltip('Copy Key to Clipboard')
+                    .onClick(async () => {
+                        await navigator.clipboard.writeText(keyItem.id);
+                        new Notice(`Key "${keyItem.id}" copied to clipboard!`, 2000);
+                    });
+
                 new ButtonComponent(actionsDiv)
                     .setIcon('trash')
                     .setTooltip('Delete Key')
@@ -272,7 +284,7 @@ export class PluginSettingsTab extends PluginSettingTab {
     }
 
     private renderAddKeySection(containerEl: HTMLElement, keyListDisplayContainer: HTMLElement): void {
-        const addKeySection = containerEl.createDiv({ cls: 'add-key-section' }); // Use new container class
+        const addKeySection = containerEl.createDiv({ cls: 'add-key-section' });
         addKeySection.createEl("h3", { text: "Manually Add New Key" });
 
         new Setting(addKeySection)
@@ -332,7 +344,7 @@ export class PluginSettingsTab extends PluginSettingTab {
                         if (newKeyItem) {
                             const success = await addKey(this.plugin, newKeyItem);
                             if (success) {
-                                new Notice(`Key added: ${newKeyItem.id.substring(0, 8)}...`, 3000);
+                                new Notice(`Key added: ${newKeyItem.id.substring(0, 8)}...`, 3000); // Still show partial in notice
                                 this.newKeyIdInput.setValue(''); // Clear key input
                                 this.newNoteNameInput.setValue(this.app.workspace.getActiveFile()?.basename || ''); // Reset note name
                                 await this.renderKeyListContent(keyListDisplayContainer); // Re-render the key list
@@ -346,10 +358,10 @@ export class PluginSettingsTab extends PluginSettingTab {
 
     private renderNoteRegistryContent(containerEl: HTMLElement): void {
         containerEl.empty();
-        const registry = getNoteRegistry(this.plugin); // Access the plugin's registry
+        const registry = getNoteRegistry(this.plugin);
 
         if (registry.length === 0) {
-            containerEl.createEl('p', { text: 'No notes currently shared in the local registry.', cls: 'empty-list-message' }); // Use new class
+            containerEl.createEl('p', { text: 'No notes currently shared in the local registry.', cls: 'empty-list-message' });
         } else {
             const registryHeader = containerEl.createDiv({ cls: 'registry-list-header' });
             registryHeader.style.gridTemplateColumns = '1.5fr 3fr 1fr';
@@ -361,8 +373,10 @@ export class PluginSettingsTab extends PluginSettingTab {
                 const row = containerEl.createDiv({ cls: 'registry-list-row' });
                 row.style.gridTemplateColumns = '1.5fr 3fr 1fr';
 
-                row.createSpan({ text: item.key, cls: 'registry-key-display' });
-                row.createSpan({ text: item.content.substring(0, 50) + (item.content.length > 50 ? '...' : ''), cls: 'registry-content-display' });
+                // NEW: Wrap content in a div with .field-content-box for styling
+                row.createDiv({ text: item.key, cls: ['registry-key-display', 'field-content-box'] });
+                // Remove substring for registry content, let CSS handle truncation
+                row.createDiv({ text: item.content, cls: ['registry-content-display', 'field-content-box'] });
 
                 const actionsDiv = row.createDiv({ cls: 'registry-actions' });
                 new ButtonComponent(actionsDiv)
@@ -394,47 +408,87 @@ export class PluginSettingsTab extends PluginSettingTab {
                     });
             });
 
-        let linkNoteKeyInput: TextComponent; // Local variable for this page's input
+        let linkNoteKeyInput: TextComponent;
 
         new Setting(containerEl)
             .setName('Share Key / Password')
             .setDesc('Enter the key/password for the shared note you want to link.')
             .addText(text => {
                 linkNoteKeyInput = text;
-                text.setPlaceholder('e.g., mysecretkey123');
+                text.setPlaceholder('e.g., MyNoteName-192.168.1.100');
             });
 
         new Setting(containerEl)
             .addButton(button => {
                 button.setButtonText('Pull Note')
                     .setCta()
-                    .onClick(() => {
+                    .onClick(async () => { // Made async
                         const key = linkNoteKeyInput.getValue().trim();
                         if (!key) {
                             new Notice('Please enter a Share Key / Password to pull a note.', 3000);
                             return;
                         }
-                        new Notice(`Attempting to pull note with key: ${key}. Functionality coming soon!`, 5000);
-                        // Here you would typically call a function like requestNoteFromPeer from client.ts
-                        // For example: requestNoteFromPeer("ws://localhost:3010", key);
+
+                        new Notice(`Attempting to pull note with key: ${key}...`, 3000);
+
+                        try {
+                            // Use the actual WebSocket client function
+                            const content = await requestNoteFromPeer("ws://localhost:3010", key);
+
+                            // Derive note name from the key (e.g., "NoteName-IP" -> "NoteName")
+                            const noteNameParts = key.split('-');
+                            const noteName = noteNameParts.length > 1 ? noteNameParts.slice(0, -1).join('-') : key; // Handle keys without IP
+
+                            const sanitizedNoteName = noteName.replace(/[\\/:*?"<>|]/g, ''); // Basic sanitization
+                            const filePath = `${sanitizedNoteName}.md`;
+                            
+                            let file: TFile | null = this.app.vault.getAbstractFileByPath(filePath) as TFile;
+                            let overwrite = false;
+
+                            if (file) {
+                                // File exists, ask for overwrite confirmation
+                                overwrite = await new Promise(resolve => {
+                                    const confirmNotice = new Notice(
+                                        `Note "${filePath}" already exists. Overwrite? (Click here to confirm)`,
+                                        0 // Display indefinitely until clicked
+                                    );
+                                    confirmNotice.noticeEl.onclick = () => {
+                                        confirmNotice.hide();
+                                        resolve(true); // User confirms overwrite
+                                    };
+                                    // Auto-hide after some time if not clicked, and resolve to false
+                                    setTimeout(() => {
+                                        confirmNotice.hide();
+                                        resolve(false);
+                                    }, 7000); // 7 seconds to decide
+                                });
+
+                                if (!overwrite) {
+                                    new Notice(`Pull cancelled for "${filePath}". Note not overwritten.`, 3000);
+                                    return;
+                                }
+                            }
+
+                            if (file && overwrite) {
+                                await this.app.vault.modify(file, content);
+                                new Notice(`Note "${filePath}" updated successfully!`, 3000);
+                            } else {
+                                file = await this.app.vault.create(filePath, content);
+                                new Notice(`Note "${filePath}" created successfully!`, 3000);
+                            }
+
+                            // Open the created/updated note
+                            if (file) {
+                                this.app.workspace.openLinkText(file.path, '', false);
+                            }
+
+                        } catch (error) {
+                            console.error('Error pulling note:', error);
+                            new Notice(`An error occurred while pulling the note: ${error.message}`, 5000);
+                        }
                     });
             });
 
-        new Setting(containerEl)
-            .addButton(button => {
-                button.setButtonText('Generate Shareable Link (Copy to Clipboard)')
-                    .onClick(() => {
-                        const password = linkNoteKeyInput.getValue().trim();
-                        if (!password) {
-                            new Notice('Please enter a Share Key / Password first to generate a link.', 3000);
-                            return;
-                        }
-                        const dummyIp = '192.168.1.42'; // This should ideally come from getLocalIP() or user input
-                        const dummyPort = 3010;
-                        const shareLink = `obs-collab://${dummyIp}:${dummyPort}/note/${password}`;
-                        navigator.clipboard.writeText(shareLink);
-                        new Notice(`Share Link copied: ${shareLink}`, 6000);
-                    });
-            });
+        // REMOVED: "Generate Shareable Link (Copy to Clipboard)" button
     }
 }

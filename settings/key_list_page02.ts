@@ -1,11 +1,11 @@
-import { App, Modal, Setting, ButtonComponent, Notice, DropdownComponent, TextComponent } from 'obsidian';
-import MyPlugin, { KeyItem } from '../main'; // Ensure KeyItem is imported
-import { listKeys, deleteKey, addKey, generateKey } from '../storage/keyManager'; // Ensure these are imported
+import { App, Modal, Setting, ButtonComponent, Notice, TextComponent, DropdownComponent } from 'obsidian';
+import MyPlugin, { KeyItem } from '../main';
+import { listKeys, deleteKey, addKey, generateKey } from '../storage/keyManager';
 
 export class KeyListModal extends Modal {
     plugin: MyPlugin;
-    private keyListContainer: HTMLElement; // To hold the list of keys
-    private addKeySectionContainer: HTMLElement; // To hold the add key section
+    private keyListContainer: HTMLElement;
+    private addKeySectionContainer: HTMLElement;
 
     // Input references for the "Add New Key" section
     private newKeyIdInput: TextComponent;
@@ -20,20 +20,20 @@ export class KeyListModal extends Modal {
 
     async onOpen() {
         const { contentEl } = this;
-        contentEl.empty(); // Clear existing content
+        contentEl.empty();
 
         contentEl.createEl('h2', { text: 'All Collaboration Keys' });
 
         this.keyListContainer = contentEl.createDiv({ cls: 'key-list-container' });
-        await this.renderKeyListContent(this.keyListContainer); // Initial render of the key list
+        await this.renderKeyListContent(this.keyListContainer);
 
         this.addKeySectionContainer = contentEl.createDiv({ cls: 'add-key-section' });
-        this.renderAddKeySection(this.addKeySectionContainer); // Render the add key section
+        this.renderAddKeySection(this.addKeySectionContainer);
 
         // You might want to display the note registry in the modal as well, if applicable
         contentEl.createEl("h3", { text: "Server Shared Notes (Registry)" });
         const registryDisplayContainer = contentEl.createDiv({ cls: 'note-registry-container' });
-        this.renderNoteRegistryContent(registryDisplayContainer); // Add this if you want it in the modal
+        this.renderNoteRegistryContent(registryDisplayContainer);
     }
 
     onClose() {
@@ -43,7 +43,7 @@ export class KeyListModal extends Modal {
 
     // Helper function to render the key list content
     private async renderKeyListContent(containerToRenderInto: HTMLElement): Promise<void> {
-        containerToRenderInto.empty(); // Clear content of the specific list container
+        containerToRenderInto.empty();
 
         const currentKeys = await listKeys(this.plugin);
 
@@ -51,21 +51,32 @@ export class KeyListModal extends Modal {
             containerToRenderInto.createEl('p', { text: 'No keys currently stored.' , cls: 'empty-list-message' });
         } else {
             const listHeader = containerToRenderInto.createDiv({ cls: 'key-list-header' });
-            listHeader.style.gridTemplateColumns = '1fr 2fr 1.5fr 0.5fr'; // Adjust column widths (consistent with CSS)
-            listHeader.createSpan({ text: 'Key (Partial)' });
+            listHeader.style.gridTemplateColumns = '2.8fr 1.5fr 1fr 0.7fr'; // Consistent with CSS
+            listHeader.createSpan({ text: 'Key (Full)' }); // Changed header text
             listHeader.createSpan({ text: 'Note Name' });
             listHeader.createSpan({ text: 'Access Type' });
             listHeader.createSpan({ text: 'Actions' });
 
             currentKeys.forEach((keyItem: KeyItem) => {
                 const keyRow = containerToRenderInto.createDiv({ cls: 'key-list-row' });
-                keyRow.style.gridTemplateColumns = '1fr 2fr 1.5fr 0.5fr';
+                keyRow.style.gridTemplateColumns = '2.8fr 1.5fr 1fr 0.7fr'; // Consistent with CSS
                 
-                keyRow.createSpan({ text: keyItem.id.substring(0, 8) + '...', cls: 'key-id-display' });
-                keyRow.createSpan({ text: keyItem.note, cls: 'note-name-display' });
-                keyRow.createSpan({ text: keyItem.access, cls: 'access-type-display' });
+                // NEW: Wrap content in a div with .field-content-box for styling
+                keyRow.createDiv({ text: keyItem.id, cls: ['key-id-display', 'field-content-box'] });
+                keyRow.createDiv({ text: keyItem.note, cls: ['note-name-display', 'field-content-box'] });
+                keyRow.createDiv({ text: keyItem.access, cls: ['access-type-display', 'field-content-box'] });
 
                 const actionsDiv = keyRow.createDiv({ cls: 'key-actions' });
+                
+                // NEW: Copy button
+                new ButtonComponent(actionsDiv)
+                    .setIcon('copy') // Obsidian's built-in copy icon
+                    .setTooltip('Copy Key to Clipboard')
+                    .onClick(async () => {
+                        await navigator.clipboard.writeText(keyItem.id);
+                        new Notice(`Key "${keyItem.id}" copied to clipboard!`, 2000);
+                    });
+
                 new ButtonComponent(actionsDiv)
                     .setIcon('trash')
                     .setTooltip('Delete Key')
@@ -84,7 +95,8 @@ export class KeyListModal extends Modal {
     // Helper function to render the "Add New Key" section
     private renderAddKeySection(containerEl: HTMLElement): void {
         containerEl.empty();
-        containerEl.createEl("h3", { text: "Manually Add New Key" });
+        // Corrected: Use containerEl.createEl directly within this function's scope
+        containerEl.createEl("h3", { text: "Manually Add New Key" }); 
 
         new Setting(containerEl)
             .setName("Key / Password")
@@ -143,7 +155,7 @@ export class KeyListModal extends Modal {
                         if (newKeyItem) {
                             const success = await addKey(this.plugin, newKeyItem);
                             if (success) {
-                                new Notice(`Key added: ${newKeyItem.id.substring(0, 8)}...`, 3000);
+                                new Notice(`Key added: ${newKeyItem.id.substring(0, 8)}...`, 3000); // Still show partial in notice
                                 this.newKeyIdInput.setValue(''); // Clear key input
                                 this.newNoteNameInput.setValue(this.app.workspace.getActiveFile()?.basename || ''); // Reset note name
                                 await this.renderKeyListContent(this.keyListContainer); // Re-render the key list in the modal
@@ -173,8 +185,10 @@ export class KeyListModal extends Modal {
                 const row = containerEl.createDiv({ cls: 'registry-list-row' });
                 row.style.gridTemplateColumns = '1.5fr 3fr 1fr';
 
-                row.createSpan({ text: item.key, cls: 'registry-key-display' });
-                row.createSpan({ text: item.content.substring(0, 50) + (item.content.length > 50 ? '...' : ''), cls: 'registry-content-display' });
+                // NEW: Wrap content in a div with .field-content-box for styling
+                row.createDiv({ text: item.key, cls: ['registry-key-display', 'field-content-box'] });
+                // Remove substring for registry content, let CSS handle truncation
+                row.createDiv({ text: item.content, cls: ['registry-content-display', 'field-content-box'] });
 
                 const actionsDiv = row.createDiv({ cls: 'registry-actions' });
                 new ButtonComponent(actionsDiv)
@@ -183,12 +197,6 @@ export class KeyListModal extends Modal {
                     .setClass('mod-warning')
                     .onClick(async () => {
                         if (confirm(`Are you sure you want to delete note "${item.key}" from the registry?`)) {
-                            // Assuming deleteNoteFromRegistry is defined and imported in main.ts and accessible via plugin.settings
-                            // For this to work, you need to import deleteNoteFromRegistry at the top of this file and call it directly
-                            // OR, if deleteNoteFromRegistry is an exported function from main.ts, you can pass this.plugin
-                            // Example: await deleteNoteFromRegistry(this.plugin, item.key);
-                            new Notice(`Deletion of '${item.key}' from registry not yet fully implemented in modal.`, 3000);
-                            // Placeholder:
                              const currentRegistry = this.plugin.settings.registry.filter(regItem => regItem.key !== item.key);
                              this.plugin.settings.registry = currentRegistry;
                              await this.plugin.saveSettings();

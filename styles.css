@@ -1,21 +1,18 @@
-/* src/styles.css - REVISED FOR IMPROVED AESTHETICS */
+/* src/styles.css - REVISED FOR IMPROVED AESTHETICS AND KEY READABILITY */
 
 /* --- General Plugin-wide Elements --- */
-/* Remove the empty wrapper if not used, or add styles if it is */
 .obsidian-collaboration-plugin-wrapper {
     /* Optional: A subtle wrapper for all plugin elements if needed */
-    /* Example: padding: 10px; */
 }
 
 /* --- Common Section Styling (for Key List and Registry) --- */
-/* Soften the main section containers, use consistent padding */
 .key-list-container,
 .note-registry-container {
-    background-color: var(--background-secondary-alt); /* Slightly darker secondary background */
+    background-color: var(--background-secondary-alt);
     border: 1px solid var(--background-modifier-border);
     border-radius: var(--radius-l);
-    padding: 20px; /* More generous padding */
-    margin-bottom: 25px; /* Spacing between main blocks */
+    padding: 20px;
+    margin-bottom: 25px;
     box-shadow: var(--shadow-s);
 }
 
@@ -23,18 +20,18 @@
 h2 {
     color: var(--text-normal);
     margin-top: 0;
-    margin-bottom: 25px; /* More space below main title */
+    margin-bottom: 25px;
     padding-bottom: 10px;
     border-bottom: 1px solid var(--background-modifier-border);
-    font-size: var(--font-title-h2); /* Standard Obsidian H2 size */
+    font-size: var(--font-title-h2);
 }
 
-h3 { /* For "Manually Add New Key" and "Server Shared Notes (Registry)" titles */
+h3 {
     color: var(--text-normal);
     margin-top: 0;
-    margin-bottom: 20px; /* Space below sub-headers */
-    font-size: var(--font-title-h3); /* Standard Obsidian H3 size */
-    border-bottom: 1px dashed var(--background-modifier-border); /* Lighter separator */
+    margin-bottom: 20px;
+    font-size: var(--font-title-h3);
+    border-bottom: 1px dashed var(--background-modifier-border);
     padding-bottom: 8px;
 }
 
@@ -42,16 +39,18 @@ h3 { /* For "Manually Add New Key" and "Server Shared Notes (Registry)" titles *
 .key-list-header,
 .registry-list-header {
     display: grid;
-    font-weight: 600; /* Bolder */
+    font-weight: 600;
     border-bottom: 2px solid var(--background-modifier-border);
-    padding-bottom: 10px; /* More padding */
+    padding-bottom: 10px;
     margin-bottom: 10px;
     align-items: center;
     gap: 10px;
-    color: var(--text-faint); /* Even fainter text for header */
+    color: var(--text-faint);
     text-transform: uppercase;
-    font-size: 0.8em; /* Slightly smaller for header text */
-    letter-spacing: 0.05em; /* Add some letter spacing */
+    font-size: 0.8em;
+    letter-spacing: 0.05em;
+    /* Adjusted column widths for content boxes */
+    grid-template-columns: 2.8fr 1.5fr 1fr 0.7fr; /* Adjusted for better balance with boxes */
 }
 
 /* --- List Rows (Key List, Registry List) --- */
@@ -59,49 +58,95 @@ h3 { /* For "Manually Add New Key" and "Server Shared Notes (Registry)" titles *
 .registry-list-row {
     display: grid;
     align-items: center;
-    padding: 12px 0; /* More vertical padding */
-    border-bottom: 1px solid var(--background-modifier-border); /* Solid, but subtle border */
-    transition: background-color 0.2s ease-in-out; /* Smooth hover */
+    padding: 8px 0; /* Reduced vertical padding slightly to make boxes fit better */
+    border-bottom: 1px solid var(--background-modifier-border);
+    transition: background-color 0.2s ease-in-out;
+    /* Adjusted column widths for content boxes */
+    grid-template-columns: 2.8fr 1.5fr 1fr 0.7fr; /* Adjusted for better balance with boxes */
 }
 
 .key-list-row:hover,
 .registry-list-row:hover {
-    background-color: var(--background-modifier-hover); /* Subtle highlight on hover */
+    background-color: var(--background-modifier-hover);
 }
 
 .key-list-row:last-child,
 .registry-list-row:last-child {
-    border-bottom: none; /* No border on the last item */
+    border-bottom: none;
 }
 
-/* --- Individual Cell Styling --- */
-.key-id-display,
-.registry-key-display {
+/* --- NEW: Styling for individual content boxes --- */
+.field-content-box {
+    background-color: var(--background-primary); /* Lighter background for the box */
+    border: 1px solid var(--background-modifier-border-hover); /* Subtle border */
+    border-radius: var(--radius-s); /* Small rounded corners */
+    padding: 6px 10px; /* Internal padding */
+    margin: 2px 0; /* Small vertical margin to separate from grid lines */
+    
+    /* Truncation properties */
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    cursor: help; /* Indicate hover functionality */
+
+    /* Transition for smooth reveal on hover */
+    transition: all 0.2s ease-in-out;
+    max-width: 100%; /* Ensure it respects grid column width */
+}
+
+.field-content-box:hover {
+    white-space: normal; /* Allow text to wrap */
+    overflow: visible; /* Show all content */
+    text-overflow: clip; /* Remove ellipsis */
+    position: relative; /* Needed for z-index to work */
+    z-index: 10; /* Bring to front so it doesn't get clipped by adjacent elements */
+    background-color: var(--background-primary-alt); /* Slightly different background on hover */
+    box-shadow: var(--shadow-m); /* More prominent shadow on hover */
+    border-color: var(--interactive-accent); /* Highlight border on hover */
+}
+
+/* --- Individual Cell Styling (apply .field-content-box to these in JS) --- */
+.key-id-display.field-content-box {
     font-family: var(--font-monospace);
     color: var(--text-accent);
     font-weight: 500;
-    word-break: break-all;
-    font-size: 0.9em; /* Slightly smaller key font */
+    font-size: 0.85em;
+    line-height: 1.3;
 }
 
-.note-name-display,
-.registry-content-display {
+.note-name-display.field-content-box {
     color: var(--text-normal);
-    word-break: break-all;
+    font-size: 0.9em;
+    line-height: 1.3;
 }
 
-.access-type-display {
+.access-type-display.field-content-box {
     font-style: italic;
     color: var(--text-muted);
-    font-size: 0.85em; /* Slightly smaller access type */
+    font-size: 0.8em;
 }
+
+.registry-key-display.field-content-box {
+    font-family: var(--font-monospace);
+    color: var(--text-accent);
+    font-weight: 500;
+    font-size: 0.85em;
+    line-height: 1.3;
+}
+
+.registry-content-display.field-content-box {
+    color: var(--text-normal);
+    font-size: 0.9em;
+    line-height: 1.3;
+}
+
 
 /* --- Actions Column Buttons --- */
 .key-actions,
 .registry-actions {
     display: flex;
     justify-content: flex-end;
-    gap: 8px; /* More space between buttons if multiple */
+    gap: 8px;
 }
 
 .key-actions button.mod-warning,
@@ -109,43 +154,43 @@ h3 { /* For "Manually Add New Key" and "Server Shared Notes (Registry)" titles *
     --button-background-hover: var(--background-modifier-error-hover);
     --button-text-color: var(--text-error);
     --button-text-color-hover: var(--text-on-accent);
-    padding: 6px 10px; /* Slightly larger clickable area */
+    padding: 6px 10px;
     min-width: unset;
     height: unset;
-    border-radius: var(--radius-s); /* Slightly rounded buttons */
-    opacity: 0.7; /* Slightly faded when not hovered */
+    border-radius: var(--radius-s);
+    opacity: 0.7;
     transition: opacity 0.2s ease-in-out;
 }
 
 .key-actions button.mod-warning:hover,
 .registry-actions button.mod-warning:hover {
-    opacity: 1; /* Full opacity on hover */
+    opacity: 1;
 }
 
 /* --- No keys/registry message --- */
 .empty-list-message {
     text-align: center;
-    color: var(--text-faint); /* More faint for empty state */
-    padding: 30px; /* More generous padding */
+    color: var(--text-faint);
+    padding: 30px;
     font-style: italic;
     font-size: 0.95em;
 }
 
 /* --- Add Key Section (within Key List Page/Modal) --- */
 .add-key-section {
-    background-color: var(--background-primary); /* Use primary for contrast */
+    background-color: var(--background-primary);
     border: 1px solid var(--background-modifier-border);
     border-radius: var(--radius-l);
     padding: 20px;
-    margin-top: 25px; /* Spacing from the list above */
-    margin-bottom: 25px; /* Spacing before the registry section */
+    margin-top: 25px;
+    margin-bottom: 25px;
     box-shadow: var(--shadow-s);
 }
 
 .add-key-section .setting-item {
-    padding-top: 8px; /* Reduce default padding */
+    padding-top: 8px;
     padding-bottom: 8px;
-    border-bottom: 1px dashed var(--background-modifier-border); /* Lighter separator between settings */
+    border-bottom: 1px dashed var(--background-modifier-border);
 }
 .add-key-section .setting-item:last-child {
     border-bottom: none;
@@ -154,19 +199,19 @@ h3 { /* For "Manually Add New Key" and "Server Shared Notes (Registry)" titles *
 }
 
 .add-key-section .setting-item-description {
-    font-size: 0.8em; /* Smaller description text */
+    font-size: 0.8em;
     color: var(--text-faint);
     margin-top: 4px;
 }
 
 /* Make "Add Key" button more prominent */
 .add-key-section .setting-item-control button.mod-cta {
-    font-size: var(--font-text-large); /* Larger text */
-    padding: 10px 15px; /* More padding */
-    min-height: unset; /* Allow height to adjust */
-    background-color: var(--interactive-accent); /* Use primary accent color */
+    font-size: var(--font-text-large);
+    padding: 10px 15px;
+    min-height: unset;
+    background-color: var(--interactive-accent);
     color: var(--text-on-accent);
-    border-radius: var(--radius-l); /* More rounded */
+    border-radius: var(--radius-l);
     font-weight: bold;
     transition: background-color 0.2s ease-in-out;
 }
@@ -177,12 +222,12 @@ h3 { /* For "Manually Add New Key" and "Server Shared Notes (Registry)" titles *
 
 /* --- Other Modal/Settings Adjustments --- */
 .modal-content .setting-item {
-    margin-bottom: 10px; /* Adjust default setting item spacing in modals */
+    margin-bottom: 10px;
 }
 
 /* Back button in settings tab */
 .settings-nav-buttons .setting-item-control button {
-    background-color: var(--background-secondary); /* Match general Obsidian button style */
+    background-color: var(--background-secondary);
     color: var(--text-normal);
     border: 1px solid var(--background-modifier-border);
     border-radius: var(--radius-s);
@@ -197,7 +242,7 @@ h3 { /* For "Manually Add New Key" and "Server Shared Notes (Registry)" titles *
 /* Ensure consistent form element sizing */
 .setting-item .text-input,
 .setting-item select {
-    width: 100%; /* Ensure inputs fill available space */
+    width: 100%;
     padding: 8px 10px;
     border: 1px solid var(--background-modifier-border);
     border-radius: var(--radius-s);
@@ -205,7 +250,7 @@ h3 { /* For "Manually Add New Key" and "Server Shared Notes (Registry)" titles *
     color: var(--text-normal);
 }
 .setting-item select {
-    appearance: none; /* Remove default dropdown arrow */
+    appearance: none;
     background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="6" viewBox="0 0 10 6"><path fill="%23CCC" d="M0 0l5 6 5-6z"/></svg>');
     background-repeat: no-repeat;
     background-position: right 8px center;

@@ -1,101 +1,77 @@
-// storage/keyManager.ts
-
-import { App, Notice } from "obsidian";
-import MyPlugin from "../main"; // Ensure this path is correct relative to keyManager.ts
-import { KeyItem } from "../main"; // *** NEW: Import KeyItem from main.ts ***
+import MyPlugin, { KeyItem } from "../main";
+import { getLocalIP } from "../utils/get-ip"; // Import getLocalIP to get the local IP address
 
 /**
- * Adds a new key item to the plugin's collection and saves the settings.
- * @param plugin The instance of your MyPlugin class.
- * @param newKeyItem The full KeyItem object to add.
- * @returns true if the key was added, false if a key with the same ID already exists.
- */
-export async function addKey(plugin: MyPlugin, newKeyItem: KeyItem): Promise<boolean> {
-    // Check if a key with the same ID already exists
-    const exists = plugin.settings.keys.some((kItem: KeyItem) => kItem.id === newKeyItem.id);
-    if (exists) {
-        new Notice(`Key "${newKeyItem.id}" already exists.`, 3000);
-        return false;
-    }
-
-    plugin.settings.keys.push(newKeyItem);
-
-    await plugin.saveSettings(); // CRITICAL: Save changes to disk
-    new Notice(`Key "${newKeyItem.id}" (Note: ${newKeyItem.note}, Access: ${newKeyItem.access}) added.`, 3000);
-    return true;
-}
-
-/**
- * Generates a random alphanumeric string of a specified length.
- * @param length The desired length of the random string.
- * @returns A random alphanumeric string.
- */
-export function generateRandomString(length: number): string {
-    const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    let result = "";
-    for (let i = 0; i < length; i++) {
-        result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return result;
-}
-
-/**
- * Generates a formatted key string and returns it as part of a KeyItem.
- * This function no longer *automatically* adds and saves the key; the calling
- * function (e.g., from a modal or command) will use the returned KeyItem with `addKey`.
- * @param plugin The instance of your MyPlugin class.
- * @param noteName A name or identifier for the note (used in the key URL and KeyItem).
- * @param accessType The role/access type (used in the KeyItem).
- * @returns The generated KeyItem object.
+ * Generates a unique key based on the note name and local IP address.
+ * This function now creates a deterministic key by concatenating these two elements.
+ *
+ * @param plugin The plugin instance, used to access plugin settings if needed.
+ * @param noteName The name of the note for which the key is being generated.
+ * @param accessType The type of access (e.g., "View", "Edit") associated with the key.
+ * @returns A Promise that resolves to a KeyItem object containing the generated ID, note name, and access type.
  */
 export async function generateKey(plugin: MyPlugin, noteName: string, accessType: string): Promise<KeyItem> {
-    const ip = '192.168.1.42'; // This should ideally come from plugin.settings or a user prompt
-    const port = 3010;
-    const randomSuffix = generateRandomString(8);
+    const localIP = getLocalIP(); // Get the current local IP address
 
-    // The 'noteName' is included in the key ID for clarity
-    const keyId = `obs-collab://${ip}:${port}/note/${noteName.replace(/ /g, '-')}-${randomSuffix}`;
+    // Create a deterministic key ID by concatenating the note name and local IP.
+    // Spaces in the note name are replaced with underscores for consistency.
+    const newKeyId = `${noteName.replace(/\s/g, '_')}-${localIP}`; // Corrected format: NoteName-IPAddress
 
-    const newKeyItem: KeyItem = {
-        id: keyId,
+    // Return the new KeyItem. The 'addKey' function (below) will handle checking for duplicates
+    // based on this generated ID before storing it.
+    return {
+        id: newKeyId,
         note: noteName,
-        access: accessType
+        access: accessType // Access type is still stored with the KeyItem, just not part of the ID
     };
-
-    // NOTE: This function no longer calls addKey and saveSettings directly.
-    // The caller of generateKey is responsible for adding the returned KeyItem.
-    // This gives more control over when the key is added and saved.
-
-    return newKeyItem;
 }
 
 /**
- * Deletes a key from the plugin's collection and saves the settings.
- * @param plugin The instance of your MyPlugin class.
- * @param keyIdToDelete The ID (string) of the key to delete.
- * @returns true if the key was deleted, false if it was not found.
+ * Adds a new key item to the plugin's settings.
+ * This function checks if a key with the exact same ID already exists to prevent duplicates.
+ *
+ * @param plugin The plugin instance where the settings are stored.
+ * @param newKeyItem The KeyItem object to be added to the plugin's key list.
+ * @returns A Promise that resolves to `true` if the key was successfully added,
+ * or `false` if a key with the same ID already exists.
  */
-export async function deleteKey(plugin: MyPlugin, keyIdToDelete: string): Promise<boolean> {
-    const originalLength = plugin.settings.keys.length;
-
-    // Filter out the key to be deleted based on its 'id' property
-    plugin.settings.keys = plugin.settings.keys.filter((kItem: KeyItem) => kItem.id !== keyIdToDelete);
-
-    if (plugin.settings.keys.length === originalLength) {
-        new Notice(`Key "${keyIdToDelete}" not found.`, 3000);
-        return false;
+export async function addKey(plugin: MyPlugin, newKeyItem: KeyItem): Promise<boolean> {
+    // Check if a key with the exact same ID already exists in the plugin's settings.
+    const existingKey = plugin.settings.keys.find(key => key.id === newKeyItem.id);
+    if (existingKey) {
+        console.warn(`Key with ID '${newKeyItem.id}' already exists. Not adding duplicate.`);
+        return false; // Indicate that the key was not added due to duplication
     }
 
-    await plugin.saveSettings(); // CRITICAL: Save changes to disk
-    new Notice(`Key "${keyIdToDelete}" deleted.`, 3000);
-    return true;
+    // If no existing key with the same ID is found, add the new key item to the list.
+    plugin.settings.keys.push(newKeyItem);
+    await plugin.saveSettings(); // Persist the updated settings
+    return true; // Indicate that the key was successfully added
 }
 
 /**
- * Returns a list of all stored KeyItem objects.
- * @param plugin The instance of your MyPlugin class.
- * @returns An array of KeyItem objects.
+ * Retrieves and returns all stored key items from the plugin's settings.
+ *
+ * @param plugin The plugin instance from which to retrieve the keys.
+ * @returns A Promise that resolves to an array of KeyItem objects.
  */
-export function listKeys(plugin: MyPlugin): KeyItem[] {
-    return plugin.settings.keys;
+export async function listKeys(plugin: MyPlugin): Promise<KeyItem[]> {
+    // Ensure plugin settings are loaded before attempting to access the keys.
+    if (!plugin.settings) {
+        await plugin.loadSettings();
+    }
+    return plugin.settings.keys; // Return the array of stored keys
+}
+
+/**
+ * Deletes a key item from the plugin's settings based on its ID.
+ *
+ * @param plugin The plugin instance from which to delete the key.
+ * @param keyId The ID of the key to be deleted.
+ * @returns A Promise that resolves once the key has been deleted and settings are saved.
+ */
+export async function deleteKey(plugin: MyPlugin, keyId: string): Promise<void> {
+    // Filter out the key with the specified ID, effectively deleting it.
+    plugin.settings.keys = plugin.settings.keys.filter(key => key.id !== keyId);
+    await plugin.saveSettings(); // Persist the updated settings
 }
