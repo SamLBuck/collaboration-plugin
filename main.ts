@@ -51,14 +51,9 @@ const DEFAULT_SETTINGS: MyPluginSettings = {
 	registry: [], 
 };
 
-const REGISTRY_KEY = "registry";
-
-type NoteRegistry = Record<string, string>; // key → content
-
 export function getNoteRegistry(plugin: MyPlugin): noteRegistry[] {
 	return plugin.settings?.registry ?? [];
 }
-
 
 export async function updateNoteRegistry(plugin: MyPlugin, key: string, content: string) {
 	let registry = getNoteRegistry(plugin);
