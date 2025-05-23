@@ -103,7 +103,7 @@ export default class MyPlugin extends Plugin {
 
     async onload() {
         await this.loadSettings();
-		
+
         // Register custom commands (Command Palette commands)
         registerGenerateKeyCommand(this.app, this);
         registerAddKeyCommand(this);
