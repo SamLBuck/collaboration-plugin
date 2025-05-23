@@ -327,3 +327,5 @@ this.addCommand({
         await this.saveData(this.settings);
     }
 }
+
+// Hello
