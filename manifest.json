@@ -1,5 +1,5 @@
 {
-	"id": "obsidian-collaboration-plugin",
+	"id": "collaboration-plugin",
 	"name": "Collaboration Plugin",
 	"version": "1.0.0",
 	"minAppVersion": "0.15.0",

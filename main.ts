@@ -41,8 +41,6 @@ import { getLocalIP } from "./utils/get-ip"
 
 
 
-
-
 interface MyPluginSettings {
     mySetting: string;
     keys: KeyItem[];
@@ -99,24 +97,31 @@ export default class MyPlugin extends Plugin {
             }
         }).addClass('my-plugin-ribbon-class');
 
-    // Ribbon: Open Settings Modal
-    this.addRibbonIcon('settings', 'Settings', async () => {
-      const { SettingsModal } = await import('./settings/main_page01');
-      new SettingsModal(this.app, this).open();
-    });
+// Settings (Gear) icon: Opens the main Collaboration Settings tab
+this.addRibbonIcon('settings', 'Open Collaboration Settings', () => {
+    // This opens the main Obsidian settings modal and navigates to your plugin's tab
+    (this.app as any).setting.open();
+    (this.app as any).setting.openTabById(PluginSettingsTab.PLUGIN_ID);
+});
 
-    // Ribbon: View Key List
-    this.addRibbonIcon('list', 'View Keys', async () => {
-      const { KeyListModal } = await import('./settings/key_list_page02');
-      new KeyListModal(this.app, this).open();
-    });
+// List (Bullet List) icon: Opens the Key List MODAL DIRECTLY
+this.addRibbonIcon('list', 'View All Collaboration Keys', () => {
+    new KeyListModal(this.app, this).open(); // <--- Opens the modal pop-up
+});
 
-    // Ribbon: Link Note Modal
-    this.addRibbonIcon('link', 'Link Notes', async () => {
-      const { LinkNoteModal } = await import('./settings/link_note_page03');
-      new LinkNoteModal(this.app, this).open();
-    });
-	this.addCommand({
+// Link (Link Chain) icon: Opens the Link Note MODAL DIRECTLY
+this.addRibbonIcon('link', 'Link / Pull a Collaborative Note', () => {
+    new LinkNoteModal(this.app, this).open(); // <--- Opens the modal pop-up
+});
+
+// --- End of Ribbon Icons ---
+
+
+// Register the main settings tab (accessible via plugin list in Obsidian settings)
+// This is the instance that will be opened by openTabById.
+this.addSettingTab(new PluginSettingsTab(this.app, this));
+
+this.addCommand({
 		id: "generate-share-key",
 		name: "Generate Share Key",
 		callback: async () => {
