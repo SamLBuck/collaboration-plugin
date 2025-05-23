@@ -23,7 +23,7 @@ import { tempIPInputModal } from "./settings/tempIPInputModal";
 import { getLocalIP } from "./utils/get-ip"
 import { registerGenerateKeyCommand } from './utils/generate_key_command';
 import { registerPullNoteCommand } from "./utils/pull_note_command";
-import { registerStartServerCommand } from "./utils/start_server_command";
+import { registerStartServerCommand, startWebSocketServerProcess } from "./utils/start_server_command";
 import { registerShowIPCommand } from "./utils/show_ip_command";
 import { registerListSharedKeysCommand } from 'utils/list_keys_command';
 import { registerShareCurrentNoteCommand } from 'utils/share_active_note_command';
@@ -102,12 +102,6 @@ export default class MyPlugin extends Plugin {
         registerSyncAllNotesCommand(this);
 
 
-        this.registerEvent(
-            this.app.workspace.onLayoutReady(() => {
-                startWebSocketServerProcess(this.app, this);
-            })
-        );
-        
 
 
 

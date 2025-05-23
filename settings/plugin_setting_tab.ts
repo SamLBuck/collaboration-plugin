@@ -1,10 +1,6 @@
 import { App, PluginSettingTab, Setting, ButtonComponent, TextComponent, Notice, DropdownComponent } from 'obsidian';
 import MyPlugin, { KeyItem, getNoteRegistry, updateNoteRegistry, deleteNoteFromRegistry } from '../main';
-import { generateKey, addKey, listKeys, deleteKey } from '../storage/keyManager'; // Ensure these are imported
-
-// We no longer import KeyListModal and LinkNoteModal here, as this tab will render their content directly
-// import { KeyListModal } from './key_list_page02'; // NO LONGER NEEDED HERE
-// import { LinkNoteModal } from './link_note_page03'; // NO LONGER NEEDED HERE
+import { generateKey, addKey, listKeys, deleteKey } from '../storage/keyManager';
 
 type SettingsPage = 'main' | 'keyList' | 'linkNote';
 
@@ -99,7 +95,7 @@ export class PluginSettingsTab extends PluginSettingTab {
 
                     if (success) {
                         this.keyInput.setValue(newKeyItem.id);
-                        new Notice(`Generated & Saved: ${newKeyItem.id}\nFor Note: "${newKeyItem.note}"`, 8000);
+                        new Notice(`Generated & Saved:\n${newKeyItem.id}\nFor Note: "${newKeyItem.note}"`, 8000);
                     } else {
                         new Notice("Failed to add key. It might already exist (password collision).", 4000);
                     }
@@ -131,9 +127,9 @@ export class PluginSettingsTab extends PluginSettingTab {
             .setDesc('Select the type of access this key grants for the note.');
 
         const checkboxContainer = accessTypeSetting.controlEl.createDiv({ cls: 'access-type-checkboxes' });
-        checkboxContainer.style.display = 'flex';
-        checkboxContainer.style.flexDirection = 'column';
-        checkboxContainer.style.gap = '8px';
+        checkboxContainer.style.display = 'flex'; // These are now handled by CSS
+        checkboxContainer.style.flexDirection = 'column'; // These are now handled by CSS
+        checkboxContainer.style.gap = '8px'; // These are now handled by CSS
 
         const createCheckbox = (name: string, checked: boolean = false): HTMLInputElement => {
             const wrapper = checkboxContainer.createDiv({ cls: 'checkbox-wrapper' });
@@ -168,9 +164,9 @@ export class PluginSettingsTab extends PluginSettingTab {
         this.accessTypeEditWithApproval = createCheckbox('Edit w/ Approval', false);
 
         const navButtonContainer = containerEl.createDiv({ cls: 'settings-nav-buttons' });
-        navButtonContainer.style.display = 'flex';
-        navButtonContainer.style.justifyContent = 'space-between';
-        navButtonContainer.style.marginTop = '20px';
+        navButtonContainer.style.display = 'flex'; // These are now handled by CSS
+        navButtonContainer.style.justifyContent = 'space-between'; // These are now handled by CSS
+        navButtonContainer.style.marginTop = '20px'; // These are now handled by CSS
 
         const leftButtons = navButtonContainer.createDiv();
         new Setting(leftButtons)
@@ -196,7 +192,7 @@ export class PluginSettingsTab extends PluginSettingTab {
         navButtonContainer.appendChild(rightButtons);
 
         containerEl.querySelectorAll('.setting-item').forEach(item => {
-            (item as HTMLElement).style.marginBottom = '15px';
+            (item as HTMLElement).style.marginBottom = '15px'; // Adjust spacing if needed, can be moved to CSS
         });
     }
 
@@ -223,7 +219,7 @@ export class PluginSettingsTab extends PluginSettingTab {
                     });
             });
 
-        const keyListDisplayContainer = containerEl.createDiv({ cls: 'key-list-display-container' });
+        const keyListDisplayContainer = containerEl.createDiv({ cls: 'key-list-container' }); // Use new container class
         await this.renderKeyListContent(keyListDisplayContainer); // Call helper to render list
 
         // Render the "Manually Add New Key" section below the list
@@ -231,7 +227,7 @@ export class PluginSettingsTab extends PluginSettingTab {
 
         // Display the note registry for server-shared notes
         containerEl.createEl("h3", { text: "Server Shared Notes (Registry)" });
-        const registryDisplayContainer = containerEl.createDiv({ cls: 'note-registry-display-container' });
+        const registryDisplayContainer = containerEl.createDiv({ cls: 'note-registry-container' }); // Use new container class
         this.renderNoteRegistryContent(registryDisplayContainer);
     }
 
@@ -242,16 +238,10 @@ export class PluginSettingsTab extends PluginSettingTab {
         const currentKeys = await listKeys(this.plugin);
 
         if (currentKeys.length === 0) {
-            containerToRenderInto.createEl('p', { text: 'No keys currently stored.' });
+            containerToRenderInto.createEl('p', { text: 'No keys currently stored.', cls: 'empty-list-message' }); // Use new class
         } else {
             const listHeader = containerToRenderInto.createDiv({ cls: 'key-list-header' });
-            listHeader.style.display = 'grid';
-            listHeader.style.gridTemplateColumns = '1fr 2fr 1.5fr 0.5fr'; // Adjust column widths
-            listHeader.style.gap = '10px';
-            listHeader.style.fontWeight = 'bold';
-            listHeader.style.borderBottom = '2px solid var(--background-modifier-border)';
-            listHeader.style.paddingBottom = '5px';
-            listHeader.style.marginBottom = '10px';
+            listHeader.style.gridTemplateColumns = '1fr 2fr 1.5fr 0.5fr'; // Adjust column widths (consistent with CSS)
             listHeader.createSpan({ text: 'Key (Partial)' });
             listHeader.createSpan({ text: 'Note Name' });
             listHeader.createSpan({ text: 'Access Type' });
@@ -259,16 +249,11 @@ export class PluginSettingsTab extends PluginSettingTab {
 
             currentKeys.forEach((keyItem: KeyItem) => {
                 const keyRow = containerToRenderInto.createDiv({ cls: 'key-list-row' });
-                keyRow.style.display = 'grid';
-                keyRow.style.gridTemplateColumns = '1fr 2fr 1.5fr 0.5fr';
-                keyRow.style.gap = '10px';
-                keyRow.style.alignItems = 'center';
-                keyRow.style.padding = '8px 0';
-                keyRow.style.borderBottom = '1px dashed var(--background-modifier-border)';
-
-                keyRow.createSpan({ text: keyItem.id.substring(0, 8) + '...' });
-                keyRow.createSpan({ text: keyItem.note });
-                keyRow.createSpan({ text: keyItem.access });
+                keyRow.style.gridTemplateColumns = '1fr 2fr 1.5fr 0.5fr'; // Consistent with CSS
+                
+                keyRow.createSpan({ text: keyItem.id.substring(0, 8) + '...', cls: 'key-id-display' });
+                keyRow.createSpan({ text: keyItem.note, cls: 'note-name-display' });
+                keyRow.createSpan({ text: keyItem.access, cls: 'access-type-display' });
 
                 const actionsDiv = keyRow.createDiv({ cls: 'key-actions' });
                 new ButtonComponent(actionsDiv)
@@ -287,7 +272,7 @@ export class PluginSettingsTab extends PluginSettingTab {
     }
 
     private renderAddKeySection(containerEl: HTMLElement, keyListDisplayContainer: HTMLElement): void {
-        const addKeySection = containerEl.createDiv({ cls: 'add-key-section' });
+        const addKeySection = containerEl.createDiv({ cls: 'add-key-section' }); // Use new container class
         addKeySection.createEl("h3", { text: "Manually Add New Key" });
 
         new Setting(addKeySection)
@@ -364,31 +349,20 @@ export class PluginSettingsTab extends PluginSettingTab {
         const registry = getNoteRegistry(this.plugin); // Access the plugin's registry
 
         if (registry.length === 0) {
-            containerEl.createEl('p', { text: 'No notes currently shared in the local registry.' });
+            containerEl.createEl('p', { text: 'No notes currently shared in the local registry.', cls: 'empty-list-message' }); // Use new class
         } else {
             const registryHeader = containerEl.createDiv({ cls: 'registry-list-header' });
-            registryHeader.style.display = 'grid';
             registryHeader.style.gridTemplateColumns = '1.5fr 3fr 1fr';
-            registryHeader.style.gap = '10px';
-            registryHeader.style.fontWeight = 'bold';
-            registryHeader.style.borderBottom = '2px solid var(--background-modifier-border)';
-            registryHeader.style.paddingBottom = '5px';
-            registryHeader.style.marginBottom = '10px';
             registryHeader.createSpan({ text: 'Note Key' });
             registryHeader.createSpan({ text: 'Content (Partial)' });
             registryHeader.createSpan({ text: 'Actions' });
 
             registry.forEach(item => {
                 const row = containerEl.createDiv({ cls: 'registry-list-row' });
-                row.style.display = 'grid';
                 row.style.gridTemplateColumns = '1.5fr 3fr 1fr';
-                row.style.gap = '10px';
-                row.style.alignItems = 'center';
-                row.style.padding = '8px 0';
-                row.style.borderBottom = '1px dashed var(--background-modifier-border)';
 
-                row.createSpan({ text: item.key });
-                row.createSpan({ text: item.content.substring(0, 50) + (item.content.length > 50 ? '...' : '') });
+                row.createSpan({ text: item.key, cls: 'registry-key-display' });
+                row.createSpan({ text: item.content.substring(0, 50) + (item.content.length > 50 ? '...' : ''), cls: 'registry-content-display' });
 
                 const actionsDiv = row.createDiv({ cls: 'registry-actions' });
                 new ButtonComponent(actionsDiv)
