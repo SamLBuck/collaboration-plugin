@@ -25,9 +25,9 @@ import { registerGenerateKeyCommand } from './utils/generate_key_command';
 import { registerPullNoteCommand } from "./utils/pull_note_command";
 import { registerStartServerCommand, startWebSocketServerProcess } from "./utils/start_server_command";
 import { registerShowIPCommand } from "./utils/show_ip_command";
-import { registerListSharedKeysCommand } from 'utils/list_keys_command';
-import { registerShareCurrentNoteCommand } from 'utils/share_active_note_command';
-import { registerSyncAllNotesCommand } from 'utils/sync_command';
+import { registerListSharedKeysCommand } from './utils/list_keys_command';
+import { registerShareCurrentNoteCommand } from './utils/share_active_note_command';
+import { registerSyncAllNotesCommand } from './utils/sync_command';
 export type NoteRegistry = Record<string, string>; // key => content
 
 
