@@ -1,7 +1,30 @@
-import { App, Plugin, PluginSettingTab, Setting, Modal, Notice } from 'obsidian';
+import {
+    App,
+    Plugin,
+    PluginSettingTab,
+    Setting,
+    Notice,
+} from 'obsidian';
 import { registerGenerateKeyCommand } from './utils/generate_key_command';
 import { registerAddKeyCommand } from './utils/add_key_command';
 import { registerDeleteKeyCommand } from './utils/delete_key_command';
+
+// Import the PluginSettingsTab for general settings
+//import { PluginSettingsTab } from './settings/plugin_setting_tab';
+
+// Import the new Modals for pop-up functionality
+import { KeyListModal } from './settings/key_list_page02';
+import { LinkNoteModal } from './settings/link_note_page03';
+
+// Import key management functions for quick key generation
+import { generateKey, addKey } from './storage/keyManager';
+
+
+export interface KeyItem {
+    id: string; // This is the unique key string itself (now a password)
+    note: string; // The note name associated with the key
+    access: string; // The access type (e.g., "View", "Edit")
+}
 import { registerNoteWithPeer, requestNoteFromPeer } from './networking/socket/client';
 import { PluginSettingsTab } from "./settings/plugin_setting_tab";
 import { parseShareKey } from "./utils/parse_key";
@@ -21,26 +44,22 @@ import { getLocalIP } from "./utils/get-ip"
 
 
 interface MyPluginSettings {
-  mySetting: string;
-  keys: keyArray[];
+    mySetting: string;
+    keys: KeyItem[];
 }
 
-interface keyArray{
-	keys: string; 
-}	
-
 const DEFAULT_SETTINGS: MyPluginSettings = {
-	keys: [
-		{ keys: "obs-collab://192.168.1.42:3010/note/test" }
-	],
-	mySetting: ''
+    mySetting: 'default',
+    keys: [
+        { id: 'defaultpass123', note: 'Default Shared Note', access: 'View' },
+    ],
 };
 
 console.log("[Collab Plugin] Plugin script loaded");
 
 
 export default class MyPlugin extends Plugin {
-  settings: MyPluginSettings;
+    settings: MyPluginSettings;
 
   async onload() {
     await this.loadSettings();
@@ -48,15 +67,37 @@ export default class MyPlugin extends Plugin {
 	console.log("[Collab Plugin] Plugin onload() started");
 
 
-    // Register key commands
-    registerGenerateKeyCommand(this.app, this);
-    registerAddKeyCommand(this);
-    registerDeleteKeyCommand(this);
+        // Register custom commands (Command Palette commands)
+        // Ensure 'utils' folder and these files exist and their imports are correct
+        registerGenerateKeyCommand(this.app, this);
+        registerAddKeyCommand(this);
+        registerDeleteKeyCommand(this);
 
-    // Ribbon: Generate Key
-    this.addRibbonIcon('key', 'Generate Key', () => {
-      new Notice('Generate a new key!');
-    }).addClass('my-plugin-ribbon-class');
+        // Ribbon icon for quick key generation for the active note (direct action)
+        this.addRibbonIcon('key', 'Generate Key for Active Note', async () => {
+            const activeFile = this.app.workspace.getActiveFile();
+            const noteName = activeFile ? activeFile.basename : 'No Active Note';
+            const accessType = 'Edit';
+
+            if (!activeFile) {
+                new Notice("No active note open to generate a key for. Please open a note.", 4000);
+                return;
+            }
+
+            try {
+                const newKeyItem = await generateKey(this, noteName, accessType);
+                const success = await addKey(this, newKeyItem);
+
+                if (success) {
+                    new Notice(`Generated & Stored:\n${newKeyItem.id}\nFor Note: "${newKeyItem.note}" (Access: ${newKeyItem.access})`, 6000);
+                } else {
+                    new Notice('Failed to add generated key. It might already exist (password collision).', 4000);
+                }
+            } catch (error) {
+                console.error("Error generating or adding key:", error);
+                new Notice(`Error generating key: ${error.message}`, 5000);
+            }
+        }).addClass('my-plugin-ribbon-class');
 
     // Ribbon: Open Settings Modal
     this.addRibbonIcon('settings', 'Settings', async () => {
@@ -270,47 +311,14 @@ export default class MyPlugin extends Plugin {
   
   onunload() {
     new Notice('Plugin is unloading!');
-    this.publishVersion();
+   // this.publishVersion();
   }
 
-  async loadSettings() {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
-  }
+    async loadSettings() {
+        this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    }
 
-  async saveSettings() {
-    await this.saveData(this.settings);
-  }
-
-  async publishVersion() {
-    new Notice('Publishing new version...');
-    // TODO: Add your real publish logic here
-  }
-}
-
-class SampleSettingTab extends PluginSettingTab {
-  plugin: MyPlugin;
-
-  constructor(app: App, plugin: MyPlugin) {
-    super(app, plugin);
-    this.plugin = plugin;
-  }
-
-  display(): void {
-    const { containerEl } = this;
-
-    containerEl.empty();
-
-    new Setting(containerEl)
-      .setName('Setting #1')
-      .setDesc('This is a secret setting')
-      .addText((text) =>
-        text
-          .setPlaceholder('Enter your secret')
-          .setValue(this.plugin.settings.mySetting)
-          .onChange(async (value) => {
-            this.plugin.settings.mySetting = value;
-            await this.plugin.saveSettings();
-          })
-      );
-  }
+    async saveSettings() {
+        await this.saveData(this.settings);
+    }
 }
