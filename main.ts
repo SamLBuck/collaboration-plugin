@@ -25,6 +25,9 @@ import { registerGenerateKeyCommand } from './utils/generate_key_command';
 import { registerPullNoteCommand } from "./utils/pull_note_command";
 import { registerStartServerCommand } from "./utils/start_server_command";
 import { registerShowIPCommand } from "./utils/show_ip_command";
+import { registerListSharedKeysCommand } from 'utils/list_keys_command';
+import { registerShareCurrentNoteCommand } from 'utils/share_active_note_command';
+import { registerSyncAllNotesCommand } from 'utils/sync_command';
 export type NoteRegistry = Record<string, string>; // key => content
 
 
@@ -94,6 +97,19 @@ export default class MyPlugin extends Plugin {
         registerStartServerCommand(this.app, this);
         registerShowIPCommand(this.app, this);
         registerPullNoteCommand(this.app, this);
+        registerListSharedKeysCommand(this);
+        registerShareCurrentNoteCommand(this);
+        registerSyncAllNotesCommand(this);
+
+
+        this.registerEvent(
+            this.app.workspace.onLayoutReady(() => {
+                startWebSocketServerProcess(this.app, this);
+            })
+        );
+        
+
+
 
 
         // Ribbon icon for quick key generation for the active note (direct action)
