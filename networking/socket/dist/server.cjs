@@ -18,9 +18,6 @@ const {
 
 registerNoteFromFile("key", "C:/Users/CSStudent/Documents/Obsidian Vault/TestNote.md");
 
-const testNotes = new Map([
-  ["test", "# This is a shared note from the creator vault."]
-]);
 
 const wss = new WebSocket.Server({ port: 3010 });
 
