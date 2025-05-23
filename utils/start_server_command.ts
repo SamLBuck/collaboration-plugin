@@ -1,15 +1,18 @@
-import { App, Notice, FileSystemAdapter } from "obsidian";
+import { App, Notice, FileSystemAdapter, Plugin } from "obsidian";
 import * as fs from "fs";
 import * as path from "path";
 import { spawn } from "child_process";
 import MyPlugin from "../main";
+import { getNoteRegistry } from "main";
 
 /**
  * Launches the WebSocket server subprocess.
  */
-export function startWebSocketServerProcess(app: App): void {
+export function startWebSocketServerProcess(app: App,plugin:Plugin): void {
 	const adapter = app.vault.adapter;
-
+    const noteEntries = getNoteRegistry(plugin).map(entry => [entry.key, entry.content]);
+    const sharedNotes = new Map<string, string>(noteEntries);
+    
 	if (!(adapter instanceof FileSystemAdapter)) {
 		new Notice("Vault path not accessible.");
 		return;
@@ -62,7 +65,7 @@ export function registerStartServerCommand(app: App, plugin: MyPlugin): void {
 		id: "start-websocket-server",
 		name: "Start WebSocket Server",
 		callback: () => {
-			startWebSocketServerProcess(app);
+			startWebSocketServerProcess(app, plugin);
 		}
 	});
 }

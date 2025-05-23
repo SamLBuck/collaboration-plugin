@@ -1,4 +1,4 @@
-console.log("server.cjs STARTED");
+import { getNoteRegistry } from "main.ts";
 process.on("uncaughtException", (err) => {
   console.error("Uncaught Exception in server.cjs:", err);
 });
