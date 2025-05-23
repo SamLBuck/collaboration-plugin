@@ -3,15 +3,17 @@ import * as fs from "fs";
 import * as path from "path";
 import { spawn } from "child_process";
 import MyPlugin from "../main";
-import { getNoteRegistry } from "main";
+import { getNoteRegistry } from "../storage/registryStore";
+import { syncAllNotesToServer } from "../utils/sync";
+
 
 /**
  * Launches the WebSocket server subprocess.
  */
-export function startWebSocketServerProcess(app: App,plugin:Plugin): void {
+export function startWebSocketServerProcess(app: App,plugin:MyPlugin): void {
 	const adapter = app.vault.adapter;
-    const noteEntries = getNoteRegistry(plugin).map(entry => [entry.key, entry.content]);
-    const sharedNotes = new Map<string, string>(noteEntries);
+	const noteEntries: Array<[string, string]> = getNoteRegistry(plugin).map(entry => [entry.key, entry.content]);
+	const sharedNotes = new Map<string, string>(noteEntries);
     
 	if (!(adapter instanceof FileSystemAdapter)) {
 		new Notice("Vault path not accessible.");
@@ -42,6 +44,12 @@ export function startWebSocketServerProcess(app: App,plugin:Plugin): void {
 		shell: false
 	});
 
+    setTimeout(() => {
+        syncAllNotesToServer(plugin, "ws://localhost:3010")
+            .then(() => console.log("[Plugin] Synced all notes to WebSocket server"))
+            .catch(err => console.error("[Plugin] Sync failed:", err));
+    }, 1000);
+    
 	subprocess.stdout.on("data", (data) => {
 		console.log("[WS Server]:", data.toString());
 	});
