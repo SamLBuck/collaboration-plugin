@@ -1,41 +1,72 @@
-/* src/styles.css */
+/* src/styles.css - REVISED FOR IMPROVED AESTHETICS */
 
-/* General styling for our plugin's elements */
+/* --- General Plugin-wide Elements --- */
+/* Remove the empty wrapper if not used, or add styles if it is */
 .obsidian-collaboration-plugin-wrapper {
     /* Optional: A subtle wrapper for all plugin elements if needed */
+    /* Example: padding: 10px; */
 }
 
-/* --- Key List & Registry Common Styles --- */
+/* --- Common Section Styling (for Key List and Registry) --- */
+/* Soften the main section containers, use consistent padding */
 .key-list-container,
 .note-registry-container {
-    background-color: var(--background-secondary); /* Lighter background than main content */
+    background-color: var(--background-secondary-alt); /* Slightly darker secondary background */
     border: 1px solid var(--background-modifier-border);
     border-radius: var(--radius-l);
-    padding: 15px;
-    margin-top: 20px;
-    box-shadow: var(--shadow-s); /* Subtle shadow for depth */
+    padding: 20px; /* More generous padding */
+    margin-bottom: 25px; /* Spacing between main blocks */
+    box-shadow: var(--shadow-s);
 }
 
+/* --- Section Headers within Modals/Settings --- */
+h2 {
+    color: var(--text-normal);
+    margin-top: 0;
+    margin-bottom: 25px; /* More space below main title */
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--background-modifier-border);
+    font-size: var(--font-title-h2); /* Standard Obsidian H2 size */
+}
+
+h3 { /* For "Manually Add New Key" and "Server Shared Notes (Registry)" titles */
+    color: var(--text-normal);
+    margin-top: 0;
+    margin-bottom: 20px; /* Space below sub-headers */
+    font-size: var(--font-title-h3); /* Standard Obsidian H3 size */
+    border-bottom: 1px dashed var(--background-modifier-border); /* Lighter separator */
+    padding-bottom: 8px;
+}
+
+/* --- List Headers (Key List, Registry List) --- */
 .key-list-header,
 .registry-list-header {
     display: grid;
-    font-weight: bold;
+    font-weight: 600; /* Bolder */
     border-bottom: 2px solid var(--background-modifier-border);
-    padding-bottom: 8px;
+    padding-bottom: 10px; /* More padding */
     margin-bottom: 10px;
     align-items: center;
     gap: 10px;
-    color: var(--text-muted); /* Make headers slightly less prominent */
+    color: var(--text-faint); /* Even fainter text for header */
     text-transform: uppercase;
-    font-size: 0.85em;
+    font-size: 0.8em; /* Slightly smaller for header text */
+    letter-spacing: 0.05em; /* Add some letter spacing */
 }
 
+/* --- List Rows (Key List, Registry List) --- */
 .key-list-row,
 .registry-list-row {
     display: grid;
     align-items: center;
-    padding: 10px 0;
-    border-bottom: 1px dashed var(--background-modifier-border);
+    padding: 12px 0; /* More vertical padding */
+    border-bottom: 1px solid var(--background-modifier-border); /* Solid, but subtle border */
+    transition: background-color 0.2s ease-in-out; /* Smooth hover */
+}
+
+.key-list-row:hover,
+.registry-list-row:hover {
+    background-color: var(--background-modifier-hover); /* Subtle highlight on hover */
 }
 
 .key-list-row:last-child,
@@ -43,13 +74,14 @@
     border-bottom: none; /* No border on the last item */
 }
 
-/* Individual cell styling */
+/* --- Individual Cell Styling --- */
 .key-id-display,
 .registry-key-display {
-    font-family: var(--font-monospace); /* Monospaced for keys */
-    color: var(--text-accent); /* Make keys stand out */
+    font-family: var(--font-monospace);
+    color: var(--text-accent);
     font-weight: 500;
-    word-break: break-all; /* Break long keys */
+    word-break: break-all;
+    font-size: 0.9em; /* Slightly smaller key font */
 }
 
 .note-name-display,
@@ -61,14 +93,15 @@
 .access-type-display {
     font-style: italic;
     color: var(--text-muted);
+    font-size: 0.85em; /* Slightly smaller access type */
 }
 
-/* Actions column */
+/* --- Actions Column Buttons --- */
 .key-actions,
 .registry-actions {
     display: flex;
-    justify-content: flex-end; /* Align delete button to the right */
-    gap: 5px;
+    justify-content: flex-end;
+    gap: 8px; /* More space between buttons if multiple */
 }
 
 .key-actions button.mod-warning,
@@ -76,87 +109,105 @@
     --button-background-hover: var(--background-modifier-error-hover);
     --button-text-color: var(--text-error);
     --button-text-color-hover: var(--text-on-accent);
-    padding: 4px 8px; /* Make button a bit smaller */
-    min-width: unset; /* Allow it to shrink */
-    height: unset; /* Allow height to adjust */
+    padding: 6px 10px; /* Slightly larger clickable area */
+    min-width: unset;
+    height: unset;
+    border-radius: var(--radius-s); /* Slightly rounded buttons */
+    opacity: 0.7; /* Slightly faded when not hovered */
+    transition: opacity 0.2s ease-in-out;
 }
 
-/* No keys/registry message */
+.key-actions button.mod-warning:hover,
+.registry-actions button.mod-warning:hover {
+    opacity: 1; /* Full opacity on hover */
+}
+
+/* --- No keys/registry message --- */
 .empty-list-message {
     text-align: center;
-    color: var(--text-muted);
-    padding: 20px;
+    color: var(--text-faint); /* More faint for empty state */
+    padding: 30px; /* More generous padding */
     font-style: italic;
+    font-size: 0.95em;
 }
 
-/* --- Add Key Section (within Key List Page) --- */
+/* --- Add Key Section (within Key List Page/Modal) --- */
 .add-key-section {
-    background-color: var(--background-primary); /* Slightly different background for distinction */
+    background-color: var(--background-primary); /* Use primary for contrast */
     border: 1px solid var(--background-modifier-border);
     border-radius: var(--radius-l);
-    padding: 15px;
-    margin-top: 25px;
+    padding: 20px;
+    margin-top: 25px; /* Spacing from the list above */
+    margin-bottom: 25px; /* Spacing before the registry section */
     box-shadow: var(--shadow-s);
 }
 
-.add-key-section h3 {
-    margin-top: 0;
-    margin-bottom: 15px;
-    color: var(--text-normal);
+.add-key-section .setting-item {
+    padding-top: 8px; /* Reduce default padding */
+    padding-bottom: 8px;
+    border-bottom: 1px dashed var(--background-modifier-border); /* Lighter separator between settings */
 }
-
-/* --- Main Settings Page Styling (for key input & access type) --- */
-.key-input-generate-wrapper {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-.key-input-generate-wrapper .text-input {
-    flex-grow: 1;
-}
-.key-input-generate-wrapper button {
-    flex-shrink: 0;
-}
-
-/* Access type checkboxes */
-.access-type-checkboxes {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding-left: 10px; /* Indent checkboxes a bit */
-}
-.checkbox-wrapper {
-    display: flex;
-    align-items: center;
-}
-.access-type-checkbox {
-    margin-right: 8px;
-}
-.access-type-label {
-    cursor: pointer;
-    font-size: var(--font-ui-small); /* Slightly smaller font for labels */
-}
-
-/* Navigation buttons (Back to Main Settings, List of Keys, Link Note) */
-.settings-nav-buttons .setting-item {
-    padding-top: 0;
+.add-key-section .setting-item:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
     padding-bottom: 0;
 }
-.settings-nav-buttons .setting-item-control {
-    flex-grow: 1;
-    justify-content: flex-start; /* Align nav buttons to the left */
-}
-.settings-nav-buttons .setting-item-control button {
-    width: auto; /* Allow buttons to size based on content */
-    padding: 8px 12px;
+
+.add-key-section .setting-item-description {
+    font-size: 0.8em; /* Smaller description text */
+    color: var(--text-faint);
+    margin-top: 4px;
 }
 
-/* Overall modal styling adjustments */
-.modal-content .setting-item {
-    margin-bottom: 10px; /* Reduce spacing in modals if needed */
+/* Make "Add Key" button more prominent */
+.add-key-section .setting-item-control button.mod-cta {
+    font-size: var(--font-text-large); /* Larger text */
+    padding: 10px 15px; /* More padding */
+    min-height: unset; /* Allow height to adjust */
+    background-color: var(--interactive-accent); /* Use primary accent color */
+    color: var(--text-on-accent);
+    border-radius: var(--radius-l); /* More rounded */
+    font-weight: bold;
+    transition: background-color 0.2s ease-in-out;
 }
-.modal-content h2 {
-    margin-top: 0;
-    padding-bottom: 10px;
-    border-bottom: 1px solid var(--background-modifier-border);
+.add-key-section .setting-item-control button.mod-cta:hover {
+    background-color: var(--interactive-accent-hover);
+}
+
+
+/* --- Other Modal/Settings Adjustments --- */
+.modal-content .setting-item {
+    margin-bottom: 10px; /* Adjust default setting item spacing in modals */
+}
+
+/* Back button in settings tab */
+.settings-nav-buttons .setting-item-control button {
+    background-color: var(--background-secondary); /* Match general Obsidian button style */
+    color: var(--text-normal);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--radius-s);
+    padding: 8px 12px;
+    font-weight: normal;
+    transition: background-color 0.2s ease-in-out;
+}
+.settings-nav-buttons .setting-item-control button:hover {
+    background-color: var(--background-modifier-hover);
+}
+
+/* Ensure consistent form element sizing */
+.setting-item .text-input,
+.setting-item select {
+    width: 100%; /* Ensure inputs fill available space */
+    padding: 8px 10px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--radius-s);
+    background-color: var(--input-background);
+    color: var(--text-normal);
+}
+.setting-item select {
+    appearance: none; /* Remove default dropdown arrow */
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="6" viewBox="0 0 10 6"><path fill="%23CCC" d="M0 0l5 6 5-6z"/></svg>');
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 10px;
 }

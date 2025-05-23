@@ -4,7 +4,7 @@ import {
     PluginSettingTab,
     Setting,
     Notice,
-    FileSystemAdapter, // This was already here from previous versions
+    FileSystemAdapter,
 } from 'obsidian';
 
 // Core command registrations
@@ -21,18 +21,17 @@ import { LinkNoteModal } from './settings/link_note_page03';
 // Key management functions
 import { generateKey, addKey } from './storage/keyManager';
 
-// Networking and utility imports
+// Networking and utility imports (if not actively used, consider if they are still needed)
 import { registerNoteWithPeer, requestNoteFromPeer } from './networking/socket/client';
-import { parseShareKey } from "./utils/parse_key"; // Still imported but not directly used in main.ts anymore
-import { tempKeyInputModal } from "./settings/tempKeyInputModal"; // Still imported but not directly used in main.ts anymore
-import { tempIPInputModal } from "./settings/tempIPInputModal";   // Still imported but not directly used in main.ts anymore
-import { getLocalIP } from "./utils/get-ip"; // Still imported but not directly used in main.ts anymore
+import { parseShareKey } from "./utils/parse_key";
+import { tempKeyInputModal } from "./settings/tempKeyInputModal";
+import { tempIPInputModal } from "./settings/tempIPInputModal";
+import { getLocalIP } from "./utils/get-ip";
 
 // Node.js specific imports for spawning server (will only work in Electron environment)
-// Note: These are now typically handled by registerStartServerCommand
-import * as path from "path"; // Still imported but not directly used in main.ts anymore
-import * as fs from "fs";     // Still imported but not directly used in main.ts anymore
-const noteRegistry = require("./networking/socket/dist/noteRegistry.cjs"); // Still imported but not directly used in main.ts anymore
+import * as path from "path";
+import * as fs from "fs";
+const noteRegistry = require("./networking/socket/dist/noteRegistry.cjs");
 
 // New utility imports that now register commands (from your recent refactoring)
 import { registerGenerateKeyCommand } from './utils/generate_key_command';
@@ -40,7 +39,7 @@ import { registerPullNoteCommand } from "./utils/pull_note_command";
 import { registerStartServerCommand } from "./utils/start_server_command";
 import { registerShowIPCommand } from "./utils/show_ip_command";
 
-// --- Custom Types and Interfaces (from your recent additions) ---
+// --- Custom Types and Interfaces ---
 export type NoteRegistry = Record<string, string>; // key => content
 
 export interface KeyItem {
@@ -99,23 +98,19 @@ export function getNoteContentByKey(plugin: MyPlugin, key: string): string | und
 // --- End Custom Types and Interfaces ---
 
 
-// console.log("[Collab Plugin] Plugin script loaded"); // This line was removed in your last update
-
 export default class MyPlugin extends Plugin {
     settings: MyPluginSettings;
 
     async onload() {
         await this.loadSettings();
-        this.addStyle(); // ADDED: Loads your plugin's stylesheet (styles.css)
-
+		
         // Register custom commands (Command Palette commands)
-        // These are now handled by separate utility files
         registerGenerateKeyCommand(this.app, this);
         registerAddKeyCommand(this);
         registerDeleteKeyCommand(this);
-        registerStartServerCommand(this.app, this); // NEW command registration
-        registerShowIPCommand(this.app, this);     // NEW command registration
-        registerPullNoteCommand(this.app, this);   // NEW command registration
+        registerStartServerCommand(this.app, this);
+        registerShowIPCommand(this.app, this);
+        registerPullNoteCommand(this.app, this);
 
 
         // Ribbon icon for quick key generation for the active note (direct action)
@@ -142,8 +137,6 @@ export default class MyPlugin extends Plugin {
             }
         }).addClass('my-plugin-ribbon-class');
 
-        // Removed the 'settings' ribbon icon as requested.
-        // Users can still access plugin settings via Obsidian's main Settings -> Community Plugins.
 
         // List (Bullet List) icon: Opens the Key List MODAL DIRECTLY
         this.addRibbonIcon('list', 'View All Collaboration Keys', () => {
@@ -158,12 +151,9 @@ export default class MyPlugin extends Plugin {
         // Register the main settings tab (accessible via plugin list in Obsidian settings)
         this.addSettingTab(new PluginSettingsTab(this.app, this));
     }
-	addStyle() {
-		throw new Error('Method not implemented.');
-	}
 
     onunload() {
-        new Notice('Plugin is unloading!'); // Changed notice message
+        new Notice('Plugin is unloading!');
     }
 
     async loadSettings() {
