@@ -38,4 +38,16 @@ import { requestNoteFromPeer } from "../networking/socket/client";
             new Notice("WebSocket connection failed.");
         };
     }
+    export function registerSyncFromServerToSettings(plugin: Plugin) {
+        plugin.addCommand({
+          id: "sync-from-server-to-settings",
+          name: "Sync Note Registry From Server",
+          callback: async () => {
+            const url = "ws://localhost:3010";
+            await syncRegistryFromServer(plugin as MyPlugin, url);
+          }
+        });
+      }
+          
+    
     

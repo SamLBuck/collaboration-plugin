@@ -28,7 +28,7 @@ import { registerStartServerCommand, startWebSocketServerProcess } from "./utils
 import { registerShowIPCommand } from "./utils/show_ip_command";
 import { registerListSharedKeysCommand } from './utils/list_keys_command';
 import { registerShareCurrentNoteCommand } from './utils/share_active_note';
-import { syncRegistryFromServer } from './utils/sync_command';
+import { registerSyncFromServerToSettings, syncRegistryFromServer } from './utils/sync_command';
 export type NoteRegistry = Record<string, string>; // key => content
 
 
@@ -109,6 +109,7 @@ export default class MyPlugin extends Plugin {
         registerPullNoteCommand(this.app, this);
         registerListSharedKeysCommand(this);
         registerShareCurrentNoteCommand(this);
+        registerSyncFromServerToSettings(this);
 
 
         this.addCommand({
@@ -119,14 +120,6 @@ export default class MyPlugin extends Plugin {
                 new Notice(`Registry contains ${this.settings.registry.length} item(s). Check console for full output.`);
             }
         });
-            this.addCommand({
-                id: "sync-from-server-to-settings",
-                name: "Sync Note Registry From Server",
-                callback: async () => {
-                    const url = "ws://localhost:3010";
-                    await syncRegistryFromServer(this, url);
-                }
-            });
         
 
 
