@@ -12,7 +12,7 @@ export class PluginSettingsTab extends PluginSettingTab {
     currentPage: SettingsPage = 'main'; // State to manage the current page in the settings tab
 
     // Input references for the main settings page
-    keyInput: TextComponent;
+    keyInput: TextComponent; // This will still be declared but not used for display in main settings
     noteInput: TextComponent;
     accessTypeView: HTMLInputElement;
     accessTypeEdit: HTMLInputElement;
@@ -53,20 +53,12 @@ export class PluginSettingsTab extends PluginSettingTab {
         containerEl.createEl('h2', { text: 'Collaboration Settings' });
 
         const keySetting = new Setting(containerEl)
-            .setName('Key')
-            .setDesc('This will be the unique password for your shared note.');
+            .setName('Generate Key')
+            .setDesc('Click "Generate" to create a new unique key for your shared note. The key will be displayed in a notice.'); // Updated description
 
-        const keyControlDiv = keySetting.controlEl.createDiv({ cls: 'key-input-generate-wrapper' });
-        keyControlDiv.style.display = 'flex';
-        keyControlDiv.style.alignItems = 'center';
-        keyControlDiv.style.gap = '8px';
-
-        this.keyInput = new TextComponent(keyControlDiv)
-            .setPlaceholder('Leave blank to auto-generate')
-            .setValue('');
-        this.keyInput.inputEl.style.flexGrow = '1';
-
-        new ButtonComponent(keyControlDiv)
+        // Removed keyControlDiv as it's no longer needed for a disabled TextComponent
+        // The generate button will now be added directly to the Setting's controlEl
+        new ButtonComponent(keySetting.controlEl) // Attach button directly to setting's control element
             .setButtonText('Generate')
             .setCta()
             .onClick(async () => {
@@ -95,7 +87,7 @@ export class PluginSettingsTab extends PluginSettingTab {
                     const success = await addKey(this.plugin, newKeyItem);
 
                     if (success) {
-                        this.keyInput.setValue(newKeyItem.id);
+                        // Key is now displayed in a notice, not in the input field
                         new Notice(`Generated & Saved:\n${newKeyItem.id}\nFor Note: "${newKeyItem.note}"`, 8000);
                     } else {
                         new Notice("Failed to add key. It might already exist (password collision).", 4000);
