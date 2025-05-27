@@ -1,21 +1,41 @@
 import { Plugin, Notice } from "obsidian";
-import type MyPlugin from "../main";
+import MyPlugin, { updateNoteRegistry } from "../main";
 
 import { syncAllNotesToServer } from "./sync"; // adjust if needed
+import { requestNoteFromPeer } from "../networking/socket/client";
 
-export function registerSyncAllNotesCommand(plugin: MyPlugin) {
-	plugin.addCommand({
-		id: "sync-all-notes-to-server",
-		name: "Sync All Notes to WebSocket Server",
-		callback: async () => {
-			const serverUrl = "ws://localhost:3010";
-			try {
-				await syncAllNotesToServer(plugin as MyPlugin, serverUrl);
-				new Notice("All notes synced to server.");
-			} catch (err) {
-				console.error("[Plugin] Sync failed:", err);
-				new Notice("Failed to sync notes.");
-			}
-		}
-	});
-}
+    export async function syncRegistryFromServer(plugin: MyPlugin, serverUrl: string) {
+        const socket = new WebSocket(serverUrl);
+    
+        socket.onopen = () => {
+            socket.send(JSON.stringify({ type: "list-keys" }));
+        };
+    
+        socket.onmessage = async (event) => {
+            try {
+                const message = JSON.parse(event.data.toString());
+    
+                if (message.type === "key-list") {
+                    const keys: string[] = message.payload.keys;
+                    console.log("[Sync] Keys found on server:", keys);
+    
+                    for (const key of keys) {
+                        const content = await requestNoteFromPeer(serverUrl, key);
+                        await updateNoteRegistry(plugin, key, content);
+                    }
+                    new Notice(`Pulled and saved ${keys.length} notes from server.`);
+                    socket.close();
+                } else {
+                    new Notice("Unexpected response during sync.");
+                }
+            } catch (err) {
+                console.error("Error syncing from server:", err);
+                new Notice("Failed to sync from server.");
+            }
+        };
+        socket.onerror = (err) => {
+            console.error("Connection error during sync:", err);
+            new Notice("WebSocket connection failed.");
+        };
+    }
+    

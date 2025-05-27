@@ -27,9 +27,8 @@ import { registerPullNoteCommand } from "./utils/pull_note_command";
 import { registerStartServerCommand, startWebSocketServerProcess } from "./utils/start_server_command";
 import { registerShowIPCommand } from "./utils/show_ip_command";
 import { registerListSharedKeysCommand } from './utils/list_keys_command';
-import { registerShareCurrentNoteCommand } from './utils/share_active_note_command';
-import { registerSyncAllNotesCommand } from './utils/sync_command';
-import { syncAllNotesToServer } from './utils/sync';
+import { registerShareCurrentNoteCommand } from './utils/share_active_note';
+import { syncRegistryFromServer } from './utils/sync_command';
 export type NoteRegistry = Record<string, string>; // key => content
 
 
@@ -89,6 +88,8 @@ export function getNoteContentByKey(plugin: MyPlugin, key: string): string | und
 
 export default class MyPlugin extends Plugin {
     settings: MyPluginSettings;
+    registry: noteRegistry[] = [];
+
 
     async onload() {
         await this.loadSettings();
@@ -108,18 +109,25 @@ export default class MyPlugin extends Plugin {
         registerPullNoteCommand(this.app, this);
         registerListSharedKeysCommand(this);
         registerShareCurrentNoteCommand(this);
-        registerSyncAllNotesCommand(this);
 
 
-        // Sync notes on load
-        const serverUrl = "ws://localhost:3010";
-        try {
-            await syncAllNotesToServer(this, serverUrl);
-            console.log("[Plugin] Notes synced to server on load.");
-        } catch (err) {
-            console.error("[Plugin] Failed to sync notes on load:", err);
-        }
-    
+        this.addCommand({
+            id: "debug-print-registry",
+            name: "Debug: Print Saved Registry",
+            callback: async () => {
+                console.log("[Registry] Current stored registry:", this.settings.registry);
+                new Notice(`Registry contains ${this.settings.registry.length} item(s). Check console for full output.`);
+            }
+        });
+            this.addCommand({
+                id: "sync-from-server-to-settings",
+                name: "Sync Note Registry From Server",
+                callback: async () => {
+                    const url = "ws://localhost:3010";
+                    await syncRegistryFromServer(this, url);
+                }
+            });
+        
 
 
         // Ribbon icon for quick key generation for the active note (direct action)
@@ -175,10 +183,17 @@ this.addSettingTab(new PluginSettingsTab(this.app, this));
         // Add any cleanup logic here if needed
     }
     async loadSettings() {
-        this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+        const raw = await this.loadData();
+        this.settings = Object.assign({}, DEFAULT_SETTINGS, raw?.settings ?? {});
+        this.registry = raw?.registry ?? this.settings.registry ?? [];
+        this.settings.registry = this.registry;
     }
-
+    
     async saveSettings() {
-        await this.saveData(this.settings);
+        await this.saveData({
+            settings: this.settings,
+            registry: this.registry
+        })
+
     }
 }
