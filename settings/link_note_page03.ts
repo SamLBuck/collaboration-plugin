@@ -1,25 +1,26 @@
-import { App, Modal, Setting, TextComponent, ButtonComponent, Notice, TFile } from 'obsidian'; // Added TFile for vault operations
-import MyPlugin from '../main';
-import { requestNoteFromPeer } from '../networking/socket/client'; // Import the actual client function
+import { App, Modal, Setting, TextComponent, ButtonComponent, Notice, TFile } from "obsidian"; // Added TFile for vault operations
+import MyPlugin from "../main"; // Assuming MyPlugin is needed for context or future use
+import { requestNoteFromPeer } from "../networking/socket/client"; // Import the actual client function
 
 export class LinkNoteModal extends Modal {
-    plugin: MyPlugin;
+    plugin: MyPlugin; // Add plugin reference if needed for other actions or context
     linkNoteKeyInput: TextComponent; // Reference to the input field
 
     constructor(app: App, plugin: MyPlugin) {
         super(app);
-        this.plugin = plugin;
+        this.plugin = plugin; // Initialize plugin reference
     }
 
     onOpen() {
         const { contentEl } = this;
         contentEl.empty();
-        contentEl.createEl('h2', { text: 'Link / Pull a Collaborative Note' });
-        contentEl.createEl('p', { text: 'Use this section to link to or pull a shared note from a peer.' });
+
+        contentEl.createEl("h2", { text: "Pull Collaborative Note" }); // Changed title here
+        contentEl.createEl('p', { text: 'Use this section to pull a shared note from a peer.' }); // Updated description for the section
 
         new Setting(contentEl)
             .setName('Share Key / Password')
-            .setDesc('Enter the key/password for the shared note you want to link.')
+            .setDesc('Enter the key/password for the shared note you want to pull.') // Updated description
             .addText(text => {
                 this.linkNoteKeyInput = text;
                 text.setPlaceholder('e.g., MyNoteName-192.168.1.100'); // Updated placeholder for clarity
@@ -98,36 +99,9 @@ export class LinkNoteModal extends Modal {
             });
 
         // REMOVED: "Generate Shareable Link (Copy to Clipboard)" button
-        // The following block was removed as requested:
-        /*
-        new Setting(contentEl)
-            .addButton(button => {
-                button.setButtonText('Generate Shareable Link (Copy to Clipboard)')
-                    .onClick(() => {
-                        const password = this.linkNoteKeyInput.getValue().trim();
-                        if (!password) {
-                            new Notice('Please enter a Share Key / Password first to generate a link.', 3000);
-                            return;
-                        }
-                        const dummyIp = '192.168.1.42'; // Replace with your actual IP/hostname or discovery logic
-                        const dummyPort = 3010; // Replace with your actual port
-                        const shareLink = `obs-collab://${dummyIp}:${dummyPort}/note/${password}`;
-                        navigator.clipboard.writeText(shareLink);
-                        new Notice(`Share Link copied: ${shareLink}`, 6000);
-                    });
-            });
-        */
-
-        // Add a close button
-        new Setting(contentEl)
-            .addButton(button => {
-                button.setButtonText("Close")
-                    .onClick(() => this.close());
-            });
     }
 
     onClose() {
-        const { contentEl } = this;
-        contentEl.empty();
+        this.contentEl.empty();
     }
 }

@@ -21,6 +21,7 @@ export function startWebSocketServerProcess(app: App,plugin:MyPlugin): void {
 	}
 
 	const vaultPath = adapter.getBasePath();
+	console.log(vaultPath);
 	const serverPath = path.join(
 		vaultPath,
 		".obsidian",

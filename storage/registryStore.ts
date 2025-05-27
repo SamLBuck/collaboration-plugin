@@ -10,6 +10,8 @@ export function getNoteRegistry(plugin: MyPlugin): NoteRegistryItem[] {
 }
 
 export async function updateNoteRegistry(plugin: MyPlugin, key: string, content: string) {
+	console.log(plugin);
+	console.log(content);
 	const registry = getNoteRegistry(plugin);
 	const existing = registry.find(item => item.key === key);
 

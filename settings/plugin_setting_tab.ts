@@ -1,29 +1,26 @@
-import { App, PluginSettingTab, Setting, ButtonComponent, TextComponent, Notice, DropdownComponent, TFile } from 'obsidian';
-import MyPlugin, { KeyItem, getNoteRegistry, updateNoteRegistry, deleteNoteFromRegistry } from '../main';
-import { generateKey, addKey, listKeys, deleteKey } from '../storage/keyManager';
-import { requestNoteFromPeer } from '../networking/socket/client';
+import { App, PluginSettingTab, Setting, ButtonComponent, TextComponent, Notice } from 'obsidian';
+import MyPlugin, { KeyItem } from '../main';
+import { generateKey, addKey } from '../storage/keyManager'; // Only need generate/add for this tab
 
-type SettingsPage = 'main' | 'keyList' | 'linkNote';
+// Import the new Modals to open them from buttons within the settings tab
+import { KeyListModal } from '../settings/key_list_page02';
+import { LinkNoteModal } from '../settings/link_note_page03';
+
 
 export class PluginSettingsTab extends PluginSettingTab {
-    static PLUGIN_ID = 'obsidian-collaboration-plugin-id'; // Ensure this matches your manifest.json ID
+    // IMPORTANT: This ID should be unique to your plugin and should match the 'id' field in your manifest.json.
+    // Replace 'obsidian-collaboration-plugin-id' with your actual plugin ID.
+    static PLUGIN_ID = 'obsidian-collaboration-plugin-id'; // <--- Ensure this matches your manifest.json ID
 
     plugin: MyPlugin;
-    currentPage: SettingsPage = 'main'; // State to manage the current page in the settings tab
 
     // Input references for the main settings page
-    keyInput: TextComponent; // This will still be declared but not used for display in main settings
+    keyInput: TextComponent;
     noteInput: TextComponent;
     accessTypeView: HTMLInputElement;
     accessTypeEdit: HTMLInputElement;
     accessTypeViewAndComment: HTMLInputElement;
     accessTypeEditWithApproval: HTMLInputElement;
-
-    // Input references for the "Add New Key" section (now inside KeyList page)
-    private newKeyIdInput: TextComponent;
-    private newNoteNameInput: TextComponent;
-    private newAccessTypeSelect: DropdownComponent;
-
 
     constructor(app: App, plugin: MyPlugin) {
         super(app, plugin);
@@ -34,31 +31,27 @@ export class PluginSettingsTab extends PluginSettingTab {
         const { containerEl } = this;
         containerEl.empty(); // Clear existing content
 
-        switch (this.currentPage) {
-            case 'main':
-                this.renderMainSettingsPage(containerEl);
-                break;
-            case 'keyList':
-                this.renderKeyListPage(containerEl);
-                break;
-            case 'linkNote':
-                this.renderLinkNotePage(containerEl);
-                break;
-            default:
-                this.renderMainSettingsPage(containerEl); // Fallback
-        }
+        this.renderMainSettingsPage(containerEl); // Only render the main page now
     }
 
     private renderMainSettingsPage(containerEl: HTMLElement): void {
         containerEl.createEl('h2', { text: 'Collaboration Settings' });
 
         const keySetting = new Setting(containerEl)
-            .setName('Generate Key')
-            .setDesc('Click "Generate" to create a new unique key for your shared note. The key will be displayed in a notice.'); // Updated description
+            .setName('Key')
+            .setDesc('This will be the unique password for your shared note.');
 
-        // Removed keyControlDiv as it's no longer needed for a disabled TextComponent
-        // The generate button will now be added directly to the Setting's controlEl
-        new ButtonComponent(keySetting.controlEl) // Attach button directly to setting's control element
+        const keyControlDiv = keySetting.controlEl.createDiv({ cls: 'key-input-generate-wrapper' });
+        keyControlDiv.style.display = 'flex';
+        keyControlDiv.style.alignItems = 'center';
+        keyControlDiv.style.gap = '8px';
+
+        this.keyInput = new TextComponent(keyControlDiv)
+            .setPlaceholder('Leave blank to auto-generate')
+            .setValue('');
+        this.keyInput.inputEl.style.flexGrow = '1';
+
+        new ButtonComponent(keyControlDiv)
             .setButtonText('Generate')
             .setCta()
             .onClick(async () => {
@@ -87,8 +80,8 @@ export class PluginSettingsTab extends PluginSettingTab {
                     const success = await addKey(this.plugin, newKeyItem);
 
                     if (success) {
-                        // Key is now displayed in a notice, not in the input field
-                        new Notice(`Generated & Saved:\n${newKeyItem.id}\nFor Note: "${newKeyItem.note}"`, 8000);
+                        this.keyInput.setValue(newKeyItem.id);
+                        new Notice(`Generated & Saved: ${newKeyItem.id}\nFor Note: "${newKeyItem.note}"`, 8000);
                     } else {
                         new Notice("Failed to add key. It might already exist (password collision).", 4000);
                     }
@@ -166,8 +159,8 @@ export class PluginSettingsTab extends PluginSettingTab {
             .addButton(button => {
                 button.setButtonText('List of keys')
                     .onClick(() => {
-                        this.currentPage = 'keyList'; // Navigate to key list page
-                        this.display(); // Re-render the settings tab
+                        // Open the KeyListModal directly from here
+                        new KeyListModal(this.app, this.plugin).open(); // <--- Opens the modal pop-up
                     });
             });
 
@@ -176,8 +169,8 @@ export class PluginSettingsTab extends PluginSettingTab {
             .addButton(button => {
                 button.setButtonText('Link Note')
                     .onClick(() => {
-                        this.currentPage = 'linkNote'; // Navigate to link note page
-                        this.display(); // Re-render the settings tab
+                        // Open the LinkNoteModal directly from here
+                        new LinkNoteModal(this.app, this.plugin).open(); // <--- Opens the modal pop-up
                     });
             });
 
@@ -189,298 +182,11 @@ export class PluginSettingsTab extends PluginSettingTab {
         });
     }
 
-    private getSelectedAccessType(): string | null {
+    getSelectedAccessType(): string | null {
         if (this.accessTypeView.checked) return 'View';
         if (this.accessTypeEdit.checked) return 'Edit';
         if (this.accessTypeViewAndComment.checked) return 'View and Comment';
         if (this.accessTypeEditWithApproval.checked) return 'Edit w/ Approval';
         return null;
-    }
-
-    // --- New Page Rendering Methods ---
-
-    private async renderKeyListPage(containerEl: HTMLElement): Promise<void> {
-        containerEl.createEl('h2', { text: 'All Collaboration Keys' });
-
-        // Back button
-        new Setting(containerEl)
-            .addButton(button => {
-                button.setButtonText('← Back to Main Settings')
-                    .onClick(() => {
-                        this.currentPage = 'main';
-                        this.display();
-                    });
-            });
-
-        const keyListDisplayContainer = containerEl.createDiv({ cls: 'key-list-container' });
-        await this.renderKeyListContent(keyListDisplayContainer);
-
-        // Render the "Manually Add New Key" section below the list
-        this.renderAddKeySection(containerEl, keyListDisplayContainer);
-
-        // Display the note registry for server-shared notes
-        containerEl.createEl("h3", { text: "Server Shared Notes (Registry)" });
-        const registryDisplayContainer = containerEl.createDiv({ cls: 'note-registry-container' });
-        this.renderNoteRegistryContent(registryDisplayContainer);
-    }
-
-    // Helper function to render the key list (used by both modal and settings tab if refactored)
-    private async renderKeyListContent(containerToRenderInto: HTMLElement): Promise<void> {
-        containerToRenderInto.empty();
-
-        const currentKeys = await listKeys(this.plugin);
-
-        if (currentKeys.length === 0) {
-            containerToRenderInto.createEl('p', { text: 'No keys currently stored.', cls: 'empty-list-message' });
-        } else {
-            const listHeader = containerToRenderInto.createDiv({ cls: 'key-list-header' });
-            listHeader.style.gridTemplateColumns = '2.8fr 1.5fr 1fr 0.7fr'; // Consistent with CSS
-            listHeader.createSpan({ text: 'Key (Full)' }); // Changed header text
-            listHeader.createSpan({ text: 'Note Name' });
-            listHeader.createSpan({ text: 'Access Type' });
-            listHeader.createSpan({ text: 'Actions' });
-
-            currentKeys.forEach((keyItem: KeyItem) => {
-                const keyRow = containerToRenderInto.createDiv({ cls: 'key-list-row' });
-                keyRow.style.gridTemplateColumns = '2.8fr 1.5fr 1fr 0.7fr'; // Consistent with CSS
-                
-                // NEW: Wrap content in a div with .field-content-box for styling
-                keyRow.createDiv({ text: keyItem.id, cls: ['key-id-display', 'field-content-box'] });
-                keyRow.createDiv({ text: keyItem.note, cls: ['note-name-display', 'field-content-box'] });
-                keyRow.createDiv({ text: keyItem.access, cls: ['access-type-display', 'field-content-box'] });
-
-                const actionsDiv = keyRow.createDiv({ cls: 'key-actions' });
-                
-                // NEW: Copy button
-                new ButtonComponent(actionsDiv)
-                    .setIcon('copy') // Obsidian's built-in copy icon
-                    .setTooltip('Copy Key to Clipboard')
-                    .onClick(async () => {
-                        await navigator.clipboard.writeText(keyItem.id);
-                        new Notice(`Key "${keyItem.id}" copied to clipboard!`, 2000);
-                    });
-
-                new ButtonComponent(actionsDiv)
-                    .setIcon('trash')
-                    .setTooltip('Delete Key')
-                    .setClass('mod-warning')
-                    .onClick(async () => {
-                        if (confirm(`Are you sure you want to delete the key for "${keyItem.note}" (${keyItem.access})?`)) {
-                            await deleteKey(this.plugin, keyItem.id);
-                            new Notice(`Key for "${keyItem.note}" deleted.`, 3000);
-                            await this.renderKeyListContent(containerToRenderInto); // Re-render the list
-                        }
-                    });
-            });
-        }
-    }
-
-    private renderAddKeySection(containerEl: HTMLElement, keyListDisplayContainer: HTMLElement): void {
-        const addKeySection = containerEl.createDiv({ cls: 'add-key-section' });
-        addKeySection.createEl("h3", { text: "Manually Add New Key" });
-
-        new Setting(addKeySection)
-            .setName("Key / Password")
-            .setDesc("Enter the key string directly. Leave empty to auto-generate.")
-            .addText(text => {
-                this.newKeyIdInput = text;
-                text.setPlaceholder("e.g., your-custom-password");
-            });
-
-        new Setting(addKeySection)
-            .setName("Note Name")
-            .setDesc("The note associated with this key.")
-            .addText(text => {
-                this.newNoteNameInput = text;
-                text.setPlaceholder("e.g., My Shared Document")
-                    .setValue(this.app.workspace.getActiveFile()?.basename || '');
-            });
-
-        new Setting(addKeySection)
-            .setName("Access Type")
-            .setDesc("Select the access level.")
-            .addDropdown(dropdown => {
-                this.newAccessTypeSelect = dropdown;
-                dropdown.addOption("View", "View");
-                dropdown.addOption("Edit", "Edit");
-                dropdown.addOption("View and Comment", "View and Comment");
-                dropdown.addOption("Edit w/ Approval", "Edit w/ Approval");
-                dropdown.setValue("Edit");
-            });
-
-        new Setting(addKeySection)
-            .addButton(button => {
-                button.setButtonText("Add Key")
-                    .setCta()
-                    .onClick(async () => {
-                        const keyId = this.newKeyIdInput.getValue().trim();
-                        const noteName = this.newNoteNameInput.getValue().trim();
-                        const accessType = this.newAccessTypeSelect.getValue();
-
-                        if (!noteName) {
-                            new Notice("Please provide a Note Name for the new key.", 3000);
-                            return;
-                        }
-                        if (!accessType) {
-                            new Notice("Please select an Access Type.", 3000);
-                            return;
-                        }
-
-                        let newKeyItem: KeyItem | null = null;
-                        if (keyId) {
-                            newKeyItem = { id: keyId, note: noteName, access: accessType };
-                        } else {
-                            newKeyItem = await generateKey(this.plugin, noteName, accessType);
-                        }
-
-                        if (newKeyItem) {
-                            const success = await addKey(this.plugin, newKeyItem);
-                            if (success) {
-                                new Notice(`Key added: ${newKeyItem.id.substring(0, 8)}...`, 3000); // Still show partial in notice
-                                this.newKeyIdInput.setValue(''); // Clear key input
-                                this.newNoteNameInput.setValue(this.app.workspace.getActiveFile()?.basename || ''); // Reset note name
-                                await this.renderKeyListContent(keyListDisplayContainer); // Re-render the key list
-                            } else {
-                                new Notice("Failed to add key. It might already exist (password collision).", 4000);
-                            }
-                        }
-                    });
-            });
-    }
-
-    private renderNoteRegistryContent(containerEl: HTMLElement): void {
-        containerEl.empty();
-        const registry = getNoteRegistry(this.plugin);
-
-        if (registry.length === 0) {
-            containerEl.createEl('p', { text: 'No notes currently shared in the local registry.', cls: 'empty-list-message' });
-        } else {
-            const registryHeader = containerEl.createDiv({ cls: 'registry-list-header' });
-            registryHeader.style.gridTemplateColumns = '1.5fr 3fr 1fr';
-            registryHeader.createSpan({ text: 'Note Key' });
-            registryHeader.createSpan({ text: 'Content (Partial)' });
-            registryHeader.createSpan({ text: 'Actions' });
-
-            registry.forEach(item => {
-                const row = containerEl.createDiv({ cls: 'registry-list-row' });
-                row.style.gridTemplateColumns = '1.5fr 3fr 1fr';
-
-                // NEW: Wrap content in a div with .field-content-box for styling
-                row.createDiv({ text: item.key, cls: ['registry-key-display', 'field-content-box'] });
-                // Remove substring for registry content, let CSS handle truncation
-                row.createDiv({ text: item.content, cls: ['registry-content-display', 'field-content-box'] });
-
-                const actionsDiv = row.createDiv({ cls: 'registry-actions' });
-                new ButtonComponent(actionsDiv)
-                    .setIcon('trash')
-                    .setTooltip('Delete from Registry')
-                    .setClass('mod-warning')
-                    .onClick(async () => {
-                        if (confirm(`Are you sure you want to delete note "${item.key}" from the registry?`)) {
-                            await deleteNoteFromRegistry(this.plugin, item.key);
-                            new Notice(`Note "${item.key}" deleted from registry.`, 3000);
-                            this.renderNoteRegistryContent(containerEl); // Re-render the registry list
-                        }
-                    });
-            });
-        }
-    }
-
-
-    private renderLinkNotePage(containerEl: HTMLElement): void {
-        containerEl.createEl('h2', { text: 'Link / Pull a Collaborative Note' });
-
-        // Back button
-        new Setting(containerEl)
-            .addButton(button => {
-                button.setButtonText('← Back to Main Settings')
-                    .onClick(() => {
-                        this.currentPage = 'main';
-                        this.display();
-                    });
-            });
-
-        let linkNoteKeyInput: TextComponent;
-
-        new Setting(containerEl)
-            .setName('Share Key / Password')
-            .setDesc('Enter the key/password for the shared note you want to link.')
-            .addText(text => {
-                linkNoteKeyInput = text;
-                text.setPlaceholder('e.g., MyNoteName-192.168.1.100');
-            });
-
-        new Setting(containerEl)
-            .addButton(button => {
-                button.setButtonText('Pull Note')
-                    .setCta()
-                    .onClick(async () => { // Made async
-                        const key = linkNoteKeyInput.getValue().trim();
-                        if (!key) {
-                            new Notice('Please enter a Share Key / Password to pull a note.', 3000);
-                            return;
-                        }
-
-                        new Notice(`Attempting to pull note with key: ${key}...`, 3000);
-
-                        try {
-                            // Use the actual WebSocket client function
-                            const content = await requestNoteFromPeer("ws://localhost:3010", key);
-
-                            // Derive note name from the key (e.g., "NoteName-IP" -> "NoteName")
-                            const noteNameParts = key.split('-');
-                            const noteName = noteNameParts.length > 1 ? noteNameParts.slice(0, -1).join('-') : key; // Handle keys without IP
-
-                            const sanitizedNoteName = noteName.replace(/[\\/:*?"<>|]/g, ''); // Basic sanitization
-                            const filePath = `${sanitizedNoteName}.md`;
-                            
-                            let file: TFile | null = this.app.vault.getAbstractFileByPath(filePath) as TFile;
-                            let overwrite = false;
-
-                            if (file) {
-                                // File exists, ask for overwrite confirmation
-                                overwrite = await new Promise(resolve => {
-                                    const confirmNotice = new Notice(
-                                        `Note "${filePath}" already exists. Overwrite? (Click here to confirm)`,
-                                        0 // Display indefinitely until clicked
-                                    );
-                                    confirmNotice.noticeEl.onclick = () => {
-                                        confirmNotice.hide();
-                                        resolve(true); // User confirms overwrite
-                                    };
-                                    // Auto-hide after some time if not clicked, and resolve to false
-                                    setTimeout(() => {
-                                        confirmNotice.hide();
-                                        resolve(false);
-                                    }, 7000); // 7 seconds to decide
-                                });
-
-                                if (!overwrite) {
-                                    new Notice(`Pull cancelled for "${filePath}". Note not overwritten.`, 3000);
-                                    return;
-                                }
-                            }
-
-                            if (file && overwrite) {
-                                await this.app.vault.modify(file, content);
-                                new Notice(`Note "${filePath}" updated successfully!`, 3000);
-                            } else {
-                                file = await this.app.vault.create(filePath, content);
-                                new Notice(`Note "${filePath}" created successfully!`, 3000);
-                            }
-
-                            // Open the created/updated note
-                            if (file) {
-                                this.app.workspace.openLinkText(file.path, '', false);
-                            }
-
-                        } catch (error) {
-                            console.error('Error pulling note:', error);
-                            new Notice(`An error occurred while pulling the note: ${error.message}`, 5000);
-                        }
-                    });
-            });
-
-        // REMOVED: "Generate Shareable Link (Copy to Clipboard)" button
     }
 }

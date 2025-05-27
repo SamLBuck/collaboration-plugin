@@ -9,6 +9,7 @@ export async function syncAllNotesToServer(plugin: MyPlugin, serverUrl: string):
 	const registry = getNoteRegistry(plugin);
 
 	for (const entry of registry) {
+		console.log(entry.content);
 		console.log(`[Sync] Registering note '${entry.key}' with server at ${serverUrl}`);
 		registerNoteWithPeer(serverUrl, entry.key, entry.content);
 	}
