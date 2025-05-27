@@ -13,9 +13,9 @@ export async function shareCurrentNote(app: App): Promise<void> {
 	const key = file.basename;
 
 	registerNoteWithPeer("ws://localhost:3010", key, content);
-	new Notice(`Note '${key}' sent to peer for sharing.`);
-
+	new Notice(`Note '${key}' added to peer accessible registry.`);
 }
+
 export function registerShareCurrentNoteCommand(plugin: Plugin) {
 	plugin.addCommand({
 		id: "share-current-note",
@@ -24,4 +24,72 @@ export function registerShareCurrentNoteCommand(plugin: Plugin) {
 			shareCurrentNote(plugin.app);
 		}
 	});
+}
+
+export async function updateRegistry(app: App, key: string): Promise<void> {
+	const file = app.vault.getFiles().find((f) => f.basename === key);
+	if (!file) {
+		new Notice(`File with key '${key}' not found.`);
+		return;
+	}
+
+	const content = await app.vault.read(file);
+	registerNoteWithPeer("ws://localhost:3010", key, content);
+	new Notice(`Registry updated for note '${key}'.`);
+}
+
+import { Modal, Setting } from "obsidian";
+
+class PromptModal extends Modal {
+	private resolve: (value: string | null) => void;
+	private placeholder: string;
+	private inputValue: string = "";
+
+	constructor(app: App, placeholder: string, resolve: (value: string | null) => void) {
+		super(app);
+		this.placeholder = placeholder;
+		this.resolve = resolve;
+	}
+
+	onOpen() {
+		const { contentEl } = this;
+		contentEl.createEl("h2", { text: "Input Required" });
+
+		new Setting(contentEl)
+			.setName(this.placeholder)
+			.addText((text) =>
+				text.onChange((value) => {
+					this.inputValue = value; // Store the input value
+				})
+			)
+			.addButton((btn) =>
+				btn
+					.setButtonText("Submit")
+					.setCta()
+					.onClick(() => {
+						this.resolve(this.inputValue); // Resolve with the stored input value
+						this.close();
+					})
+			);
+	}
+
+	onClose() {
+		this.contentEl.empty();
+	}
+}
+
+export function registerUpdateRegistryCommand(plugin: Plugin) {
+	plugin.addCommand({
+		id: "update-registry",
+		name: "Update Registry for Note",
+		callback: async () => {
+		const key = await new Promise<string | null>((resolve) => {
+			const promptModal = new PromptModal(plugin.app, "Enter the key of the note to update:", resolve);
+			promptModal.open();
+		});
+		if (key) {
+			updateRegistry(plugin.app, key);
+		}
+	}
+})
 }

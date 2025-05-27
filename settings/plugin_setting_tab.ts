@@ -177,6 +177,20 @@ export class PluginSettingsTab extends PluginSettingTab {
         navButtonContainer.appendChild(leftButtons);
         navButtonContainer.appendChild(rightButtons);
 
+        // New toggle setting for automatic Note Registry Updates
+        new Setting(containerEl)
+            .setName("Automatic Note Registry Updates")
+            .setDesc("Automatically update the registry when a note is modified.")
+            .addToggle((toggle) =>
+                toggle
+                    .setValue(this.plugin.settings.autoUpdateRegistry)
+                    .onChange(async (value) => {
+                        this.plugin.settings.autoUpdateRegistry = value;
+                        await this.plugin.saveSettings();
+                        console.log(`[Settings] Auto-update registry set to ${value}`);
+                    })
+            );
+
         containerEl.querySelectorAll('.setting-item').forEach(item => {
             (item as HTMLElement).style.marginBottom = '15px';
         });

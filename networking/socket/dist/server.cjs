@@ -33,7 +33,7 @@ wss.on("connection", (socket) => {
       if (message.type === "register-note") {
         const { key, content } = message.payload;
         registerNote(key, content);
-        socket.send(JSON.stringify({
+          socket.send(JSON.stringify({
           type: "ack",
           payload: { message: `Registered '${key}'` }
         }));
@@ -49,6 +49,7 @@ wss.on("connection", (socket) => {
         }));
         return;
       }
+  
       if (message.type === "list-keys") {
         const keys = Array.from(sharedNotes.keys());
         socket.send(JSON.stringify({
@@ -67,4 +68,4 @@ wss.on("connection", (socket) => {
       }));
     }
   });
-  });
+});

@@ -4,6 +4,7 @@ import {
     PluginSettingTab,
     Setting,
     Notice,
+    TFile,
 } from 'obsidian';
 import { registerAddKeyCommand } from './utils/add_key_command';
 import { registerDeleteKeyCommand } from './utils/delete_key_command';
@@ -29,6 +30,7 @@ import { registerShowIPCommand } from "./utils/show_ip_command";
 import { registerListSharedKeysCommand } from './utils/list_keys_command';
 import { registerShareCurrentNoteCommand } from './utils/share_active_note';
 import { registerSyncFromServerToSettings, syncRegistryFromServer } from './utils/sync_command';
+import { registerUpdateRegistryCommand } from './utils/share_active_note';
 export type NoteRegistry = Record<string, string>; // key => content
 
 
@@ -45,6 +47,7 @@ interface MyPluginSettings {
     mySetting: string;
     keys: KeyItem[];
     registry: noteRegistry[];
+    autoUpdateRegistry: boolean; // New setting
 }
 
 const DEFAULT_SETTINGS: MyPluginSettings = {
@@ -53,6 +56,7 @@ const DEFAULT_SETTINGS: MyPluginSettings = {
         { id: 'defaultpass123', note: 'Default Shared Note', access: 'View' },
     ],
     registry: [],
+    autoUpdateRegistry: false, // New setting
 };
 
 export function getNoteRegistry(plugin: MyPlugin): noteRegistry[] {
@@ -62,12 +66,9 @@ export function getNoteRegistry(plugin: MyPlugin): noteRegistry[] {
 export async function updateNoteRegistry(plugin: MyPlugin, key: string, content: string) {
     let registry = getNoteRegistry(plugin);
 
-    const existingIndex = registry.findIndex(item => item.key === key);
-    if (existingIndex !== -1) {
-        registry[existingIndex].content = content;
-    } else {
-        registry.push({ key, content });
-    }
+    // Ensure no duplicate keys exist by replacing the existing entry
+    registry = registry.filter(item => item.key !== key);
+    registry.push({ key, content });
 
     plugin.settings.registry = registry;
     await plugin.saveSettings();
@@ -77,7 +78,8 @@ export async function deleteNoteFromRegistry(plugin: MyPlugin, key: string) {
     let registry = getNoteRegistry(plugin);
     registry = registry.filter(item => item.key !== key);
     plugin.settings.registry = registry;
-    await plugin.saveSettings();
+    await plugin.saveSettings(); // Ensure persistent settings are updated
+    console.log(`[Delete Note] Key '${key}' deleted. Updated registry:`, registry);
 }
 export function getNoteContentByKey(plugin: MyPlugin, key: string): string | undefined {
     const registry = getNoteRegistry(plugin);
@@ -92,13 +94,16 @@ export default class MyPlugin extends Plugin {
 
 
     async onload() {
+        console.log("Loading collaboration plugin...");
         await this.loadSettings();
 
         // Start the HTTP server
         this.startServer();
 
-        // Register custom commands (Command Palette commands)
+        // Start WebSocket server
+        this.startWebSocketServer();
 
+        // Register custom commands (Command Palette commands)
         
 
         registerGenerateKeyCommand(this.app, this);
@@ -109,15 +114,40 @@ export default class MyPlugin extends Plugin {
         registerPullNoteCommand(this.app, this);
         registerListSharedKeysCommand(this);
         registerShareCurrentNoteCommand(this);
-        registerSyncFromServerToSettings(this);
-
+        registerUpdateRegistryCommand(this);
 
         this.addCommand({
-            id: "debug-print-registry",
-            name: "Debug: Print Saved Registry",
+            id: 'delete-note-from-registry',
+            name: 'Delete Note from Registry',
             callback: async () => {
-                console.log("[Registry] Current stored registry:", this.settings.registry);
-                new Notice(`Registry contains ${this.settings.registry.length} item(s). Check console for full output.`);
+                const modal = new tempKeyInputModal(this.app, async (key) => {
+                    if (!key) {
+                        new Notice("No key provided. Deletion canceled.");
+                        return;
+                    }
+                    const noteContent = getNoteContentByKey(this, key);
+                    if (!noteContent) {
+                        new Notice(`No note found with key '${key}'.`);
+                        return;
+                    }
+                    await deleteNoteFromRegistry(this, key);
+                    new Notice(`Note with key '${key}' deleted from registry.`);
+                });
+                modal.open();
+            },
+        });
+
+        // Listen for file changes if auto-update is enabled
+        this.app.vault.on("modify", async (file) => {
+            if (this.settings.autoUpdateRegistry) {
+                if (file instanceof TFile) {
+                    const key = file.basename; // Define the key based on the file's basename
+                    const content = await this.app.vault.read(file);
+                    await updateNoteRegistry(this, key, content);
+                    console.log(`[Auto-Update] Registry updated for note '${key}'.`);
+                } else {
+                    console.warn(`[Auto-Update] Skipped updating registry for non-TFile instance.`);
+                }
             }
         });
         
@@ -169,6 +199,20 @@ this.addSettingTab(new PluginSettingsTab(this.app, this));
         server.listen(PORT, () => {
             console.log(`Server started on port ${PORT}`);
         });
+    }
+
+    startWebSocketServer() {
+        try {
+            const serverPath = this.manifest.dir + "/networking/socket/dist/server.cjs";
+            const childProcess = require("child_process");
+            childProcess.fork(serverPath);
+
+            console.log("[Plugin] WebSocket server started at ws://localhost:3010");
+            new Notice("WebSocket server started at ws://localhost:3010");
+        } catch (err) {
+            console.error("[Plugin] Failed to start WebSocket server:", err);
+            new Notice("Failed to start WebSocket server. Check console for details.");
+        }
     }
 
     onunload() {
