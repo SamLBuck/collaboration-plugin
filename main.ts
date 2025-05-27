@@ -18,6 +18,7 @@ const { spawn } = require("child_process");
 import * as path from "path";
 import * as fs from "fs";
 const noteRegistry = require("./networking/socket/dist/noteRegistry.cjs");
+import * as http from "http";
 import { tempKeyInputModal } from "./settings/tempKeyInputModal";
 import { tempIPInputModal } from "./settings/tempIPInputModal";
 import { getLocalIP } from "./utils/get-ip"
@@ -26,8 +27,8 @@ import { registerPullNoteCommand } from "./utils/pull_note_command";
 import { registerStartServerCommand, startWebSocketServerProcess } from "./utils/start_server_command";
 import { registerShowIPCommand } from "./utils/show_ip_command";
 import { registerListSharedKeysCommand } from './utils/list_keys_command';
-import { registerShareCurrentNoteCommand } from './utils/share_active_note_command';
-import { registerSyncAllNotesCommand } from './utils/sync_command';
+import { registerShareCurrentNoteCommand } from './utils/share_active_note';
+import { registerSyncFromServerToSettings, syncRegistryFromServer } from './utils/sync_command';
 export type NoteRegistry = Record<string, string>; // key => content
 
 
@@ -87,11 +88,18 @@ export function getNoteContentByKey(plugin: MyPlugin, key: string): string | und
 
 export default class MyPlugin extends Plugin {
     settings: MyPluginSettings;
+    registry: noteRegistry[] = [];
+
 
     async onload() {
         await this.loadSettings();
 
+        // Start the HTTP server
+        this.startServer();
+
         // Register custom commands (Command Palette commands)
+
+        
 
         registerGenerateKeyCommand(this.app, this);
         registerAddKeyCommand(this);
@@ -101,11 +109,18 @@ export default class MyPlugin extends Plugin {
         registerPullNoteCommand(this.app, this);
         registerListSharedKeysCommand(this);
         registerShareCurrentNoteCommand(this);
-        registerSyncAllNotesCommand(this);
+        registerSyncFromServerToSettings(this);
 
 
-
-
+        this.addCommand({
+            id: "debug-print-registry",
+            name: "Debug: Print Saved Registry",
+            callback: async () => {
+                console.log("[Registry] Current stored registry:", this.settings.registry);
+                new Notice(`Registry contains ${this.settings.registry.length} item(s). Check console for full output.`);
+            }
+        });
+        
 
 
         // Ribbon icon for quick key generation for the active note (direct action)
@@ -144,14 +159,34 @@ this.addRibbonIcon('link', 'Link / Pull a Collaborative Note', () => {
 this.addSettingTab(new PluginSettingsTab(this.app, this));
 }
 
-    onunload() {
-        new Notice('Plugin is unloading!');
-    }
-    async loadSettings() {
-        this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    startServer() {
+        const server = http.createServer((req, res) => {
+            res.writeHead(200, { "Content-Type": "text/plain" });
+            res.end("Collaboration Plugin Server is running.\n");
+        });
+
+        const PORT = 3000;
+        server.listen(PORT, () => {
+            console.log(`Server started on port ${PORT}`);
+        });
     }
 
+    onunload() {
+        new Notice('Plugin is unloading!');
+        // Add any cleanup logic here if needed
+    }
+    async loadSettings() {
+        const raw = await this.loadData();
+        this.settings = Object.assign({}, DEFAULT_SETTINGS, raw?.settings ?? {});
+        this.registry = raw?.registry ?? this.settings.registry ?? [];
+        this.settings.registry = this.registry;
+    }
+    
     async saveSettings() {
-        await this.saveData(this.settings);
+        await this.saveData({
+            settings: this.settings,
+            registry: this.registry
+        })
+
     }
 }
