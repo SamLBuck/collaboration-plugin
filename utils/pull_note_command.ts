@@ -13,7 +13,7 @@ export function registerPullNoteCommand(app: App, plugin: MyPlugin) {
         id: "pull-note-from-peer-modal",
         name: "Pull Note from Server Registry (enter key and IP)",
         callback: () => {
-          pullNoteFromPeerWithModal(app);
+          //pullNoteFromPeerNewNote(app);  // pullNoteFromPeerNewNote takes a ip and note name now
         },
     });
 
@@ -37,8 +37,7 @@ export function registerPullNoteCommand(app: App, plugin: MyPlugin) {
         },
     });
 }
-export async function pullNoteFromPeerWithModal(app: App) {
-    new tempIPInputModal(app, async (ip: string, key: string) => {
+export async function pullNoteFromPeerNewNote(app: App, ip: string, key: string) {
       try {
         const content = await requestNoteFromPeer(`ws://${ip}:3010`, key);
         await app.vault.create(`${key}.md`, content);
@@ -47,7 +46,6 @@ export async function pullNoteFromPeerWithModal(app: App) {
         console.error("Failed to pull note:", err);
         new Notice(`Failed to pull note: ${err}`);
       }
-    }).open();
   }
 
   export async function rewriteExistingNote(app: App, ip: string, key: string) {
