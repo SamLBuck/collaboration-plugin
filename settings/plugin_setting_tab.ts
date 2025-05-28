@@ -1,21 +1,18 @@
 import { App, PluginSettingTab, Setting, ButtonComponent, TextComponent, Notice } from 'obsidian';
 import MyPlugin, { KeyItem } from '../main';
-import { generateKey, addKey } from '../storage/keyManager'; // Only need generate/add for this tab
-
-// Import the new Modals to open them from buttons within the settings tab
-import { KeyListModal } from '../settings/key_list_page02';
-import { LinkNoteModal } from '../settings/link_note_page03';
-
+import { generateKey, addKey } from '../storage/keyManager'; // Ensure addKey is imported if used directly here
+import { KeyListModal } from './key_list_page02';
+import { LinkNoteModal } from './link_note_page03';
 
 export class PluginSettingsTab extends PluginSettingTab {
     // IMPORTANT: This ID should be unique to your plugin and should match the 'id' field in your manifest.json.
     // Replace 'obsidian-collaboration-plugin-id' with your actual plugin ID.
     static PLUGIN_ID = 'obsidian-collaboration-plugin-id'; // <--- Ensure this matches your manifest.json ID
 
-    plugin: MyPlugin;
+    plugin: MyPlugin; // <--- ENSURE THIS IS DECLARED
 
     // Input references for the main settings page
-    keyInput: TextComponent;
+    // Removed: keyInput: TextComponent; // No longer needed for manual input
     noteInput: TextComponent;
     accessTypeView: HTMLInputElement;
     accessTypeEdit: HTMLInputElement;
@@ -24,73 +21,70 @@ export class PluginSettingsTab extends PluginSettingTab {
 
     constructor(app: App, plugin: MyPlugin) {
         super(app, plugin);
-        this.plugin = plugin;
+        this.plugin = plugin; // <--- ENSURE THIS IS INITIALIZED
     }
 
     display(): void {
         const { containerEl } = this;
         containerEl.empty(); // Clear existing content
 
-        this.renderMainSettingsPage(containerEl); // Only render the main page now
+        this.renderMainSettingsPage(containerEl);
     }
 
     private renderMainSettingsPage(containerEl: HTMLElement): void {
         containerEl.createEl('h2', { text: 'Collaboration Settings' });
 
-        const keySetting = new Setting(containerEl)
-            .setName('Key')
-            .setDesc('This will be the unique password for your shared note.');
+        // --- SECTION: Generate New Key ---
+        new Setting(containerEl)
+            .setName('Generate New Key')
+            .setDesc('Generate a new key (IP-NoteName format) for the specified note and access type. The generated key will be copied to your clipboard and saved.')
+            .addButton(button =>
+                button
+                    .setButtonText('Generate')
+                    .setCta()
+                    .onClick(async () => {
+                        const noteName = this.noteInput.getValue().trim();
+                        const accessType = this.getSelectedAccessType(); // <--- THIS METHOD IS NOW INCLUDED
 
-        const keyControlDiv = keySetting.controlEl.createDiv({ cls: 'key-input-generate-wrapper' });
-        keyControlDiv.style.display = 'flex';
-        keyControlDiv.style.alignItems = 'center';
-        keyControlDiv.style.gap = '8px';
+                        if (!noteName) {
+                            new Notice('Please provide a Note Name to generate a key.', 4000);
+                            return;
+                        }
+                        if (!accessType) {
+                            new Notice('Please select an Access Type to generate a key.', 4000);
+                            return;
+                        }
 
-        this.keyInput = new TextComponent(keyControlDiv)
-            .setPlaceholder('Leave blank to auto-generate')
-            .setValue('');
-        this.keyInput.inputEl.style.flexGrow = '1';
+                        // Check for existing key with the same note and access type
+                        const existingKey = this.plugin.settings.keys.find( // <--- 'plugin' IS NOW ACCESSIBLE
+                            key => key.note === noteName && key.access === accessType
+                        );
+                        if (existingKey) {
+                            new Notice(`A key for "${noteName}" with "${accessType}" access already exists. Cannot generate a duplicate. Existing Key: ${existingKey.ip}`, 8000);
+                            await navigator.clipboard.writeText(existingKey.ip); // Copy existing key if it's a duplicate
+                            return;
+                        }
 
-        new ButtonComponent(keyControlDiv)
-            .setButtonText('Generate')
-            .setCta()
-            .onClick(async () => {
-                const noteName = this.noteInput.getValue().trim();
-                const accessType = this.getSelectedAccessType();
+                        try {
+                            const newKeyItem = await generateKey(this.plugin, noteName, accessType); // <--- newKeyItem WILL BE KeyItem
+                            const success = await addKey(this.plugin, newKeyItem);
 
-                if (!noteName) {
-                    new Notice('Please provide a Note Name to generate a key.', 4000);
-                    return;
-                }
-                if (!accessType) {
-                    new Notice('Please select an Access Type to generate a key.', 4000);
-                    return;
-                }
+                            if (success) {
+                                new Notice(`Generated & Saved:\n${newKeyItem.ip}\nFor Note: "${newKeyItem.note}" (Access: ${newKeyItem.access})`, 8000);
+                                await navigator.clipboard.writeText(newKeyItem.ip); // Copy to clipboard
+                            } else {
+                                // This case should ideally not be reached due to the existingKey check above,
+                                // but kept as a fallback for rare collision scenarios.
+                                new Notice("Failed to add key. It might already exist (password collision).", 4000);
+                            }
+                        } catch (error: any) {
+                            console.error("Error generating or adding key:", error);
+                            new Notice(`Error: Could not generate key. ${error.message}`, 5000);
+                        }
+                    })
+            );
 
-                const existingKey = this.plugin.settings.keys.find(
-                    key => key.note === noteName && key.access === accessType
-                );
-                if (existingKey) {
-                    new Notice(`A key for "${noteName}" with "${accessType}" access already exists. Cannot generate a duplicate.`, 6000);
-                    return;
-                }
-
-                try {
-                    const newKeyItem = await generateKey(this.plugin, noteName, accessType);
-                    const success = await addKey(this.plugin, newKeyItem);
-
-                    if (success) {
-                        this.keyInput.setValue(newKeyItem.ip);
-                        new Notice(`Generated & Saved: ${newKeyItem.ip}\nFor Note: "${newKeyItem.note}"`, 8000);
-                    } else {
-                        new Notice("Failed to add key. It might already exist (password collision).", 4000);
-                    }
-                } catch (error) {
-                    console.error("Error generating or adding key:", error);
-                    new Notice(`Error: Could not generate key. ${error.message}`, 5000);
-                }
-            });
-
+        // --- SECTION: Note Input ---
         new Setting(containerEl)
             .setName('Note')
             .setDesc('The note this key will be associated with.')
@@ -108,6 +102,7 @@ export class PluginSettingsTab extends PluginSettingTab {
                     });
             });
 
+        // --- SECTION: Access Type ---
         const accessTypeSetting = new Setting(containerEl)
             .setName('Access Type')
             .setDesc('Select the type of access this key grants for the note.');
@@ -144,11 +139,12 @@ export class PluginSettingsTab extends PluginSettingTab {
             return checkbox;
         };
 
-        this.accessTypeView = createCheckbox('View', false);
-        this.accessTypeEdit = createCheckbox('Edit', true);
+        this.accessTypeView = createCheckbox('View', true);
+        this.accessTypeEdit = createCheckbox('Edit', false);
         this.accessTypeViewAndComment = createCheckbox('View and Comment', false);
         this.accessTypeEditWithApproval = createCheckbox('Edit w/ Approval', false);
 
+        // --- SECTION: Navigation Buttons ---
         const navButtonContainer = containerEl.createDiv({ cls: 'settings-nav-buttons' });
         navButtonContainer.style.display = 'flex';
         navButtonContainer.style.justifyContent = 'space-between';
@@ -159,8 +155,7 @@ export class PluginSettingsTab extends PluginSettingTab {
             .addButton(button => {
                 button.setButtonText('List of keys')
                     .onClick(() => {
-                        // Open the KeyListModal directly from here
-                        new KeyListModal(this.app, this.plugin).open(); // <--- Opens the modal pop-up
+                        new KeyListModal(this.app, this.plugin).open();
                     });
             });
 
@@ -169,15 +164,14 @@ export class PluginSettingsTab extends PluginSettingTab {
             .addButton(button => {
                 button.setButtonText('Link Note')
                     .onClick(() => {
-                        // Open the LinkNoteModal directly from here
-                        new LinkNoteModal(this.app, this.plugin).open(); // <--- Opens the modal pop-up
+                        new LinkNoteModal(this.app, this.plugin).open();
                     });
             });
 
         navButtonContainer.appendChild(leftButtons);
         navButtonContainer.appendChild(rightButtons);
 
-        // New toggle setting for automatic Note Registry Updates
+        // --- SECTION: Automatic Note Registry Updates ---
         new Setting(containerEl)
             .setName("Automatic Note Registry Updates")
             .setDesc("Automatically update the registry when a note is modified.")
@@ -196,6 +190,7 @@ export class PluginSettingsTab extends PluginSettingTab {
         });
     }
 
+    // <--- ENSURE THIS METHOD IS PRESENT WITHIN THE CLASS
     getSelectedAccessType(): string | null {
         if (this.accessTypeView.checked) return 'View';
         if (this.accessTypeEdit.checked) return 'Edit';

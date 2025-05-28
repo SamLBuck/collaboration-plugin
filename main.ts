@@ -10,7 +10,7 @@ import { registerAddKeyCommand } from './utils/add_key_command';
 import { registerDeleteKeyCommand } from './utils/delete_key_command';
 import { KeyListModal } from './settings/key_list_page02';
 import { LinkNoteModal } from './settings/link_note_page03';
-import { generateKey, addKey } from './storage/keyManager';
+import { generateKey, addKey } from './storage/keyManager'; // Ensure addKey is imported if used directly here
 import { registerNoteWithPeer, requestNoteFromPeer } from './networking/socket/client';
 import { PluginSettingsTab } from "./settings/plugin_setting_tab";
 import { FileSystemAdapter } from "obsidian";
@@ -20,21 +20,22 @@ import * as fs from "fs";
 const noteRegistry = require("./networking/socket/dist/noteRegistry.cjs");
 import * as http from "http";
 import { tempKeyInputModal } from "./settings/tempKeyInputModal";
-import { tempIPInputModal } from "./settings/tempIPInputModal";
+import { tempIPInputModal } from "./settings/tempIPInputModal"; // This modal is no longer used for pull, but remains if other commands use it.
 import { getLocalIP } from "./utils/get-ip"
 import { registerGenerateKeyCommand } from './utils/generate_key_command';
-import { registerPullNoteCommand } from "./utils/pull_note_command";
+import { registerPullNoteCommand } from "./utils/pull_note_command"; // This command should now use LinkNoteModal
 import { registerStartServerCommand, startWebSocketServerProcess } from "./utils/start_server_command";
 import { registerShowIPCommand } from "./utils/show_ip_command";
 import { registerListSharedKeysCommand } from './utils/list_keys_command';
 import { registerShareCurrentNoteCommand } from './utils/share_active_note';
 import { registerSyncFromServerToSettings, syncRegistryFromServer } from './utils/sync_command';
 import { registerUpdateRegistryCommand } from './utils/share_active_note';
+
 export type NoteRegistry = Record<string, string>; // key => content
 
 
 export interface KeyItem {
-    ip: string;
+    ip: string; // MODIFIED: KeyItem interface now uses 'ip' as the unique identifier
     note: string;
     access: string;
 }
@@ -52,7 +53,8 @@ interface MyPluginSettings {
 const DEFAULT_SETTINGS: MyPluginSettings = {
     mySetting: 'default',
     keys: [
-        { ip: 'defaultpass123', note: 'Default Shared Note', access: 'View' },
+        // MODIFIED: Default key updated to align with IP-NoteName format
+        { ip: 'default-ip-default_note', note: 'Default Shared Note', access: 'View' },
     ],
     registry: [],
     autoUpdateRegistry: false, // New setting
@@ -103,14 +105,12 @@ export default class MyPlugin extends Plugin {
         this.startWebSocketServer();
 
         // Register custom commands (Command Palette commands)
-        
-
         registerGenerateKeyCommand(this.app, this);
         registerAddKeyCommand(this);
         registerDeleteKeyCommand(this);
         registerStartServerCommand(this.app, this);
         registerShowIPCommand(this.app, this);
-        registerPullNoteCommand(this.app, this);
+        registerPullNoteCommand(this.app, this); // This command should now open LinkNoteModal
         registerListSharedKeysCommand(this);
         registerShareCurrentNoteCommand(this);
         registerUpdateRegistryCommand(this);
@@ -140,7 +140,11 @@ export default class MyPlugin extends Plugin {
         this.app.vault.on("modify", async (file) => {
             if (this.settings.autoUpdateRegistry) {
                 if (file instanceof TFile) {
-                    const key = file.basename; // Define the key based on the file's basename
+                    // MODIFIED: Key for auto-update registry should ideally be IP-NoteName too.
+                    // This currently uses just basename, you might want to adapt it later to use IP
+                    // if notes are shared based on IP-NoteName for auto-updates.
+                    // For now, it will use only the note's basename as the key.
+                    const key = file.basename;
                     const content = await this.app.vault.read(file);
                     await updateNoteRegistry(this, key, content);
                     console.log(`[Auto-Update] Registry updated for note '${key}'.`);
@@ -149,44 +153,44 @@ export default class MyPlugin extends Plugin {
                 }
             }
         });
-        
 
 
         // Ribbon icon for quick key generation for the active note (direct action)
         this.addRibbonIcon('key', 'Generate Key for Active Note', async () => {
             const activeFile = this.app.workspace.getActiveFile();
             const noteName = activeFile ? activeFile.basename : 'No Active Note';
-            const accessType = 'Edit';
+            const accessType = 'Edit'; // Default for generated keys
 
             if (!activeFile) {
                 new Notice("No active note open to generate a key for. Please open a note.", 4000);
                 return;
             }
             try {
+                // Call generateKey from keyManager which handles IP and note name to create the key ID
                 const newKeyItem = await generateKey(this, noteName, accessType);
+                // Add the generated key to plugin settings
                 const success = await addKey(this, newKeyItem);
                 if (success) {
+                    // MODIFIED: Display the full IP-NoteName key and copy to clipboard
                     new Notice(`Generated & Stored:\n${newKeyItem.ip}\nFor Note: "${newKeyItem.note}" (Access: ${newKeyItem.access})`, 6000);
+                    await navigator.clipboard.writeText(newKeyItem.ip); // Copy the generated IP-NoteName key
                 } else {
                     new Notice('Failed to add generated key. It might already exist (password collision).', 4000);
                 }
-            } catch (error) {
+            } catch (error: any) { // Added : any for type safety
                 console.error("Error generating or adding key:", error);
                 new Notice(`Error generating key: ${error.message}`, 5000);
             }
         }).addClass('my-plugin-ribbon-class');
 
-// Removed the 'settings' ribbon icon as requested.
-// Users can still access plugin settings via Obsidian's main Settings -> Community Plugins.
-
-this.addRibbonIcon('list', 'View All Collaboration Keys', () => {
-    new KeyListModal(this.app, this).open();
-});
-this.addRibbonIcon('link', 'Link / Pull a Collaborative Note', () => {
-    new LinkNoteModal(this.app, this).open();
-});
-this.addSettingTab(new PluginSettingsTab(this.app, this));
-}
+        this.addRibbonIcon('list', 'View All Collaboration Keys', () => {
+            new KeyListModal(this.app, this).open();
+        });
+        this.addRibbonIcon('link', 'Link / Pull a Collaborative Note', () => {
+            new LinkNoteModal(this.app, this).open();
+        });
+        this.addSettingTab(new PluginSettingsTab(this.app, this));
+    }
 
     startServer() {
         const server = http.createServer((req, res) => {
@@ -208,15 +212,15 @@ this.addSettingTab(new PluginSettingsTab(this.app, this));
 
             console.log("[Plugin] WebSocket server started at ws://localhost:3010");
             new Notice("WebSocket server started at ws://localhost:3010");
-        } catch (err) {
+        } catch (err: any) { // Added : any for type safety
             console.error("[Plugin] Failed to start WebSocket server:", err);
-            new Notice("Failed to start WebSocket server. Check console for details.");
+            new Notice(`Failed to start WebSocket server: ${err.message}. Check console for details.`, 5000); // MODIFIED: More informative notice
         }
     }
 
     onunload() {
         new Notice('Plugin is unloading!');
-        // Add any cleanup logic here if needed
+        // TODO: Add logic to stop http and websocket servers gracefully on unload
     }
     async loadSettings() {
         const raw = await this.loadData();
@@ -224,7 +228,7 @@ this.addSettingTab(new PluginSettingsTab(this.app, this));
         this.registry = raw?.registry ?? this.settings.registry ?? [];
         this.settings.registry = this.registry;
     }
-    
+
     async saveSettings() {
         await this.saveData({
             settings: this.settings,

@@ -1,13 +1,13 @@
 // utils/add_key_command.ts
 
-import { App, Modal, Notice } from "obsidian";
+import { App, Modal, Notice, ButtonComponent } from "obsidian"; // Ensure ButtonComponent is imported
 import { addKey, generateKey } from "../storage/keyManager";
-import MyPlugin, { KeyItem } from "../main"; // *** NEW: Import KeyItem from main.ts ***
+import MyPlugin, { KeyItem } from "../main";
 
 export function registerAddKeyCommand(plugin: MyPlugin) {
     plugin.addCommand({
         id: "add-key",
-        name: "Add a Key to Collection",
+        name: "Generate & Add a Key (IP-NoteName)",
         callback: () => {
             new AddKeyModal(plugin).open();
         },
@@ -15,9 +15,8 @@ export function registerAddKeyCommand(plugin: MyPlugin) {
 }
 
 class AddKeyModal extends Modal {
-    inputEl: HTMLInputElement;
-    noteInputEl: HTMLInputElement; // NEW: Input for note name
-    accessSelectEl: HTMLSelectElement; // NEW: Select for access type
+    noteInputEl: HTMLInputElement;
+    accessSelectEl: HTMLSelectElement;
     plugin: MyPlugin;
 
     constructor(plugin: MyPlugin) {
@@ -28,15 +27,7 @@ class AddKeyModal extends Modal {
     onOpen() {
         const { contentEl } = this;
 
-        contentEl.createEl("h2", { text: "Add a New Key" });
-
-        // Input for the key ID itself
-        contentEl.createEl("h3", { text: "Key ID" });
-        this.inputEl = contentEl.createEl("input", {
-            type: "text",
-            placeholder: "Enter key ID (e.g., obs-collab://...)",
-            cls: "add-key-input"
-        });
+        contentEl.createEl("h2", { text: "Generate & Add New Key" });
 
         // Input for the associated note name
         contentEl.createEl("h3", { text: "Note Name" });
@@ -45,7 +36,6 @@ class AddKeyModal extends Modal {
             placeholder: "Enter associated note name",
             cls: "add-key-note-input"
         });
-        // Suggest current note
         this.noteInputEl.value = this.plugin.app.workspace.getActiveFile()?.basename || '';
 
 
@@ -62,45 +52,53 @@ class AddKeyModal extends Modal {
 
         const buttonContainer = contentEl.createDiv({cls: "button-container"});
 
-        const addButton = buttonContainer.createEl("button", { text: "Add Manually Entered Key" });
-        addButton.onclick = () => this.addKeyToCollection();
+        // CORRECTED: Use ButtonComponent for the generate button
+        new ButtonComponent(buttonContainer) // Create a new ButtonComponent instance
+            .setButtonText("Generate & Save Key")
+            .setCta() // This method now exists on ButtonComponent
+            .onClick(() => this.generateAndSaveKey()); // Attach the click handler
 
-        const randomButton = buttonContainer.createEl("button", { text: "Generate & Add Random Key" });
-        randomButton.onclick = () => this.addRandomKey();
-
-        const closeButton = buttonContainer.createEl("button", { text: "Close" });
-        closeButton.onclick = () => this.close();
+        // CORRECTED: Use ButtonComponent for the close button as well for consistency
+        new ButtonComponent(buttonContainer)
+            .setButtonText("Close")
+            .onClick(() => this.close()); // Attach the click handler
     }
 
     onClose() {
         this.contentEl.empty();
     }
 
-    async addKeyToCollection() {
-        const keyId = this.inputEl.value.trim();
+    async generateAndSaveKey() {
         const noteName = this.noteInputEl.value.trim();
         const accessType = this.accessSelectEl.value;
 
-        if (!keyId || !noteName || !accessType) {
-            new Notice("Please fill in all fields (Key ID, Note Name, Access Type).", 3000);
+        if (!noteName) {
+            new Notice("Please provide a Note Name to generate a key.", 4000);
             return;
         }
 
-        const newKeyItem: KeyItem = { id: keyId, note: noteName, access: accessType };
-        await addKey(this.plugin, newKeyItem);
-        this.close();
-    }
+        const existingKey = this.plugin.settings.keys.find(
+            key => key.note === noteName && key.access === accessType
+        );
+        if (existingKey) {
+            new Notice(`A key for "${noteName}" with "${accessType}" access already exists. Cannot generate a duplicate. Existing Key: ${existingKey.ip}`, 8000);
+            return;
+        }
 
-    async addRandomKey() {
-        const noteName = this.noteInputEl.value.trim() || "Generated Note"; // Use note input or a default
-        const accessType = this.accessSelectEl.value;
+        try {
+            const newKeyItem = await generateKey(this.plugin, noteName, accessType);
+            const success = await addKey(this.plugin, newKeyItem);
 
-        // generateKey now returns a KeyItem
-        const newKeyItem = await generateKey(this.plugin, noteName, accessType);
-
-        // Then, use addKey to actually add and save it
-        await addKey(this.plugin, newKeyItem);
-
-        this.close();
+            if (success) {
+                new Notice(`Generated & Saved: ${newKeyItem.ip}\nFor Note: "${newKeyItem.note}" (Access: ${newKeyItem.access})`, 8000);
+                await navigator.clipboard.writeText(newKeyItem.ip);
+                this.close();
+            } else {
+                new Notice("Failed to add generated key. It might already exist (password collision).", 4000);
+            }
+        } catch (error: any) {
+            console.error("Error generating or adding key:", error);
+            new Notice(`Error generating key: ${error.message}`, 5000);
+        }
     }
 }

@@ -1,4 +1,4 @@
-import { Plugin, Notice } from "obsidian";
+import { Plugin, Notice, TFile } from "obsidian";
 import { App } from "obsidian";
 import { registerNoteWithPeer } from "../networking/socket/client";
 
@@ -14,6 +14,31 @@ export async function shareCurrentNote(app: App): Promise<void> {
 
 	registerNoteWithPeer("ws://localhost:3010", key, content);
 	new Notice(`Note '${key}' added to peer accessible registry.`);
+}
+
+export async function shareCurrentNoteWithFileName(app: App, fileName: string): Promise<void> {
+	const file = app.vault.getAbstractFileByPath(`${fileName}.md`);
+	if (!file) {
+		new Notice("No active file.");
+		return;
+	}
+
+	if (!(file instanceof TFile)) {
+        new Notice(`'${file}' is not a readable file.`, 3000);
+        return;
+    }
+	
+	try {
+        const content = await app.vault.read(file);
+        const key = fileName;
+
+		registerNoteWithPeer("ws://localhost:3010", key, content);
+		new Notice(`Note '${key}' added to peer accessible registry.`);
+	}
+	catch (error: any) {
+        console.error("Error sharing note by filename:", error);
+        new Notice(`Failed to share note '${fileName}': ${error.message || error}`, 5000);
+    }
 }
 
 export function registerShareCurrentNoteCommand(plugin: Plugin) {

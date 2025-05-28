@@ -1,28 +1,32 @@
+// src/storage/keyManager.ts
+
 import MyPlugin, { KeyItem } from "../main";
 import { getLocalIP } from "../utils/get-ip"; // Import getLocalIP to get the local IP address
 
 /**
  * Generates a unique key based on the note name and local IP address.
  * This function now creates a deterministic key by concatenating these two elements.
+ * The generated key is in 'IP-NoteName' format.
  *
- * @param plugin The plugin instance, used to access plugin settings if needed.
+ * @param plugin The plugin instance (not directly used for key generation, but for context).
  * @param noteName The name of the note for which the key is being generated.
  * @param accessType The type of access (e.g., "View", "Edit") associated with the key.
- * @returns A Promise that resolves to a KeyItem object containing the generated ID, note name, and access type.
+ * @returns A Promise that resolves to a KeyItem object containing the generated ID (as 'ip'), note name, and access type.
  */
 export async function generateKey(plugin: MyPlugin, noteName: string, accessType: string): Promise<KeyItem> {
-    const localIP = getLocalIP(); // Get the current local IP address
+    const localIP = await getLocalIP(); // MODIFIED: Await getLocalIP() if it's async
 
-    // Create a deterministic key ID by concatenating the note name and local IP.
+    // Create a deterministic key ID by concatenating the local IP and sanitized note name.
     // Spaces in the note name are replaced with underscores for consistency.
-    const newKeyId = `${noteName.replace(/\s/g, '_')}-${localIP}`; // Corrected format: NoteName-IPAddress
+    const sanitizedNoteName = noteName.replace(/\s/g, '_'); // ADDED: Sanitize note name here
+    const newKeyId = `${localIP}-${sanitizedNoteName}|${accessType}`; // MODIFIED: Format is now IP-NoteName
 
-    // Return the new KeyItem. The 'addKey' function (below) will handle checking for duplicates
+    // Return the new KeyItem. The 'addKey' function will handle checking for duplicates
     // based on this generated ID before storing it.
     return {
-        ip: newKeyId,
+        ip: newKeyId, // MODIFIED: Storing the full IP-NoteName string in the 'ip' property
         note: noteName,
-        access: accessType // Access type is still stored with the KeyItem, just not part of the ID
+        access: accessType
     };
 }
 
