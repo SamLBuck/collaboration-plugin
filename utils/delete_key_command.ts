@@ -35,14 +35,14 @@ class DeleteKeyModal extends Modal {
         const listContainer = contentEl.createEl("div");
 
         keys.forEach((keyItem: KeyItem) => { // Iterate over KeyItem objects
-            const button = listContainer.createEl("button", { text: `Delete "${keyItem.id}" (Note: ${keyItem.note}, Access: ${keyItem.access})` });
+            const button = listContainer.createEl("button", { text: `Delete "${keyItem.ip}" (Note: ${keyItem.note}, Access: ${keyItem.access})` });
             button.onclick = async () => {
                 // Pass the ID of the key item to delete
-                const success = await deleteKey(this.plugin, keyItem.id);
-                if (success) {
-                    new Notice(`Key "${keyItem.id}" deleted successfully.`);
+                const success = await deleteKey(this.plugin, keyItem.ip);
+                if (success !== undefined) { // Ensure success is not void
+                    new Notice(`Key "${keyItem.ip}" deleted successfully.`);
                 } else {
-                    new Notice(`Failed to delete "${keyItem.id}".`);
+                    new Notice(`Failed to delete "${keyItem.ip}".`);
                 }
                 this.close(); // Close after deletion
             };

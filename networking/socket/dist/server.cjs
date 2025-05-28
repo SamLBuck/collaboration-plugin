@@ -13,10 +13,11 @@ const {
   getNote,
   sharedNotes,
   registerNote,
-  registerNoteFromFile
+  registerNoteFromFile,
+  deleteNote
 } = require("./noteRegistry.cjs");
 
-//registerNoteFromFile("key", "C:/Users/CSStudent/Documents/Obsidian Vault/TestNote.md");
+//registerNoteFromFile("key", "C:/Users/CSStudent/Documents/Obsidian Vault/TestNote.md");//registerNoteFromFile("key", "C:/Users/CSStudent/Documents/Obsidian Vault/TestNote.md");
 
 
 const wss = new WebSocket.Server({ port: 3010 });
@@ -27,45 +28,63 @@ wss.on("connection", (socket) => {
   console.log("Viewer connected");
   socket.on("message", (data) => {
     try {
-      const message = JSON.parse(data.toString());  // <-- must come first
+      const message = JSON.parse(data.toString());
       console.log("[Server] Received message:", message);
-  
+
       if (message.type === "register-note") {
         const { key, content } = message.payload;
         registerNote(key, content);
-          socket.send(JSON.stringify({
-          type: "ack",
-          payload: { message: `Registered '${key}'` }
-        }));
+        socket.send(
+          JSON.stringify({
+            type: "ack",
+            payload: { message: `Registered '${key}'` },
+          })
+        );
         return;
       }
-  
+
+      if (message.type === "delete-note") {
+        const { key } = message.payload;
+        deleteNote(key);
+        socket.send(
+          JSON.stringify({
+            type: "ack",
+            payload: { message: `Deleted '${key}'` },
+          })
+        );
+        return;
+      }
+
       if (message.type === "note") {
         const key = message.payload.key;
         const content = getNote(key);
-        socket.send(JSON.stringify({
-          type: "note",
-          payload: { content: content ?? "Note not found" }
-        }));
+        socket.send(
+          JSON.stringify({
+            type: "note",
+            payload: { content: content ?? "Note not found" },
+          })
+        );
         return;
       }
-  
+
       if (message.type === "list-keys") {
         const keys = Array.from(sharedNotes.keys());
-        socket.send(JSON.stringify({
-          type: "key-list",
-          payload: { keys }
-        }));
+        socket.send(
+          JSON.stringify({
+            type: "key-list",
+            payload: { keys },
+          })
+        );
         return;
       }
-      
-  
     } catch (err) {
       console.error("[Server] Error handling message:", err);
-      socket.send(JSON.stringify({
-        type: "error",
-        payload: { message: "Invalid format" }
-      }));
+      socket.send(
+        JSON.stringify({
+          type: "error",
+          payload: { message: "Invalid format" },
+        })
+      );
     }
   });
 });

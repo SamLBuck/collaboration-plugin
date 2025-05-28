@@ -79,7 +79,7 @@ export class KeyListModal extends Modal {
         const currentKeys = await listKeys(this.plugin);
 
         if (currentKeys.length === 0) {
-            containerToRenderInto.createEl('p', { text: 'No keys currently stored.' , cls: 'empty-list-message' });
+            containerToRenderInto.createEl('p', { text: 'No keys currently stored.', cls: 'empty-list-message' });
         } else {
             const listHeader = containerToRenderInto.createDiv({ cls: 'key-list-header' });
             listHeader.style.gridTemplateColumns = '2.8fr 1.5fr 1fr 0.7fr';
@@ -91,13 +91,13 @@ export class KeyListModal extends Modal {
             currentKeys.forEach((keyItem: KeyItem) => {
                 const keyRow = containerToRenderInto.createDiv({ cls: 'key-list-row' });
                 keyRow.style.gridTemplateColumns = '2.8fr 1.5fr 1fr 0.7fr';
-                
+
                 keyRow.createDiv({ text: keyItem.ip, cls: ['key-id-display', 'field-content-box'] });
                 keyRow.createDiv({ text: keyItem.note, cls: ['note-name-display', 'field-content-box'] });
                 keyRow.createDiv({ text: keyItem.access, cls: ['access-type-display', 'field-content-box'] });
 
                 const actionsDiv = keyRow.createDiv({ cls: 'key-actions' });
-                
+
                 new ButtonComponent(actionsDiv)
                     .setIcon('copy')
                     .setTooltip('Copy Key to Clipboard')
@@ -111,9 +111,12 @@ export class KeyListModal extends Modal {
                     .setTooltip('Delete Key')
                     .setClass('mod-warning')
                     .onClick(async () => {
-                        // Use the new ConfirmationModal
-                        const confirmDelete = await new Promise<boolean>(resolve => {
-                            new ConfirmationModal(this.app, `Are you sure you want to delete the key for "${keyItem.note}" (${keyItem.access})?`, resolve).open();
+                        const confirmDelete = await new Promise<boolean>((resolve) => {
+                            new ConfirmationModal(
+                                this.app,
+                                `Are you sure you want to delete the key for "${keyItem.note}" (${keyItem.access})?`,
+                                resolve
+                            ).open();
                         });
 
                         if (confirmDelete) {
@@ -133,7 +136,7 @@ export class KeyListModal extends Modal {
         const registry = this.plugin.settings.registry ?? [];
 
         if (registry.length === 0) {
-            containerEl.createEl('p', { text: 'No notes currently shared in the local registry.' , cls: 'empty-list-message'});
+            containerEl.createEl('p', { text: 'No notes currently shared in the local registry.', cls: 'empty-list-message' });
         } else {
             const registryHeader = containerEl.createDiv({ cls: 'registry-list-header' });
             registryHeader.style.gridTemplateColumns = '1.5fr 3fr 1fr';
@@ -154,15 +157,14 @@ export class KeyListModal extends Modal {
                     .setTooltip('Delete from Registry')
                     .setClass('mod-warning')
                     .onClick(async () => {
-                        // Use the new ConfirmationModal
+                        // Use the ConfirmationModal for user confirmation
                         const confirmDelete = await new Promise<boolean>(resolve => {
                             new ConfirmationModal(this.app, `Are you sure you want to delete note "${item.key}" from the registry?`, resolve).open();
                         });
 
                         if (confirmDelete) {
-                            const currentRegistry = this.plugin.settings.registry.filter(regItem => regItem.key !== item.key);
-                            this.plugin.settings.registry = currentRegistry;
-                            await this.plugin.saveSettings();
+                            // Use the deleteKey function from keyManager.ts
+                            await deleteKey(this.plugin, item.key);
                             new Notice(`Note '${item.key}' deleted from registry.`, 3000);
                             this.renderNoteRegistryContent(containerEl);
                         } else {
