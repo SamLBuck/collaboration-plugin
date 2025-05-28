@@ -8,7 +8,7 @@ export function parseKey(keyString: string) {
 
     const parts = keyString.split('-');
 
-    if (parts.length < 3) {
+    if (parts.length < 2) {
         // Not enough parts to match the expected format
         return null;
     }
