@@ -62,7 +62,7 @@ export class KeyListModal extends Modal {
                 keyRow.style.gridTemplateColumns = '2.8fr 1.5fr 1fr 0.7fr'; // Consistent with CSS
                 
                 // NEW: Wrap content in a div with .field-content-box for styling
-                keyRow.createDiv({ text: keyItem.id, cls: ['key-id-display', 'field-content-box'] });
+                keyRow.createDiv({ text: keyItem.ip, cls: ['key-id-display', 'field-content-box'] });
                 keyRow.createDiv({ text: keyItem.note, cls: ['note-name-display', 'field-content-box'] });
                 keyRow.createDiv({ text: keyItem.access, cls: ['access-type-display', 'field-content-box'] });
 
@@ -73,8 +73,8 @@ export class KeyListModal extends Modal {
                     .setIcon('copy') // Obsidian's built-in copy icon
                     .setTooltip('Copy Key to Clipboard')
                     .onClick(async () => {
-                        await navigator.clipboard.writeText(keyItem.id);
-                        new Notice(`Key "${keyItem.id}" copied to clipboard!`, 2000);
+                        await navigator.clipboard.writeText(keyItem.ip);
+                        new Notice(`Key "${keyItem.ip}" copied to clipboard!`, 2000);
                     });
 
                 new ButtonComponent(actionsDiv)
@@ -83,7 +83,7 @@ export class KeyListModal extends Modal {
                     .setClass('mod-warning')
                     .onClick(async () => {
                         if (confirm(`Are you sure you want to delete the key for "${keyItem.note}" (${keyItem.access})?`)) {
-                            await deleteKey(this.plugin, keyItem.id);
+                            await deleteKey(this.plugin, keyItem.ip);
                             new Notice(`Key for "${keyItem.note}" deleted.`, 3000);
                             await this.renderKeyListContent(containerToRenderInto); // Re-render the list
                         }
@@ -147,7 +147,7 @@ export class KeyListModal extends Modal {
 
                         let newKeyItem: KeyItem | null = null;
                         if (keyId) {
-                            newKeyItem = { id: keyId, note: noteName, access: accessType };
+                            newKeyItem = { ip: keyId, note: noteName, access: accessType };
                         } else {
                             newKeyItem = await generateKey(this.plugin, noteName, accessType);
                         }
@@ -155,7 +155,7 @@ export class KeyListModal extends Modal {
                         if (newKeyItem) {
                             const success = await addKey(this.plugin, newKeyItem);
                             if (success) {
-                                new Notice(`Key added: ${newKeyItem.id.substring(0, 8)}...`, 3000); // Still show partial in notice
+                                new Notice(`Key added: ${newKeyItem.ip.substring(0, 8)}...`, 3000); // Still show partial in notice
                                 this.newKeyIdInput.setValue(''); // Clear key input
                                 this.newNoteNameInput.setValue(this.app.workspace.getActiveFile()?.basename || ''); // Reset note name
                                 await this.renderKeyListContent(this.keyListContainer); // Re-render the key list in the modal
