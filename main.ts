@@ -10,7 +10,7 @@ import { registerAddKeyCommand } from './utils/add_key_command';
 import { registerDeleteKeyCommand } from './utils/delete_key_command';
 import { KeyListModal } from './settings/key_list_page02';
 import { LinkNoteModal } from './settings/link_note_page03';
-import { generateKey, addKey } from './storage/keyManager'; // Ensure addKey is imported if used directly here
+import { generateKey, addKey } from './storage/keyManager';
 import { registerNoteWithPeer, requestNoteFromPeer } from './networking/socket/client';
 import { PluginSettingsTab } from "./settings/plugin_setting_tab";
 import { FileSystemAdapter } from "obsidian";
@@ -20,10 +20,10 @@ import * as fs from "fs";
 const noteRegistry = require("./networking/socket/dist/noteRegistry.cjs");
 import * as http from "http";
 import { tempKeyInputModal } from "./settings/tempKeyInputModal";
-import { tempIPInputModal } from "./settings/tempIPInputModal"; // This modal is no longer used for pull, but remains if other commands use it.
+import { tempIPInputModal } from "./settings/tempIPInputModal";
 import { getLocalIP } from "./utils/get-ip"
 import { registerGenerateKeyCommand } from './utils/generate_key_command';
-import { registerPullNoteCommand } from "./utils/pull_note_command"; // This command should now use LinkNoteModal
+import { registerPullNoteCommand } from "./utils/pull_note_command";
 import { registerStartServerCommand, startWebSocketServerProcess } from "./utils/start_server_command";
 import { registerShowIPCommand } from "./utils/show_ip_command";
 import { registerListSharedKeysCommand } from './utils/list_keys_command';
@@ -35,9 +35,9 @@ export type NoteRegistry = Record<string, string>; // key => content
 
 
 export interface KeyItem {
-    ip: string; // MODIFIED: KeyItem interface now uses 'ip' as the unique identifier
-    note: string;
-    access: string;
+    ip: string; // This now stores the full key string (e.g., "IP-NoteName")
+    note: string; // The parsed note name
+    access: string; // The access type (e.g., "Edit", "View", "Pulled")
 }
 interface noteRegistry {
     key: string;
@@ -45,19 +45,20 @@ interface noteRegistry {
 }
 interface MyPluginSettings {
     mySetting: string;
-    keys: KeyItem[];
+    keys: KeyItem[]; // Keys created by this user/plugin instance
+    linkedKeys: KeyItem[]; // NEW: Keys received/linked from external sources
     registry: noteRegistry[];
-    autoUpdateRegistry: boolean; // New setting
+    autoUpdateRegistry: boolean;
 }
 
 const DEFAULT_SETTINGS: MyPluginSettings = {
     mySetting: 'default',
     keys: [
-        // MODIFIED: Default key updated to align with IP-NoteName format
         { ip: 'default-ip-default_note', note: 'Default Shared Note', access: 'View' },
     ],
+    linkedKeys: [], // NEW: Initialize as empty array
     registry: [],
-    autoUpdateRegistry: false, // New setting
+    autoUpdateRegistry: false,
 };
 
 export function getNoteRegistry(plugin: MyPlugin): noteRegistry[] {
@@ -67,7 +68,6 @@ export function getNoteRegistry(plugin: MyPlugin): noteRegistry[] {
 export async function updateNoteRegistry(plugin: MyPlugin, key: string, content: string) {
     let registry = getNoteRegistry(plugin);
 
-    // Ensure no duplicate keys exist by replacing the existing entry
     registry = registry.filter(item => item.key !== key);
     registry.push({ key, content });
 
@@ -79,7 +79,7 @@ export async function deleteNoteFromRegistry(plugin: MyPlugin, key: string) {
     let registry = getNoteRegistry(plugin);
     registry = registry.filter(item => item.key !== key);
     plugin.settings.registry = registry;
-    await plugin.saveSettings(); // Ensure persistent settings are updated
+    await plugin.saveSettings();
     console.log(`[Delete Note] Key '${key}' deleted. Updated registry:`, registry);
 }
 export function getNoteContentByKey(plugin: MyPlugin, key: string): string | undefined {
@@ -91,8 +91,7 @@ export function getNoteContentByKey(plugin: MyPlugin, key: string): string | und
 
 export default class MyPlugin extends Plugin {
     settings: MyPluginSettings;
-    registry: noteRegistry[] = [];
-
+    registry: noteRegistry[] = []; // This will be deprecated in favor of settings.registry
 
     async onload() {
         console.log("Loading collaboration plugin...");
@@ -110,7 +109,7 @@ export default class MyPlugin extends Plugin {
         registerDeleteKeyCommand(this);
         registerStartServerCommand(this.app, this);
         registerShowIPCommand(this.app, this);
-        registerPullNoteCommand(this.app, this); // This command should now open LinkNoteModal
+        registerPullNoteCommand(this.app, this);
         registerListSharedKeysCommand(this);
         registerShareCurrentNoteCommand(this);
         registerUpdateRegistryCommand(this);
@@ -140,11 +139,7 @@ export default class MyPlugin extends Plugin {
         this.app.vault.on("modify", async (file) => {
             if (this.settings.autoUpdateRegistry) {
                 if (file instanceof TFile) {
-                    // MODIFIED: Key for auto-update registry should ideally be IP-NoteName too.
-                    // This currently uses just basename, you might want to adapt it later to use IP
-                    // if notes are shared based on IP-NoteName for auto-updates.
-                    // For now, it will use only the note's basename as the key.
-                    const key = file.basename;
+                    const key = file.basename; // Uses basename as key for auto-update
                     const content = await this.app.vault.read(file);
                     await updateNoteRegistry(this, key, content);
                     console.log(`[Auto-Update] Registry updated for note '${key}'.`);
@@ -166,18 +161,15 @@ export default class MyPlugin extends Plugin {
                 return;
             }
             try {
-                // Call generateKey from keyManager which handles IP and note name to create the key ID
                 const newKeyItem = await generateKey(this, noteName, accessType);
-                // Add the generated key to plugin settings
                 const success = await addKey(this, newKeyItem);
                 if (success) {
-                    // MODIFIED: Display the full IP-NoteName key and copy to clipboard
                     new Notice(`Generated & Stored:\n${newKeyItem.ip}\nFor Note: "${newKeyItem.note}" (Access: ${newKeyItem.access})`, 6000);
-                    await navigator.clipboard.writeText(newKeyItem.ip); // Copy the generated IP-NoteName key
+                    await navigator.clipboard.writeText(newKeyItem.ip);
                 } else {
                     new Notice('Failed to add generated key. It might already exist (password collision).', 4000);
                 }
-            } catch (error: any) { // Added : any for type safety
+            } catch (error: any) {
                 console.error("Error generating or adding key:", error);
                 new Notice(`Error generating key: ${error.message}`, 5000);
             }
@@ -212,9 +204,9 @@ export default class MyPlugin extends Plugin {
 
             console.log("[Plugin] WebSocket server started at ws://localhost:3010");
             new Notice("WebSocket server started at ws://localhost:3010");
-        } catch (err: any) { // Added : any for type safety
+        } catch (err: any) {
             console.error("[Plugin] Failed to start WebSocket server:", err);
-            new Notice(`Failed to start WebSocket server: ${err.message}. Check console for details.`, 5000); // MODIFIED: More informative notice
+            new Notice(`Failed to start WebSocket server: ${err.message}. Check console for details.`, 5000);
         }
     }
 
@@ -222,18 +214,25 @@ export default class MyPlugin extends Plugin {
         new Notice('Plugin is unloading!');
         // TODO: Add logic to stop http and websocket servers gracefully on unload
     }
+
+    // CORRECTED loadSettings METHOD
     async loadSettings() {
-        const raw = await this.loadData();
-        this.settings = Object.assign({}, DEFAULT_SETTINGS, raw?.settings ?? {});
-        this.registry = raw?.registry ?? this.settings.registry ?? [];
-        this.settings.registry = this.registry;
+        // this.loadData() retrieves the raw saved data for the plugin
+        const loadedData = await this.loadData(); 
+
+        // Use Object.assign to merge default settings with any loaded data.
+        // This ensures all properties from DEFAULT_SETTINGS are present,
+        // and then they are overwritten by any corresponding properties from loadedData.
+        this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedData);
+
+        // It seems you have an old 'registry' property on the plugin class itself.
+        // Ensure this deprecated 'registry' field points to the one in settings.
+        // This is good practice to keep them in sync if other parts of the code still reference the top-level 'registry'.
+        this.registry = this.settings.registry; 
     }
 
     async saveSettings() {
-        await this.saveData({
-            settings: this.settings,
-            registry: this.registry
-        })
-
+        // Save all settings, including linkedKeys
+        await this.saveData(this.settings);
     }
 }
