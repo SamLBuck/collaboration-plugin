@@ -21,12 +21,12 @@ export function parseKey(keyString: string) {
     // const access = parts[parts.length - 1];
 
     // The note name is everything in between the first and last parts
-    const note = parts.slice(1, parts.length - 1).join('-');
+    //const note = parts.slice(1, parts.length - 1).join('-');
 
-    if (!ip || !note) {
-        // One of the essential parts is missing
-        return null;
-    }
+    // if (!ip || !note) {
+    //     // One of the essential parts is missing
+    //     return null;
+    // }
 
     return { ip, noteName};
 }

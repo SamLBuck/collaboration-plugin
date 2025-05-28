@@ -2,6 +2,7 @@ import { App, Modal, Setting, TextComponent, ButtonComponent, Notice, TFile } fr
 import MyPlugin from "../main"; // Assuming MyPlugin is needed for context or future use
 import { requestNoteFromPeer } from "../networking/socket/client"; // Import the actual client function
 import { pullNoteFromPeerNewNote, rewriteExistingNote } from "../utils/pull_note_command";
+import { parseKey } from "../utils/parse_key";
 
 export class LinkNoteModal extends Modal {
     plugin: MyPlugin; // Add plugin reference if needed for other actions or context
@@ -42,13 +43,13 @@ export class LinkNoteModal extends Modal {
 
                             // Derive note name from the key (e.g., "NoteName-IP" -> "NoteName")
                             // This assumes the key format is "NoteName-IPAddress"
-                            const noteNameParts = input.split('-');
-                            const noteName = noteNameParts.length > 1 ? noteNameParts.slice(0, -1).join('-') : input; // Handle keys without IP part
+                            const noteNameParts = parseKey(input); // Assuming parseKey is a function that splits the key into parts
 
-                            const key = noteNameParts[1]; // Assuming the second part is the noteName address
-                            const ip = noteNameParts[0]; // Assuming the first part is the IP
-                            const sanitizedNoteName = noteName.replace(/[\\/:*?"<>|]/g, ''); // Basic sanitization for file names
-                            const filePath = `${sanitizedNoteName}.md`;
+                            if (!noteNameParts) {
+                                throw new Error('Invalid key format. Unable to parse note name and IP.');
+                            }
+                            const { ip, noteName: key } = noteNameParts;
+                            const filePath = `${key}.md`;
                             
                             let file: TFile | null = this.app.vault.getAbstractFileByPath(filePath) as TFile;
                             let overwrite = false;
@@ -78,7 +79,8 @@ export class LinkNoteModal extends Modal {
                             }
                             if (file && overwrite) {
                                 await rewriteExistingNote(this.app, ip, key);
-                            } else {
+                            } 
+                            else{
                                 await pullNoteFromPeerNewNote(this.app, ip, key);
                             }
 
