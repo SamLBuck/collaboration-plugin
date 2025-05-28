@@ -3,6 +3,7 @@ import MyPlugin, { KeyItem } from '../main';
 import { generateKey, addKey } from '../storage/keyManager'; // Ensure addKey is imported if used directly here
 import { KeyListModal } from './key_list_page02';
 import { LinkNoteModal } from './link_note_page03';
+import { shareCurrentNoteWithFileName } from '../utils/share_active_note';
 
 export class PluginSettingsTab extends PluginSettingTab {
     // IMPORTANT: This ID should be unique to your plugin and should match the 'id' field in your manifest.json.
@@ -56,7 +57,7 @@ export class PluginSettingsTab extends PluginSettingTab {
                         }
 
                         // Check for existing key with the same note and access type
-                        const existingKey = this.plugin.settings.keys.find( // <--- 'plugin' IS NOW ACCESSIBLE
+                        const existingKey = this.plugin.settings.keys.find( // we can refigure this to check our actual stored data
                             key => key.note === noteName && key.access === accessType
                         );
                         if (existingKey) {
@@ -72,6 +73,8 @@ export class PluginSettingsTab extends PluginSettingTab {
                             if (success) {
                                 new Notice(`Generated & Saved:\n${newKeyItem.ip}\nFor Note: "${newKeyItem.note}" (Access: ${newKeyItem.access})`, 8000);
                                 await navigator.clipboard.writeText(newKeyItem.ip); // Copy to clipboard
+                                shareCurrentNoteWithFileName(this.app, newKeyItem.note); // Assuming this function exists to share the current note
+
                             } else {
                                 // This case should ideally not be reached due to the existingKey check above,
                                 // but kept as a fallback for rare collision scenarios.
