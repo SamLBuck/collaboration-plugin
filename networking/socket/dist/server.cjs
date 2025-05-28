@@ -16,7 +16,7 @@ const {
   registerNoteFromFile
 } = require("./noteRegistry.cjs");
 
-registerNoteFromFile("key", "C:/Users/CSStudent/Documents/Obsidian Vault/TestNote.md");
+//registerNoteFromFile("key", "C:/Users/CSStudent/Documents/Obsidian Vault/TestNote.md");
 
 
 const wss = new WebSocket.Server({ port: 3010 });

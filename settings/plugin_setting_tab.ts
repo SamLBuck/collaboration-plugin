@@ -80,8 +80,8 @@ export class PluginSettingsTab extends PluginSettingTab {
                     const success = await addKey(this.plugin, newKeyItem);
 
                     if (success) {
-                        this.keyInput.setValue(newKeyItem.id);
-                        new Notice(`Generated & Saved: ${newKeyItem.id}\nFor Note: "${newKeyItem.note}"`, 8000);
+                        this.keyInput.setValue(newKeyItem.ip);
+                        new Notice(`Generated & Saved: ${newKeyItem.ip}\nFor Note: "${newKeyItem.note}"`, 8000);
                     } else {
                         new Notice("Failed to add key. It might already exist (password collision).", 4000);
                     }

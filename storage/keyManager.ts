@@ -20,7 +20,7 @@ export async function generateKey(plugin: MyPlugin, noteName: string, accessType
     // Return the new KeyItem. The 'addKey' function (below) will handle checking for duplicates
     // based on this generated ID before storing it.
     return {
-        id: newKeyId,
+        ip: newKeyId,
         note: noteName,
         access: accessType // Access type is still stored with the KeyItem, just not part of the ID
     };
@@ -37,9 +37,9 @@ export async function generateKey(plugin: MyPlugin, noteName: string, accessType
  */
 export async function addKey(plugin: MyPlugin, newKeyItem: KeyItem): Promise<boolean> {
     // Check if a key with the exact same ID already exists in the plugin's settings.
-    const existingKey = plugin.settings.keys.find(key => key.id === newKeyItem.id);
+    const existingKey = plugin.settings.keys.find(key => key.ip === newKeyItem.ip);
     if (existingKey) {
-        console.warn(`Key with ID '${newKeyItem.id}' already exists. Not adding duplicate.`);
+        console.warn(`Key with ID '${newKeyItem.ip}' already exists. Not adding duplicate.`);
         return false; // Indicate that the key was not added due to duplication
     }
 
@@ -72,6 +72,6 @@ export async function listKeys(plugin: MyPlugin): Promise<KeyItem[]> {
  */
 export async function deleteKey(plugin: MyPlugin, keyId: string): Promise<void> {
     // Filter out the key with the specified ID, effectively deleting it.
-    plugin.settings.keys = plugin.settings.keys.filter(key => key.id !== keyId);
+    plugin.settings.keys = plugin.settings.keys.filter(key => key.ip !== keyId);
     await plugin.saveSettings(); // Persist the updated settings
 }

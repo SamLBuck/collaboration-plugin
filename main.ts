@@ -13,7 +13,6 @@ import { LinkNoteModal } from './settings/link_note_page03';
 import { generateKey, addKey } from './storage/keyManager';
 import { registerNoteWithPeer, requestNoteFromPeer } from './networking/socket/client';
 import { PluginSettingsTab } from "./settings/plugin_setting_tab";
-import { parseShareKey } from "./utils/parse_key";
 import { FileSystemAdapter } from "obsidian";
 const { spawn } = require("child_process");
 import * as path from "path";
@@ -35,7 +34,7 @@ export type NoteRegistry = Record<string, string>; // key => content
 
 
 export interface KeyItem {
-    id: string;
+    ip: string;
     note: string;
     access: string;
 }
@@ -53,7 +52,7 @@ interface MyPluginSettings {
 const DEFAULT_SETTINGS: MyPluginSettings = {
     mySetting: 'default',
     keys: [
-        { id: 'defaultpass123', note: 'Default Shared Note', access: 'View' },
+        { ip: 'defaultpass123', note: 'Default Shared Note', access: 'View' },
     ],
     registry: [],
     autoUpdateRegistry: false, // New setting
@@ -167,7 +166,7 @@ export default class MyPlugin extends Plugin {
                 const newKeyItem = await generateKey(this, noteName, accessType);
                 const success = await addKey(this, newKeyItem);
                 if (success) {
-                    new Notice(`Generated & Stored:\n${newKeyItem.id}\nFor Note: "${newKeyItem.note}" (Access: ${newKeyItem.access})`, 6000);
+                    new Notice(`Generated & Stored:\n${newKeyItem.ip}\nFor Note: "${newKeyItem.note}" (Access: ${newKeyItem.access})`, 6000);
                 } else {
                     new Notice('Failed to add generated key. It might already exist (password collision).', 4000);
                 }

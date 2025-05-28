@@ -1,4 +1,4 @@
-import { App, Modal, TextComponent, ButtonComponent } from "obsidian";
+import { App, Modal, TextComponent, ButtonComponent, Notice } from "obsidian";
 
 export class tempIPInputModal extends Modal {
   onSubmit: (ip: string, key: string) => void;
@@ -13,21 +13,22 @@ export class tempIPInputModal extends Modal {
 
     contentEl.createEl("h3", { text: "Pull Note from Server Registry" });
 
-    const urlInput = new TextComponent(contentEl);
-    urlInput.setPlaceholder("ws://192.168.1.100:3010");
-
-    const keyInput = new TextComponent(contentEl);
-    keyInput.setPlaceholder("Note key");
+    const combinedInput = new TextComponent(contentEl);
+    combinedInput.setPlaceholder("192.168.1.100-noteName");
 
     new ButtonComponent(contentEl)
       .setButtonText("Pull")
       .setCta()
       .onClick(() => {
-        const ip = urlInput.getValue().trim();
-        const key = keyInput.getValue().trim();
+        const input = combinedInput.getValue().trim();
+
+        const [ip, key] = input.split("-");
+
         if (ip && key) {
           this.close();
           this.onSubmit(ip, key);
+        } else {
+          new Notice("Please enter in format: IP-NOTEKEY (e.g., 192.168.1.100-noteName)");
         }
       });
   }
