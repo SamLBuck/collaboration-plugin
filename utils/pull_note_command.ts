@@ -13,7 +13,7 @@ export function registerPullNoteCommand(app: App, plugin: MyPlugin) {
         id: "pull-note-from-peer-modal",
         name: "Pull Note from Server Registry (enter key and IP)",
         callback: () => {
-          //pullNoteFromPeerNewNote(app);  // pullNoteFromPeerNewNote takes a ip and note name now
+          //pullNoteFromPeerNewNote(app);  // pullNoteFromPeerNewNote takes a ip nad key 
         },
     });
 
