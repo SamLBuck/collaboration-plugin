@@ -7,7 +7,10 @@ export function parseKey(keyString: string): { ip: string; noteName: string; vie
     if (parts.length < 2) return null;
 
     const ip = parts[0];
-    const noteName = parts.slice(1).join('-');
+    let noteName = parts.slice(1).join('-');
+
+    // Remove any '|' characters from the noteName
+    noteName = noteName.replace(/\|/g, '');
 
     return {
         ip,
