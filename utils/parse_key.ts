@@ -1,6 +1,6 @@
 import { KeyItem } from '../main'; // Assuming KeyItem is defined in main.ts or a shared types file
 
-export function parseKey(keyString: string): KeyItem | null {
+export function parseKey(keyString: string) {
     // Expected format: "KEYID-NoteName-AccessType"
     // Example: "xyz123-MySharedNote-Edit"
     // The key ID is assumed to be alphanumeric, followed by a hyphen.
@@ -14,18 +14,19 @@ export function parseKey(keyString: string): KeyItem | null {
     }
 
     // The key ID is the first part
-    const ip = parts[0];
-
+    const ip = parts[0]; // IP is now the first part
+    const noteName = parts[1]; // Note name is the rest of the parts
+	
     // The access type is the last part
-    const access = parts[parts.length - 1];
+    // const access = parts[parts.length - 1];
 
     // The note name is everything in between the first and last parts
     const note = parts.slice(1, parts.length - 1).join('-');
 
-    if (!ip || !note || !access) {
+    if (!ip || !note) {
         // One of the essential parts is missing
         return null;
     }
 
-    return { ip, note, access };
+    return { ip, noteName};
 }
