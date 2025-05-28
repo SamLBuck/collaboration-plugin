@@ -214,21 +214,15 @@ export default class MyPlugin extends Plugin {
         new Notice('Plugin is unloading!');
         // TODO: Add logic to stop http and websocket servers gracefully on unload
     }
-
-    // CORRECTED loadSettings METHOD
     async loadSettings() {
-        // this.loadData() retrieves the raw saved data for the plugin
-        const loadedData = await this.loadData(); 
-
-        // Use Object.assign to merge default settings with any loaded data.
-        // This ensures all properties from DEFAULT_SETTINGS are present,
-        // and then they are overwritten by any corresponding properties from loadedData.
-        this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedData);
-
-        // It seems you have an old 'registry' property on the plugin class itself.
-        // Ensure this deprecated 'registry' field points to the one in settings.
-        // This is good practice to keep them in sync if other parts of the code still reference the top-level 'registry'.
-        this.registry = this.settings.registry; 
+        const raw = await this.loadData();
+        // Ensure linkedKeys is initialized from raw data or default
+        this.settings = Object.assign({}, DEFAULT_SETTINGS, raw?.settings ?? {});
+        this.settings.linkedKeys = raw?.settings?.linkedKeys ?? DEFAULT_SETTINGS.linkedKeys; // Ensure linkedKeys is loaded
+        
+        // Consolidate registry management to settings.registry
+        this.settings.registry = raw?.settings?.registry ?? DEFAULT_SETTINGS.registry;
+        this.registry = this.settings.registry; // Keep this line for now if other parts still reference this.registry directly
     }
 
     async saveSettings() {
