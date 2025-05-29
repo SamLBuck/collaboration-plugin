@@ -61,21 +61,3 @@ export function registerNoteWithPeer(url: string, key: string, content: string) 
       console.error("[Plugin] Failed to connect to peer for registration", err);
   };
 }
-
-export async function sendDeleteNoteToServer(serverUrl: string, key: string): Promise<void> {
-    const socket = new WebSocket(serverUrl);
-
-    socket.onopen = () => {
-        const message = {
-            type: "delete-note",
-            payload: { key },
-        };
-        socket.send(JSON.stringify(message));
-        console.log(`[Client] Sent delete-note message for key '${key}' to server.`);
-        socket.close();
-    };
-
-    socket.onerror = (err) => {
-        console.error(`[Client] Failed to send delete-note message for key '${key}':`, err);
-    };
-}

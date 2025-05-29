@@ -3,6 +3,7 @@
 import MyPlugin, { KeyItem } from "../main";
 import { getLocalIP } from "../utils/get-ip"; // Import getLocalIP to get the local IP address
 import { sendDeleteNoteToServer } from "../networking/socket/client"; // Import the function to communicate with the server
+import { updateNoteRegistry } from "../main"; // Import registry update function
 
 /**
  * Generates a unique key based on the note name and local IP address.
@@ -76,18 +77,7 @@ export async function listKeys(plugin: MyPlugin): Promise<KeyItem[]> {
  * @returns A Promise that resolves once the key has been deleted and settings are saved.
  */
 export async function deleteKey(plugin: MyPlugin, keyId: string): Promise<void> {
-    // Filter out the key with the specified ID, effectively deleting it from the keys array.
+    // Filter out the key with the specified ID, effectively deleting it.
     plugin.settings.keys = plugin.settings.keys.filter(key => key.ip !== keyId);
-
-    // Also remove the corresponding content from the registry.
-    plugin.settings.registry = plugin.settings.registry.filter(regItem => regItem.key !== keyId);
-
-    // Persist the updated settings.
-    await plugin.saveSettings();
-
-    // Notify the server to delete the note
-    const serverUrl = "ws://localhost:3010"; // Replace with your server URL if needed
-    await sendDeleteNoteToServer(serverUrl, keyId);
-
-    console.log(`[Delete Key] Key '${keyId}' and associated registry content deleted.`);
+await plugin.saveSettings(); // Persist the updated settings
 }

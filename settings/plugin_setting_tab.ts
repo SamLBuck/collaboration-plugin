@@ -146,16 +146,11 @@ export class PluginSettingsTab extends PluginSettingTab {
             return checkbox;
         };
 
-        new Setting(containerEl)
-        .setName("View")
-        .addToggle(toggle => {
-            toggle.setValue(true);
-            toggle.setDisabled(true); // show as selected and unclickable
-        });
-    
-    addStaticAccessLabel(containerEl, "Edit");
-    addStaticAccessLabel(containerEl, "View and Comment");
-    addStaticAccessLabel(containerEl, "Edit w/ Approval");
+
+        this.accessTypeView = createCheckbox('View', true);
+        this.accessTypeEdit = createCheckbox('Edit', false);
+        this.accessTypeViewAndComment = createCheckbox('View and Comment', false);
+        this.accessTypeEditWithApproval = createCheckbox('Edit w/ Approval', false);
     
         //Navigation Buttons
         const navButtonContainer = containerEl.createDiv({ cls: 'settings-nav-buttons' });
