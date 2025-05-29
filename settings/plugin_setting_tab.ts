@@ -6,14 +6,11 @@ import { LinkNoteModal } from './link_note_page03';
 import { shareCurrentNoteWithFileName } from '../utils/share_active_note';
 
 export class PluginSettingsTab extends PluginSettingTab {
-    // IMPORTANT: This ID should be unique to your plugin and should match the 'id' field in your manifest.json.
-    // Replace 'obsidian-collaboration-plugin-id' with your actual plugin ID.
-    static PLUGIN_ID = 'obsidian-collaboration-plugin-id'; // <--- Ensure this matches your manifest.json ID
+    static PLUGIN_ID = 'obsidian-collaboration-plugin-id'; 
 
-    plugin: MyPlugin; // <--- ENSURE THIS IS DECLARED
+    plugin: MyPlugin; 
 
     // Input references for the main settings page
-    // Removed: keyInput: TextComponent; // No longer needed for manual input
     noteInput: TextComponent;
     accessTypeView: HTMLInputElement;
     accessTypeEdit: HTMLInputElement;
@@ -22,30 +19,34 @@ export class PluginSettingsTab extends PluginSettingTab {
 
     constructor(app: App, plugin: MyPlugin) {
         super(app, plugin);
-        this.plugin = plugin; // <--- ENSURE THIS IS INITIALIZED
+        this.plugin = plugin; 
     }
 
     display(): void {
         const { containerEl } = this;
-        containerEl.empty(); // Clear existing content
+        containerEl.empty();
 
         this.renderMainSettingsPage(containerEl);
     }
 
     private renderMainSettingsPage(containerEl: HTMLElement): void {
         containerEl.createEl('h2', { text: 'Collaboration Settings' });
+        containerEl.createEl('h3', { text: 'Before attmepting to Generate note link, Please run command Start WebSocket Server' });
 
-        // --- SECTION: Generate New Key ---
+        containerEl.createEl('p', {
+            text: 'Allows you to generate, manage, and link keys to specific notes for collaborative access control. You can generate new keys for selected notes with a specified access type, currently limited to View, and those keys are copied to your clipboard and saved locally. You can also view a list of all collaboration keys you have created, as well notes that can be pullable with those keys. Link Note allows you to enter a shared key and access the note, it maintains a list of keys you have linked. Theres a toggle to enable or disable automatic updates to the note registry whenever a note with a created key is modified.'
+        })
+        //Generate New Key
         new Setting(containerEl)
             .setName('Generate New Key')
-            .setDesc('Generate a new key (IP-NoteName format) for the specified note and access type. The generated key will be copied to your clipboard and saved.')
+            .setDesc('Generate a new key for the specified note and access type. The generated key will be copied to your clipboard and saved. Click on the Key List button to view all keys.')
             .addButton(button =>
                 button
                     .setButtonText('Generate')
                     .setCta()
                     .onClick(async () => {
                         const noteName = this.noteInput.getValue().trim();
-                        const accessType = this.getSelectedAccessType(); // <--- THIS METHOD IS NOW INCLUDED
+                        const accessType = this.getSelectedAccessType(); 
 
                         if (!noteName) {
                             new Notice('Please provide a Note Name to generate a key.', 4000);
@@ -73,11 +74,10 @@ export class PluginSettingsTab extends PluginSettingTab {
                             if (success) {
                                 new Notice(`Generated & Saved:\n${newKeyItem.ip}\nFor Note: "${newKeyItem.note}" (Access: ${newKeyItem.access})`, 8000);
                                 await navigator.clipboard.writeText(newKeyItem.ip); // Copy to clipboard
-                                shareCurrentNoteWithFileName(this.app, newKeyItem.note); // Assuming this function exists to share the current note
+                                shareCurrentNoteWithFileName(this.app, newKeyItem.note); 
 
                             } else {
-                                // This case should ideally not be reached due to the existingKey check above,
-                                // but kept as a fallback for rare collision scenarios.
+                                 // but kept as a fallback for rare collision scenarios.
                                 new Notice("Failed to add key. It might already exist (password collision).", 4000);
                             }
                         } catch (error: any) {
@@ -87,10 +87,10 @@ export class PluginSettingsTab extends PluginSettingTab {
                     })
             );
 
-        // --- SECTION: Note Input ---
+        // Note Input
         new Setting(containerEl)
             .setName('Note')
-            .setDesc('The note this key will be associated with.')
+            .setDesc('The note this key will be associated with. Make sure that your note title does not have spaces')
             .addText(text => {
                 this.noteInput = text;
                 text.setPlaceholder('Suggest Current Note...')
@@ -105,10 +105,10 @@ export class PluginSettingsTab extends PluginSettingTab {
                     });
             });
 
-        // --- SECTION: Access Type ---
+        //Access Type
         const accessTypeSetting = new Setting(containerEl)
             .setName('Access Type')
-            .setDesc('Select the type of access this key grants for the note.');
+            .setDesc('Select the type of access this key grants for the note. Only View can be selected at this time');
 
         const checkboxContainer = accessTypeSetting.controlEl.createDiv({ cls: 'access-type-checkboxes' });
         checkboxContainer.style.display = 'flex';
@@ -142,12 +142,18 @@ export class PluginSettingsTab extends PluginSettingTab {
             return checkbox;
         };
 
-        this.accessTypeView = createCheckbox('View', true);
-        this.accessTypeEdit = createCheckbox('Edit', false);
-        this.accessTypeViewAndComment = createCheckbox('View and Comment', false);
-        this.accessTypeEditWithApproval = createCheckbox('Edit w/ Approval', false);
-
-        // --- SECTION: Navigation Buttons ---
+        new Setting(containerEl)
+        .setName("View")
+        .addToggle(toggle => {
+            toggle.setValue(true);
+            toggle.setDisabled(true); // show as selected and unclickable
+        });
+    
+    addStaticAccessLabel(containerEl, "Edit");
+    addStaticAccessLabel(containerEl, "View and Comment");
+    addStaticAccessLabel(containerEl, "Edit w/ Approval");
+    
+        //Navigation Buttons
         const navButtonContainer = containerEl.createDiv({ cls: 'settings-nav-buttons' });
         navButtonContainer.style.display = 'flex';
         navButtonContainer.style.justifyContent = 'space-between';
@@ -169,15 +175,21 @@ export class PluginSettingsTab extends PluginSettingTab {
                     .onClick(() => {
                         new LinkNoteModal(this.app, this.plugin).open();
                     });
+                    
             });
 
         navButtonContainer.appendChild(leftButtons);
         navButtonContainer.appendChild(rightButtons);
 
-        // --- SECTION: Automatic Note Registry Updates ---
+        containerEl.createEl('p', {
+            text: 'Use the buttons above to manage existing keys or use the key you have with Link Note.'
+        });
+        
+
+        //Automatic Note Registry Updates
         new Setting(containerEl)
             .setName("Automatic Note Registry Updates")
-            .setDesc("Automatically update the registry when a note is modified.")
+            .setDesc("Automatically update the registry when a note is modified. We suggest that this is on, but you can disable it if you prefer manual updates.")
             .addToggle((toggle) =>
                 toggle
                     .setValue(this.plugin.settings.autoUpdateRegistry)
@@ -201,4 +213,10 @@ export class PluginSettingsTab extends PluginSettingTab {
         if (this.accessTypeEditWithApproval.checked) return 'Edit w/ Approval';
         return null;
     }
+    
 }
+function addStaticAccessLabel(container: HTMLElement, label: string) {
+	const settingEl = container.createDiv("setting-item");
+	settingEl.createDiv("setting-item-name").setText(label);
+}
+
