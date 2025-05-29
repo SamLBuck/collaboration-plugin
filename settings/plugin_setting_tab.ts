@@ -1,33 +1,25 @@
 import { App, PluginSettingTab, Setting, ButtonComponent, TextComponent, Notice } from 'obsidian';
 import MyPlugin, { KeyItem } from '../main';
-import { generateKey, addKey } from '../storage/keyManager'; // Ensure addKey is imported if used directly here
+import { generateKey, addKey } from '../storage/keyManager';
 import { KeyListModal } from './key_list_page02';
 import { LinkNoteModal } from './link_note_page03';
-import { shareCurrentNoteWithFileName } from '../utils/share_active_note';
 
 export class PluginSettingsTab extends PluginSettingTab {
-    // IMPORTANT: This ID should be unique to your plugin and should match the 'id' field in your manifest.json.
-    // Replace 'obsidian-collaboration-plugin-id' with your actual plugin ID.
-    static PLUGIN_ID = 'obsidian-collaboration-plugin-id'; // <--- Ensure this matches your manifest.json ID
+    static PLUGIN_ID = 'obsidian-collaboration-plugin-id';
 
-    plugin: MyPlugin; // <--- ENSURE THIS IS DECLARED
+    plugin: MyPlugin;
 
-    // Input references for the main settings page
-    // Removed: keyInput: TextComponent; // No longer needed for manual input
     noteInput: TextComponent;
-    accessTypeView: HTMLInputElement;
-    accessTypeEdit: HTMLInputElement;
-    accessTypeViewAndComment: HTMLInputElement;
-    accessTypeEditWithApproval: HTMLInputElement;
+    // Removed accessTypeView, accessTypeEdit, etc. properties as they are no longer linked to UI elements.
 
     constructor(app: App, plugin: MyPlugin) {
         super(app, plugin);
-        this.plugin = plugin; // <--- ENSURE THIS IS INITIALIZED
+        this.plugin = plugin;
     }
 
     display(): void {
         const { containerEl } = this;
-        containerEl.empty(); // Clear existing content
+        containerEl.empty();
 
         this.renderMainSettingsPage(containerEl);
     }
@@ -38,46 +30,39 @@ export class PluginSettingsTab extends PluginSettingTab {
         // --- SECTION: Generate New Key ---
         new Setting(containerEl)
             .setName('Generate New Key')
-            .setDesc('Generate a new key (IP-NoteName format) for the specified note and access type. The generated key will be copied to your clipboard and saved.')
+            .setDesc('Generate a new key (IP-NoteName format) for the specified note. Access type will default to "View". The generated key will be copied to your clipboard and saved.') // Updated description
             .addButton(button =>
                 button
                     .setButtonText('Generate')
                     .setCta()
                     .onClick(async () => {
                         const noteName = this.noteInput.getValue().trim();
-                        const accessType = this.getSelectedAccessType(); // <--- THIS METHOD IS NOW INCLUDED
+                        const accessType = 'View'; // <--- HARDCODED DEFAULT ACCESS TYPE TO "View"
 
                         if (!noteName) {
                             new Notice('Please provide a Note Name to generate a key.', 4000);
                             return;
                         }
-                        if (!accessType) {
-                            new Notice('Please select an Access Type to generate a key.', 4000);
-                            return;
-                        }
+                        // Removed: if (!accessType) check, as it's now hardcoded.
 
                         // Check for existing key with the same note and access type
-                        const existingKey = this.plugin.settings.keys.find( // we can refigure this to check our actual stored data
+                        const existingKey = this.plugin.settings.keys.find(
                             key => key.note === noteName && key.access === accessType
                         );
                         if (existingKey) {
                             new Notice(`A key for "${noteName}" with "${accessType}" access already exists. Cannot generate a duplicate. Existing Key: ${existingKey.ip}`, 8000);
-                            await navigator.clipboard.writeText(existingKey.ip); // Copy existing key if it's a duplicate
+                            await navigator.clipboard.writeText(existingKey.ip);
                             return;
                         }
 
                         try {
-                            const newKeyItem = await generateKey(this.plugin, noteName, accessType); // <--- newKeyItem WILL BE KeyItem
+                            const newKeyItem = await generateKey(this.plugin, noteName, accessType);
                             const success = await addKey(this.plugin, newKeyItem);
 
                             if (success) {
                                 new Notice(`Generated & Saved:\n${newKeyItem.ip}\nFor Note: "${newKeyItem.note}" (Access: ${newKeyItem.access})`, 8000);
-                                await navigator.clipboard.writeText(newKeyItem.ip); // Copy to clipboard
-                                shareCurrentNoteWithFileName(this.app, newKeyItem.note); // Assuming this function exists to share the current note
-
+                                await navigator.clipboard.writeText(newKeyItem.ip);
                             } else {
-                                // This case should ideally not be reached due to the existingKey check above,
-                                // but kept as a fallback for rare collision scenarios.
                                 new Notice("Failed to add key. It might already exist (password collision).", 4000);
                             }
                         } catch (error: any) {
@@ -106,6 +91,8 @@ export class PluginSettingsTab extends PluginSettingTab {
             });
 
         // --- SECTION: Access Type ---
+        // This entire section is now commented out to deactivate the UI for access type selection.
+        /*
         const accessTypeSetting = new Setting(containerEl)
             .setName('Access Type')
             .setDesc('Select the type of access this key grants for the note.');
@@ -142,10 +129,11 @@ export class PluginSettingsTab extends PluginSettingTab {
             return checkbox;
         };
 
-        this.accessTypeView = createCheckbox('View', true);
-        this.accessTypeEdit = createCheckbox('Edit', false);
+        this.accessTypeView = createCheckbox('View', false);
+        this.accessTypeEdit = createCheckbox('Edit', true);
         this.accessTypeViewAndComment = createCheckbox('View and Comment', false);
         this.accessTypeEditWithApproval = createCheckbox('Edit w/ Approval', false);
+        */
 
         // --- SECTION: Navigation Buttons ---
         const navButtonContainer = containerEl.createDiv({ cls: 'settings-nav-buttons' });
@@ -193,12 +181,9 @@ export class PluginSettingsTab extends PluginSettingTab {
         });
     }
 
-    // <--- ENSURE THIS METHOD IS PRESENT WITHIN THE CLASS
+    // This method is no longer used by the "Generate" button's logic
+    // but can be kept if it's used elsewhere or for future reactivation.
     getSelectedAccessType(): string | null {
-        if (this.accessTypeView.checked) return 'View';
-        if (this.accessTypeEdit.checked) return 'Edit';
-        if (this.accessTypeViewAndComment.checked) return 'View and Comment';
-        if (this.accessTypeEditWithApproval.checked) return 'Edit w/ Approval';
-        return null;
+        return 'View'; // Always return 'View' as the default/only access type
     }
 }
