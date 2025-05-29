@@ -30,9 +30,17 @@ import { registerListSharedKeysCommand } from './utils/list_keys_command';
 import { registerShareCurrentNoteCommand } from './utils/share_active_note';
 import { registerSyncFromServerToSettings, syncRegistryFromServer } from './utils/sync_command';
 import { registerUpdateRegistryCommand } from './utils/share_active_note';
+import { registerAddPersonalCommentCommand } from './utils/addPersonalCommentCommand';
+import { showAllPersonalCommentsForKey } from './utils/showCommentModal';
 
 export type NoteRegistry = Record<string, string>; // key => content
 
+export interface PersonalComment {
+    key: string;              // matches key used to identify the shared note
+    line: number;             // approximate line number in the note
+    column: number;           // optional: horizontal offset
+    content: string;          // the actual comment content
+}
 
 export interface KeyItem {
     ip: string; // This now stores the full key string (e.g., "IP-NoteName")
@@ -49,6 +57,8 @@ interface MyPluginSettings {
     linkedKeys: KeyItem[]; // NEW: Keys received/linked from external sources
     registry: noteRegistry[];
     autoUpdateRegistry: boolean;
+    personalComments: PersonalComment[];
+
 }
 
 const DEFAULT_SETTINGS: MyPluginSettings = {
@@ -59,6 +69,8 @@ const DEFAULT_SETTINGS: MyPluginSettings = {
     linkedKeys: [], // NEW: Initialize as empty array
     registry: [],
     autoUpdateRegistry: false,
+    	personalComments: [],
+
 };
 
 export function getNoteRegistry(plugin: MyPlugin): noteRegistry[] {
@@ -92,6 +104,7 @@ export function getNoteContentByKey(plugin: MyPlugin, key: string): string | und
 export default class MyPlugin extends Plugin {
     settings: MyPluginSettings;
     registry: noteRegistry[] = []; // This will be deprecated in favor of settings.registry
+    personalComments: PersonalComment[] = []; // Store personal comments
 
     async onload() {
         console.log("Loading collaboration plugin...");
@@ -113,6 +126,8 @@ export default class MyPlugin extends Plugin {
         registerListSharedKeysCommand(this);
         registerShareCurrentNoteCommand(this);
         registerUpdateRegistryCommand(this);
+        registerAddPersonalCommentCommand(this);
+
 
         this.addCommand({
             id: 'delete-note-from-registry',
@@ -134,6 +149,15 @@ export default class MyPlugin extends Plugin {
                 modal.open();
             },
         });
+        this.registerEvent(
+            this.app.workspace.on("file-open", (file) => {
+                if (!file) return;
+                const key = file.basename;
+                const comments = this.settings.personalComments || [];
+                showAllPersonalCommentsForKey(this.app, key, comments);
+            })
+        );
+        
 
         // Listen for file changes if auto-update is enabled
         this.app.vault.on("modify", async (file) => {
@@ -219,10 +243,9 @@ export default class MyPlugin extends Plugin {
         // Ensure linkedKeys is initialized from raw data or default
         this.settings = Object.assign({}, DEFAULT_SETTINGS, raw?.settings ?? {});
         this.settings.linkedKeys = raw?.settings?.linkedKeys ?? DEFAULT_SETTINGS.linkedKeys; // Ensure linkedKeys is loaded
-        
-        // Consolidate registry management to settings.registry
-        this.settings.registry = raw?.settings?.registry ?? DEFAULT_SETTINGS.registry;
+                this.settings.registry = raw?.settings?.registry ?? DEFAULT_SETTINGS.registry;
         this.registry = this.settings.registry; // Keep this line for now if other parts still reference this.registry directly
+        this.personalComments = raw?.settings?.personalComments ?? DEFAULT_SETTINGS.personalComments; // Load personal comments
     }
 
     async saveSettings() {
