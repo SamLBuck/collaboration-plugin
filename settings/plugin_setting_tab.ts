@@ -30,7 +30,7 @@ export class PluginSettingsTab extends PluginSettingTab {
         // --- SECTION: Generate New Key ---
         new Setting(containerEl)
             .setName('Generate New Key')
-            .setDesc('Generate a new key (IP-NoteName format) for the specified note. Access type will default to "View". The generated key will be copied to your clipboard and saved.') // Updated description
+            .setDesc('Generate a new key (IP-NoteName format) for the specified note. The generated key will be copied to your clipboard and saved.') // REVERTED DESCRIPTION
             .addButton(button =>
                 button
                     .setButtonText('Generate')
@@ -43,7 +43,6 @@ export class PluginSettingsTab extends PluginSettingTab {
                             new Notice('Please provide a Note Name to generate a key.', 4000);
                             return;
                         }
-                        // Removed: if (!accessType) check, as it's now hardcoded.
 
                         // Check for existing key with the same note and access type
                         const existingKey = this.plugin.settings.keys.find(
@@ -75,7 +74,7 @@ export class PluginSettingsTab extends PluginSettingTab {
         // --- SECTION: Note Input ---
         new Setting(containerEl)
             .setName('Note')
-            .setDesc('The note this key will be associated with.')
+            .setDesc('The note this key will be associated with.') // ORIGINAL DESCRIPTION
             .addText(text => {
                 this.noteInput = text;
                 text.setPlaceholder('Suggest Current Note...')
