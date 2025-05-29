@@ -25,7 +25,7 @@ import { getLocalIP } from "./utils/get-ip"
 import { registerGenerateKeyCommand } from './utils/generate_key_command';
 import { registerPullNoteCommand } from "./utils/pull_note_command";
 import { registerStartServerCommand, startWebSocketServerProcess } from "./utils/start_server_command";
-import { registerShowIPCommand } from "./utils/show_ip_command";
+import { registerShowIPCommand } from './utils/show_ip_command';
 import { registerListSharedKeysCommand } from './utils/list_keys_command';
 import { registerShareCurrentNoteCommand } from './utils/share_active_note';
 import { registerSyncFromServerToSettings, syncRegistryFromServer } from './utils/sync_command';
@@ -36,10 +36,10 @@ import { showAllPersonalCommentsForKey } from './utils/showCommentModal';
 export type NoteRegistry = Record<string, string>; // key => content
 
 export interface PersonalComment {
-    key: string;              // matches key used to identify the shared note
-    line: number;             // approximate line number in the note
-    column: number;           // optional: horizontal offset
-    content: string;          // the actual comment content
+    key: string;            // matches key used to identify the shared note
+    line: number;           // approximate line number in the note
+    column: number;         // optional: horizontal offset
+    content: string;        // the actual comment content
 }
 
 export interface KeyItem {
@@ -69,7 +69,7 @@ const DEFAULT_SETTINGS: MyPluginSettings = {
     linkedKeys: [], // NEW: Initialize as empty array
     registry: [],
     autoUpdateRegistry: false,
-    	personalComments: [],
+    personalComments: [],
 
 };
 
@@ -174,7 +174,8 @@ export default class MyPlugin extends Plugin {
         });
 
 
-        // Ribbon icon for quick key generation for the active note (direct action)
+        // Removed: Ribbon icon for quick key generation for the active note (direct action)
+        /*
         this.addRibbonIcon('key', 'Generate Key for Active Note', async () => {
             const activeFile = this.app.workspace.getActiveFile();
             const noteName = activeFile ? activeFile.basename : 'No Active Note';
@@ -198,13 +199,21 @@ export default class MyPlugin extends Plugin {
                 new Notice(`Error generating key: ${error.message}`, 5000);
             }
         }).addClass('my-plugin-ribbon-class');
+        */
 
+        // Removed: Ribbon icon for View All Collaboration Keys
+        /*
         this.addRibbonIcon('list', 'View All Collaboration Keys', () => {
             new KeyListModal(this.app, this).open();
         });
+        */
+
+        // Removed: Ribbon icon for Link / Pull a Collaborative Note
+        /*
         this.addRibbonIcon('link', 'Link / Pull a Collaborative Note', () => {
             new LinkNoteModal(this.app, this).open();
         });
+        */
         this.addSettingTab(new PluginSettingsTab(this.app, this));
     }
 
@@ -243,7 +252,7 @@ export default class MyPlugin extends Plugin {
         // Ensure linkedKeys is initialized from raw data or default
         this.settings = Object.assign({}, DEFAULT_SETTINGS, raw?.settings ?? {});
         this.settings.linkedKeys = raw?.settings?.linkedKeys ?? DEFAULT_SETTINGS.linkedKeys; // Ensure linkedKeys is loaded
-                this.settings.registry = raw?.settings?.registry ?? DEFAULT_SETTINGS.registry;
+        this.settings.registry = raw?.settings?.registry ?? DEFAULT_SETTINGS.registry;
         this.registry = this.settings.registry; // Keep this line for now if other parts still reference this.registry directly
         this.personalComments = raw?.settings?.personalComments ?? DEFAULT_SETTINGS.personalComments; // Load personal comments
     }

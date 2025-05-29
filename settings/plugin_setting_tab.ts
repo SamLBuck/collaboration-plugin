@@ -1,9 +1,8 @@
 import { App, PluginSettingTab, Setting, ButtonComponent, TextComponent, Notice } from 'obsidian';
 import MyPlugin, { KeyItem } from '../main';
-import { generateKey, addKey } from '../storage/keyManager'; // Ensure addKey is imported if used directly here
+import { generateKey, addKey } from '../storage/keyManager';
 import { KeyListModal } from './key_list_page02';
 import { LinkNoteModal } from './link_note_page03';
-import { shareCurrentNoteWithFileName } from '../utils/share_active_note';
 
 export class PluginSettingsTab extends PluginSettingTab {
     static PLUGIN_ID = 'obsidian-collaboration-plugin-id'; 
@@ -12,6 +11,7 @@ export class PluginSettingsTab extends PluginSettingTab {
 
     // Input references for the main settings page
     noteInput: TextComponent;
+    // These properties are needed because the UI elements for them are active
     accessTypeView: HTMLInputElement;
     accessTypeEdit: HTMLInputElement;
     accessTypeViewAndComment: HTMLInputElement;
@@ -24,6 +24,7 @@ export class PluginSettingsTab extends PluginSettingTab {
 
     display(): void {
         const { containerEl } = this;
+        containerEl.empty();
         containerEl.empty();
 
         this.renderMainSettingsPage(containerEl);
@@ -42,7 +43,7 @@ export class PluginSettingsTab extends PluginSettingTab {
             .setDesc('Generate a new key for the specified note and access type. The generated key will be copied to your clipboard and saved. Click on the Key List button to view all keys.')
             .addButton(button =>
                 button
-                    .setButtonText('Generate')
+                    .setButtonText('Generate & Save') // Original button text
                     .setCta()
                     .onClick(async () => {
                         const noteName = this.noteInput.getValue().trim();
@@ -52,23 +53,23 @@ export class PluginSettingsTab extends PluginSettingTab {
                             new Notice('Please provide a Note Name to generate a key.', 4000);
                             return;
                         }
-                        if (!accessType) {
+                        if (!accessType) { // Check if access type is selected
                             new Notice('Please select an Access Type to generate a key.', 4000);
                             return;
                         }
 
                         // Check for existing key with the same note and access type
-                        const existingKey = this.plugin.settings.keys.find( // we can refigure this to check our actual stored data
+                        const existingKey = this.plugin.settings.keys.find(
                             key => key.note === noteName && key.access === accessType
                         );
                         if (existingKey) {
                             new Notice(`A key for "${noteName}" with "${accessType}" access already exists. Cannot generate a duplicate. Existing Key: ${existingKey.ip}`, 8000);
-                            await navigator.clipboard.writeText(existingKey.ip); // Copy existing key if it's a duplicate
+                            await navigator.clipboard.writeText(existingKey.ip);
                             return;
                         }
 
                         try {
-                            const newKeyItem = await generateKey(this.plugin, noteName, accessType); // <--- newKeyItem WILL BE KeyItem
+                            const newKeyItem = await generateKey(this.plugin, noteName, accessType);
                             const success = await addKey(this.plugin, newKeyItem);
 
                             if (success) {
@@ -125,6 +126,7 @@ export class PluginSettingsTab extends PluginSettingTab {
             checkbox.onchange = (evt) => {
                 const targetCheckbox = evt.target as HTMLInputElement;
                 if (targetCheckbox.checked) {
+                    // Ensure only one checkbox is checked at a time
                     [this.accessTypeView, this.accessTypeEdit, this.accessTypeViewAndComment, this.accessTypeEditWithApproval].forEach(cb => {
                         if (cb && cb !== targetCheckbox) {
                             cb.checked = false;
@@ -132,9 +134,10 @@ export class PluginSettingsTab extends PluginSettingTab {
                     });
                     new Notice(`Access type selected: ${name}`);
                 } else {
+                    // Prevent all checkboxes from being unchecked
                     const anyChecked = [this.accessTypeView, this.accessTypeEdit, this.accessTypeViewAndComment, this.accessTypeEditWithApproval].some(cb => cb?.checked);
                     if (!anyChecked) {
-                        targetCheckbox.checked = true;
+                        targetCheckbox.checked = true; // Re-check the current one if it's the last one
                         new Notice("At least one access type must be selected.", 3000);
                     }
                 }
@@ -205,7 +208,7 @@ export class PluginSettingsTab extends PluginSettingTab {
         });
     }
 
-    // <--- ENSURE THIS METHOD IS PRESENT WITHIN THE CLASS
+    // This method is now active again and reads from the checkboxes
     getSelectedAccessType(): string | null {
         if (this.accessTypeView.checked) return 'View';
         if (this.accessTypeEdit.checked) return 'Edit';
