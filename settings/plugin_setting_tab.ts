@@ -10,7 +10,11 @@ export class PluginSettingsTab extends PluginSettingTab {
     plugin: MyPlugin;
 
     noteInput: TextComponent;
-    // Removed accessTypeView, accessTypeEdit, etc. properties as they are no longer linked to UI elements.
+    // These properties are needed because the UI elements for them are active
+    accessTypeView: HTMLInputElement;
+    accessTypeEdit: HTMLInputElement;
+    accessTypeViewAndComment: HTMLInputElement;
+    accessTypeEditWithApproval: HTMLInputElement;
 
     constructor(app: App, plugin: MyPlugin) {
         super(app, plugin);
@@ -30,17 +34,21 @@ export class PluginSettingsTab extends PluginSettingTab {
         // --- SECTION: Generate New Key ---
         new Setting(containerEl)
             .setName('Generate New Key')
-            .setDesc('Generate a new key (IP-NoteName format) for the specified note. The generated key will be copied to your clipboard and saved.') // REVERTED DESCRIPTION
+            .setDesc('Generate a new key (IP-NoteName format) for the specified note and access type. The generated key will be copied to your clipboard and saved.') // Original description
             .addButton(button =>
                 button
-                    .setButtonText('Generate')
+                    .setButtonText('Generate & Save') // Original button text
                     .setCta()
                     .onClick(async () => {
                         const noteName = this.noteInput.getValue().trim();
-                        const accessType = 'View'; // <--- HARDCODED DEFAULT ACCESS TYPE TO "View"
+                        const accessType = this.getSelectedAccessType(); // Access type is selected from UI
 
                         if (!noteName) {
                             new Notice('Please provide a Note Name to generate a key.', 4000);
+                            return;
+                        }
+                        if (!accessType) { // Check if access type is selected
+                            new Notice('Please select an Access Type to generate a key.', 4000);
                             return;
                         }
 
@@ -74,7 +82,7 @@ export class PluginSettingsTab extends PluginSettingTab {
         // --- SECTION: Note Input ---
         new Setting(containerEl)
             .setName('Note')
-            .setDesc('The note this key will be associated with.') // ORIGINAL DESCRIPTION
+            .setDesc('The note this key will be associated with.') // Original description
             .addText(text => {
                 this.noteInput = text;
                 text.setPlaceholder('Suggest Current Note...')
@@ -90,8 +98,7 @@ export class PluginSettingsTab extends PluginSettingTab {
             });
 
         // --- SECTION: Access Type ---
-        // This entire section is now commented out to deactivate the UI for access type selection.
-        /*
+        // This section is now active again
         const accessTypeSetting = new Setting(containerEl)
             .setName('Access Type')
             .setDesc('Select the type of access this key grants for the note.');
@@ -111,6 +118,7 @@ export class PluginSettingsTab extends PluginSettingTab {
             checkbox.onchange = (evt) => {
                 const targetCheckbox = evt.target as HTMLInputElement;
                 if (targetCheckbox.checked) {
+                    // Ensure only one checkbox is checked at a time
                     [this.accessTypeView, this.accessTypeEdit, this.accessTypeViewAndComment, this.accessTypeEditWithApproval].forEach(cb => {
                         if (cb && cb !== targetCheckbox) {
                             cb.checked = false;
@@ -118,9 +126,10 @@ export class PluginSettingsTab extends PluginSettingTab {
                     });
                     new Notice(`Access type selected: ${name}`);
                 } else {
+                    // Prevent all checkboxes from being unchecked
                     const anyChecked = [this.accessTypeView, this.accessTypeEdit, this.accessTypeViewAndComment, this.accessTypeEditWithApproval].some(cb => cb?.checked);
                     if (!anyChecked) {
-                        targetCheckbox.checked = true;
+                        targetCheckbox.checked = true; // Re-check the current one if it's the last one
                         new Notice("At least one access type must be selected.", 3000);
                     }
                 }
@@ -129,10 +138,9 @@ export class PluginSettingsTab extends PluginSettingTab {
         };
 
         this.accessTypeView = createCheckbox('View', false);
-        this.accessTypeEdit = createCheckbox('Edit', true);
+        this.accessTypeEdit = createCheckbox('Edit', true); // Default to Edit as it was before
         this.accessTypeViewAndComment = createCheckbox('View and Comment', false);
         this.accessTypeEditWithApproval = createCheckbox('Edit w/ Approval', false);
-        */
 
         // --- SECTION: Navigation Buttons ---
         const navButtonContainer = containerEl.createDiv({ cls: 'settings-nav-buttons' });
@@ -180,9 +188,12 @@ export class PluginSettingsTab extends PluginSettingTab {
         });
     }
 
-    // This method is no longer used by the "Generate" button's logic
-    // but can be kept if it's used elsewhere or for future reactivation.
+    // This method is now active again and reads from the checkboxes
     getSelectedAccessType(): string | null {
-        return 'View'; // Always return 'View' as the default/only access type
+        if (this.accessTypeView.checked) return 'View';
+        if (this.accessTypeEdit.checked) return 'Edit';
+        if (this.accessTypeViewAndComment.checked) return 'View and Comment';
+        if (this.accessTypeEditWithApproval.checked) return 'Edit w/ Approval';
+        return null;
     }
 }
