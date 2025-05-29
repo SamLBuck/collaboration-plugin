@@ -33,7 +33,6 @@ export class PluginSettingsTab extends PluginSettingTab {
 
     private renderMainSettingsPage(containerEl: HTMLElement): void {
         containerEl.createEl('h2', { text: 'Collaboration Settings' });
-        containerEl.createEl('h3', { text: 'Before attmepting to Generate note link, Please run command Start WebSocket Server' });
 
         containerEl.createEl('p', {
             text: 'Allows you to generate, manage, and link keys to specific notes for collaborative access control. You can generate new keys for selected notes with a specified access type, currently limited to View, and those keys are copied to your clipboard and saved locally. You can also view a list of all collaboration keys you have created, as well notes that can be pullable with those keys. Link Note allows you to enter a shared key and access the note, it maintains a list of keys you have linked. Theres a toggle to enable or disable automatic updates to the note registry whenever a note with a created key is modified.'
