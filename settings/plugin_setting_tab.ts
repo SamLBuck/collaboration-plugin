@@ -35,12 +35,12 @@ export class PluginSettingsTab extends PluginSettingTab {
         containerEl.createEl('h2', { text: 'Collaboration Settings' });
 
         containerEl.createEl('p', {
-            text: 'Allows you to generate, manage, and link keys to specific notes for collaborative access control. You can generate new keys for selected notes with a specified access type, currently limited to View, and those keys are copied to your clipboard and saved locally. You can also view a list of all collaboration keys you have created, as well notes that can be pullable with those keys. Link Note allows you to enter a shared key and access the note, it maintains a list of keys you have linked. Theres a toggle to enable or disable automatic updates to the note registry whenever a note with a created key is modified.'
+            text: 'Allows you to generate, manage, and link keys to specific notes for collaborative access control. You can generate new keys for selected notes with a specified access type, currently limited to View, and those keys are copied to your clipboard and saved locally AFTER YOUR KEY HAS BEEN MADE, YOU MUST MAKE EDITS TO THE NOTE LINKED. You can also view a list of all collaboration keys you have created, as well as notes that can be pullable with those keys. Link Note allows you to enter a shared key and access the note, it maintains a list of keys you have linked. We suggest sending created keys over email! IF YOU ARE HAVING CONNECTIVITY ISSUES, TRY RUNNING THE COMMAND STARTWEBSOCKETSERVER '
         })
         //Generate New Key
         new Setting(containerEl)
             .setName('Generate New Key')
-            .setDesc('Generate a new key for the specified note and access type. The generated key will be copied to your clipboard and saved. Click on the Key List button to view all keys.')
+            .setDesc('Generate a new key for the specified note and access type. The generated key will be copied to your clipboard and saved. Click on the Key List button to view and delete keys.')
             .addButton(button =>
                 button
                     .setButtonText('Generate & Save') // Original button text
@@ -97,14 +97,6 @@ export class PluginSettingsTab extends PluginSettingTab {
                 text.setPlaceholder('Suggest Current Note...')
                     .setValue(this.app.workspace.getActiveFile()?.basename || '');
             })
-            .addButton(button => {
-                button.setIcon('refresh-cw')
-                    .setTooltip('Suggest Current Note')
-                    .onClick(() => {
-                        this.noteInput.setValue(this.app.workspace.getActiveFile()?.basename || '');
-                        new Notice('Suggested current note!');
-                    });
-            });
 
         //Access Type
         const accessTypeSetting = new Setting(containerEl)
@@ -112,7 +104,7 @@ export class PluginSettingsTab extends PluginSettingTab {
             .setDesc('Select the type of access this key grants for the note. Only View can be selected at this time');
 
         const checkboxContainer = accessTypeSetting.controlEl.createDiv({ cls: 'access-type-checkboxes' });
-        checkboxContainer.style.display = 'flex';
+        checkboxContainer.style.display = 'flex'; 
         checkboxContainer.style.flexDirection = 'column';
         checkboxContainer.style.gap = '8px';
 
@@ -184,19 +176,19 @@ export class PluginSettingsTab extends PluginSettingTab {
         });
         
 
-        //Automatic Note Registry Updates
-        new Setting(containerEl)
-            .setName("Automatic Note Registry Updates")
-            .setDesc("Automatically update the registry when a note is modified. We suggest that this is on, but you can disable it if you prefer manual updates.")
-            .addToggle((toggle) =>
-                toggle
-                    .setValue(this.plugin.settings.autoUpdateRegistry)
-                    .onChange(async (value) => {
-                        this.plugin.settings.autoUpdateRegistry = value;
-                        await this.plugin.saveSettings();
-                        console.log(`[Settings] Auto-update registry set to ${value}`);
-                    })
-            );
+        // //Automatic Note Registry Updates
+        // new Setting(containerEl)
+        //     .setName("Automatic Note Registry Updates")
+        //     .setDesc("Automatically update the registry when a note is modified. We suggest that this is on, but you can disable it if you prefer manual updates.")
+        //     .addToggle((toggle) =>
+        //         toggle
+        //             .setValue(this.plugin.settings.autoUpdateRegistry)
+        //             .onChange(async (value) => {
+        //                 this.plugin.settings.autoUpdateRegistry = value;
+        //                 await this.plugin.saveSettings();
+        //                 console.log(`[Settings] Auto-update registry set to ${value}`);
+        //             })
+        //     );
 
         containerEl.querySelectorAll('.setting-item').forEach(item => {
             (item as HTMLElement).style.marginBottom = '15px';
