@@ -68,7 +68,7 @@ const DEFAULT_SETTINGS: MyPluginSettings = {
     ],
     linkedKeys: [], // NEW: Initialize as empty array
     registry: [],
-    autoUpdateRegistry: false,
+    autoUpdateRegistry: true,
     personalComments: [],
 
 };
