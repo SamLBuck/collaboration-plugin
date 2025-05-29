@@ -3,6 +3,7 @@ import MyPlugin, { KeyItem } from '../main';
 import { generateKey, addKey } from '../storage/keyManager';
 import { KeyListModal } from './key_list_page02';
 import { LinkNoteModal } from './link_note_page03';
+import { shareCurrentNoteWithFileName } from '../utils/share_active_note';
 
 export class PluginSettingsTab extends PluginSettingTab {
     static PLUGIN_ID = 'obsidian-collaboration-plugin-id'; 
