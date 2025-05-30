@@ -53,7 +53,6 @@ export function startWebSocketServerProcess(app: App, plugin: MyPlugin): void {
 		return;
 	}
 
-	// 🔪 Kill any old PID first
 	if (fs.existsSync(pidPath)) {
 		const pid = parseInt(fs.readFileSync(pidPath, "utf8"));
 		if (!isNaN(pid)) {
@@ -72,6 +71,7 @@ export function startWebSocketServerProcess(app: App, plugin: MyPlugin): void {
 		if (!available) {
 			console.warn(`[Plugin] Port ${PORT} is already in use. Skipping server start.`);
 			new Notice(`WebSocket server already running on port ${PORT}., try using the command Start WebSocket Server!`);
+
 			return;
 		}
 
