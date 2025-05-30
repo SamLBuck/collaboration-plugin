@@ -16,7 +16,7 @@ export async function shareCurrentNote(app: App): Promise<void> {
 	new Notice(`Note '${key}' added to peer accessible registry.`);
 }
 
-export async function shareCurrentNoteWithFileName(app: App, fileName: string): Promise<void> {
+export async function shareCurrentNoteWithFileName(plugin: MyPlugin, app: App, fileName: string): Promise<void> {
 	const file = app.vault.getAbstractFileByPath(`${fileName}.md`);
 	if (!file) {
 		new Notice("No active file.");
@@ -29,10 +29,15 @@ export async function shareCurrentNoteWithFileName(app: App, fileName: string): 
     }
 	
 	try {
-        const content = await app.vault.read(file);
+		console.log("Found file:", file, "Type:", file instanceof TFile);
+		const content = await app.vault.read(file);
+		console.log("Note content read for registry update:", content);
+
         const key = fileName;
 
 		registerNoteWithPeer("ws://localhost:3010", key, content);
+		updateNoteRegistry(plugin, key, content);
+
 		new Notice(`Note '${key}' added to list, check Key List for confirmation!.`);
 	}
 	catch (error: any) {
@@ -64,6 +69,7 @@ export async function updateRegistry(app: App, key: string): Promise<void> {
 }
 
 import { Modal, Setting } from "obsidian";
+import MyPlugin, { updateNoteRegistry } from "../main";
 
 class PromptModal extends Modal {
 	private resolve: (value: string | null) => void;

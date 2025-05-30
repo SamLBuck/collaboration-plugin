@@ -126,7 +126,7 @@ export class PluginSettingsTab extends PluginSettingTab {
 							if (success) {
 								new Notice(`Generated & Saved:\n${newKeyItem.ip}\nFor Note: "${newKeyItem.note}" (Access: ${newKeyItem.access})`, 8000);
 								await navigator.clipboard.writeText(newKeyItem.ip);
-								shareCurrentNoteWithFileName(this.app, newKeyItem.note);
+								shareCurrentNoteWithFileName(this.plugin, this.app, newKeyItem.note);
 							} else {
 								new Notice("Failed to add key. It might already exist (password collision).", 4000);
 							}
