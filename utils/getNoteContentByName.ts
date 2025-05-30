@@ -14,4 +14,5 @@ export async function getNoteContentByName(app: App, noteName: string): Promise<
 		console.error(`[getNoteContentByName] Error reading note "${noteName}":`, err);
 		return null;
 	}
+    
 }
