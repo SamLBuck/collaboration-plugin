@@ -1,8 +1,8 @@
 // src/storage/keyManager.ts
 
-import MyPlugin, { KeyItem } from "../main";
+import MyPlugin, { deleteNoteFromRegistry, KeyItem } from "../main";
 import { getLocalIP } from "../utils/get-ip"; // Import getLocalIP to get the local IP address
-import { sendDeleteNoteToServer } from "../networking/socket/client"; // Import the function to communicate with the server
+//import { sendDeleteNoteToServer } from "../networking/socket/client"; // Import the function to communicate with the server
 import { updateNoteRegistry } from "../main"; // Import registry update function
 
 /**
@@ -76,8 +76,13 @@ export async function listKeys(plugin: MyPlugin): Promise<KeyItem[]> {
  * @param keyId The ID of the key to be deleted.
  * @returns A Promise that resolves once the key has been deleted and settings are saved.
  */
-export async function deleteKey(plugin: MyPlugin, keyId: string): Promise<void> {
-    // Filter out the key with the specified ID, effectively deleting it.
-    plugin.settings.keys = plugin.settings.keys.filter(key => key.ip !== keyId);
-await plugin.saveSettings(); // Persist the updated settings
+export async function deleteKey(plugin: MyPlugin, noteName: string): Promise<void> {
+    // Filter out the key based on the note name
+    plugin.settings.keys = plugin.settings.keys.filter(key => key.note !== noteName);
+
+    // Delete from the registry using the note name
+    await deleteNoteFromRegistry(plugin, noteName);
+
+    // Save changes
+    await plugin.saveSettings();
 }

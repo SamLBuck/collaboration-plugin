@@ -33,7 +33,7 @@ export async function shareCurrentNoteWithFileName(app: App, fileName: string): 
         const key = fileName;
 
 		registerNoteWithPeer("ws://localhost:3010", key, content);
-		new Notice(`Note '${key}' added to list, make edits in note to make it accessible through the key.`);
+		new Notice(`Note '${key}' added to list, check Key List for confirmation!.`);
 	}
 	catch (error: any) {
         console.error("Error sharing note by filename:", error);

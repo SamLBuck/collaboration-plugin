@@ -33,6 +33,7 @@ import { registerUpdateRegistryCommand } from './utils/share_active_note';
 import { registerAddPersonalCommentCommand } from './utils/addPersonalCommentCommand';
 import { showAllPersonalCommentsForKey } from './utils/showCommentModal';
 
+
 export type NoteRegistry = Record<string, string>; // key => content
 
 export interface PersonalComment {
@@ -114,7 +115,7 @@ export default class MyPlugin extends Plugin {
         this.startServer();
 
         // Start WebSocket server
-        this.startWebSocketServer();
+        startWebSocketServerProcess(this.app, this);
 
         // Register custom commands (Command Palette commands)
         registerGenerateKeyCommand(this.app, this);
@@ -157,6 +158,7 @@ export default class MyPlugin extends Plugin {
                 showAllPersonalCommentsForKey(this.app, key, comments);
             })
         );
+        
         
 
         // Listen for file changes if auto-update is enabled
@@ -229,34 +231,42 @@ export default class MyPlugin extends Plugin {
         });
     }
 
-    startWebSocketServer() {
-        try {
-            const serverPath = this.manifest.dir + "/networking/socket/dist/server.cjs";
-            const childProcess = require("child_process");
-            childProcess.fork(serverPath);
-
-            console.log("[Plugin] WebSocket server started at ws://localhost:3010");
-            new Notice("WebSocket server started at ws://localhost:3010");
-        } catch (err: any) {
-            console.error("[Plugin] Failed to start WebSocket server:", err);
-            new Notice(`Failed to start WebSocket server: ${err.message}. Check console for details.`, 5000);
-        }
-    }
 
     onunload() {
         new Notice('Plugin is unloading!');
-        // TODO: Add logic to stop http and websocket servers gracefully on unload
+    
+        const adapter = this.app.vault.adapter;
+        if (!(adapter instanceof FileSystemAdapter)) return;
+    
+        const vaultPath = adapter.getBasePath();
+        const pidPath = path.join(
+            vaultPath,
+            ".obsidian",
+            "plugins",
+            "collaboration-plugin",
+            "ws-server.pid"
+        );
+    
+        if (fs.existsSync(pidPath)) {
+            const pid = parseInt(fs.readFileSync(pidPath, "utf8"));
+            if (!isNaN(pid)) {
+                try {
+                    process.kill(pid);
+                    console.log(`[Plugin] Cleanly killed previous WebSocket server with PID ${pid}`);
+                } catch (err) {
+                    console.warn(`[Plugin] Failed to kill server PID ${pid}:`, err);
+                }
+            }
+            fs.unlinkSync(pidPath);
+        }
     }
-    async loadSettings() {
+        async loadSettings() {
         const raw = await this.loadData();
-        // Ensure linkedKeys is initialized from raw data or default
-        this.settings = Object.assign({}, DEFAULT_SETTINGS, raw?.settings ?? {});
-        this.settings.linkedKeys = raw?.settings?.linkedKeys ?? DEFAULT_SETTINGS.linkedKeys; // Ensure linkedKeys is loaded
-        this.settings.registry = raw?.settings?.registry ?? DEFAULT_SETTINGS.registry;
-        this.registry = this.settings.registry; // Keep this line for now if other parts still reference this.registry directly
-        this.personalComments = raw?.settings?.personalComments ?? DEFAULT_SETTINGS.personalComments; // Load personal comments
+        this.settings = Object.assign({}, DEFAULT_SETTINGS, raw ?? {});
+        this.registry = this.settings.registry;
+        this.personalComments = this.settings.personalComments;
     }
-
+    
     async saveSettings() {
         // Save all settings, including linkedKeys
         await this.saveData(this.settings);

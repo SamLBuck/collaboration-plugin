@@ -140,10 +140,19 @@ export class LinkNoteModal extends Modal {
                             if (file) {
                                 this.app.workspace.openLinkText(file.path, '', false);
                             }
+							this.close();
+
+							file = this.app.vault.getAbstractFileByPath(filePath) as TFile;
+							if (file) {
+							// Switch to the pulled note
+									await this.app.workspace.getLeaf(true).openFile(file);
+									new Notice(`Pulled and opened "${file.basename}" successfully.`, 4000);
+							} else {
+
                             
                             // Re-render the linked keys list
                             await this.renderLinkedKeysContent(this.linkedKeysContainer);
-
+							}
                         } catch (error: any) {
                             console.error('Error pulling note:', error);
                             new Notice(`An error occurred while pulling the note: ${error.message}`, 5000);
@@ -151,7 +160,6 @@ export class LinkNoteModal extends Modal {
                     });
             });
 
-        // --- Section for displaying Linked Keys ---
         contentEl.createEl("h3", { text: "My Linked Keys (from others)" });
         this.linkedKeysContainer = contentEl.createDiv({ cls: 'linked-keys-container' });
         await this.renderLinkedKeysContent(this.linkedKeysContainer);

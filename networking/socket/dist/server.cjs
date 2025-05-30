@@ -42,6 +42,18 @@ wss.on("connection", (socket) => {
         );
         return;
       }
+      if (message.type === "loadNote") {
+        const { key, content } = message;
+        registerNote(key, content);
+        socket.send(
+          JSON.stringify({
+            type: "ack",
+            payload: { message: `Loaded note '${key}' into registry` },
+          })
+        );
+        return;
+      }
+      
 
       if (message.type === "delete-note") {
         const { key } = message.payload;

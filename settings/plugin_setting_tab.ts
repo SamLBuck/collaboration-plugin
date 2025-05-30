@@ -1,9 +1,11 @@
-import { App, PluginSettingTab, Setting, ButtonComponent, TextComponent, Notice } from 'obsidian';
-import MyPlugin, { KeyItem } from '../main';
+import { App, PluginSettingTab, Setting, ButtonComponent, TextComponent, Notice, TFile } from 'obsidian';
+import MyPlugin, { KeyItem, updateNoteRegistry } from '../main';
 import { generateKey, addKey } from '../storage/keyManager';
 import { KeyListModal } from './key_list_page02';
 import { LinkNoteModal } from './link_note_page03';
 import { shareCurrentNoteWithFileName } from '../utils/share_active_note';
+import { registerNote } from '../networking/socket/dist/noteRegistry.cjs';
+import { getNoteContentByName } from '../utils/getNoteContentByName';
 
 export class PluginSettingsTab extends PluginSettingTab {
     static PLUGIN_ID = 'obsidian-collaboration-plugin-id'; 
@@ -35,7 +37,7 @@ export class PluginSettingsTab extends PluginSettingTab {
         containerEl.createEl('h2', { text: 'Collaboration Settings' });
 
         containerEl.createEl('p', {
-            text: 'Allows you to generate, manage, and link keys to specific notes for collaborative access control. You can generate new keys for selected notes with a specified access type, currently limited to View, and those keys are copied to your clipboard and saved locally AFTER YOUR KEY HAS BEEN MADE, YOU MUST MAKE EDITS TO THE NOTE LINKED. You can also view a list of all collaboration keys you have created, as well as notes that can be pullable with those keys. Link Note allows you to enter a shared key and access the note, it maintains a list of keys you have linked. We suggest sending created keys over email! IF YOU ARE HAVING CONNECTIVITY ISSUES, TRY RUNNING THE COMMAND STARTWEBSOCKETSERVER '
+            text: 'Allows you to generate, manage, and link keys to specific notes for collaborative access control. You can generate new keys for selected notes with a specified access type, currently limited to View, and those keys are copied to your clipboard and saved locally. You can also view a list of all collaboration keys you have created, as well as notes that can be pullable with those keys. Link Note allows you to enter a shared key and access the note, it maintains a list of keys you have linked. Notes can only be pulled between computers on the same network that are both running. We suggest sending created keys over email! IF YOU ARE HAVING CONNECTIVITY ISSUES TRY RUNNING THE COMMAND START WEBSOCKETSERVER '
         })
         //Generate New Key
         new Setting(containerEl)
@@ -73,11 +75,19 @@ export class PluginSettingsTab extends PluginSettingTab {
                             const success = await addKey(this.plugin, newKeyItem);
 
                             if (success) {
-                                new Notice(`Generated & Saved:\n${newKeyItem.ip}\nFor Note: "${newKeyItem.note}" (Access: ${newKeyItem.access})`, 8000);
-                                await navigator.clipboard.writeText(newKeyItem.ip); // Copy to clipboard
-                                shareCurrentNoteWithFileName(this.app, newKeyItem.note); 
-
-                            } else {
+                                    new Notice(`Generated & Saved:\n${newKeyItem.ip}\nFor Note: "${newKeyItem.note}" (Access: ${newKeyItem.access})`, 8000);
+                                    await navigator.clipboard.writeText(newKeyItem.ip); // Copy to clipboard
+                                    shareCurrentNoteWithFileName(this.app, newKeyItem.note); 
+                                    
+                                    // 🆕 Update registry immediately upon key creation
+                                    const file = this.app.vault.getAbstractFileByPath(`${newKeyItem.note}.md`);
+                                    if (file instanceof TFile) {
+                                        const content = await this.app.vault.read(file);
+                                        await updateNoteRegistry(this.plugin, newKeyItem.note, content);
+                                        console.log(`[Registry] Added '${newKeyItem.note}' to registry on key creation.`);
+                                    }
+                                }
+                                else {
                                  // but kept as a fallback for rare collision scenarios.
                                 new Notice("Failed to add key. It might already exist (password collision).", 4000);
                             }
