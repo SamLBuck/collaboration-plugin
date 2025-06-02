@@ -2,8 +2,8 @@
 
 import MyPlugin, { deleteNoteFromRegistry, KeyItem } from "../main";
 import { getLocalIP } from "../utils/get-ip"; // Import getLocalIP to get the local IP address
-//import { sendDeleteNoteToServer } from "../networking/socket/client"; // Import the function to communicate with the server
-import { updateNoteRegistry } from "../main"; // Import registry update function
+//import { sendDeleteNoteToServer } from "../networking/socket/client"; // Keep if used elsewhere
+import { updateNoteRegistry } from "../main"; // Keep if used elsewhere
 
 /**
  * Generates a unique key based on the note name and local IP address.
@@ -70,19 +70,32 @@ export async function listKeys(plugin: MyPlugin): Promise<KeyItem[]> {
 }
 
 /**
- * Deletes a key item from the plugin's settings based on its ID.
+ * Deletes a key item from the plugin's settings based on its unique 'ip' string.
+ * Also deletes the corresponding note from the registry.
  *
  * @param plugin The plugin instance from which to delete the key.
- * @param keyId The ID of the key to be deleted.
+ * @param keyIdToDelete The full unique ID string of the key to be deleted (e.g., "IP-NoteName|AccessType").
  * @returns A Promise that resolves once the key has been deleted and settings are saved.
  */
-export async function deleteKey(plugin: MyPlugin, noteName: string): Promise<void> {
-    // Filter out the key based on the note name
-    plugin.settings.keys = plugin.settings.keys.filter(key => key.note !== noteName);
+export async function deleteKey(plugin: MyPlugin, keyIdToDelete: string): Promise<void> {
+    // Filter out the key based on its unique 'ip' string
+    plugin.settings.keys = plugin.settings.keys.filter(key => key.ip !== keyIdToDelete);
 
-    // Delete from the registry using the note name
-    await deleteNoteFromRegistry(plugin, noteName);
+    // Extract the original note name from the keyIdToDelete for registry deletion
+    // The format is "IP-NoteName|AccessType"
+    const parts = keyIdToDelete.split('-');
+    if (parts.length > 1) {
+        let noteNameWithAccess = parts.slice(1).join('-'); // This will be "NoteName|AccessType"
+        const noteNameParts = noteNameWithAccess.split('|');
+        const originalNoteName = noteNameParts[0].replace(/_/g, ' '); // Revert sanitized underscores to spaces
 
-    // Save changes
+        // Delete from the registry using the extracted original note name
+        await deleteNoteFromRegistry(plugin, originalNoteName);
+    } else {
+        console.warn(`[keyManager] Could not parse note name from key ID '${keyIdToDelete}' for registry deletion.`);
+    }
+
+    // Save changes to persist the deleted key
     await plugin.saveSettings();
+    console.log(`[KeyManager] Key '${keyIdToDelete}' and associated registry entry deleted.`);
 }

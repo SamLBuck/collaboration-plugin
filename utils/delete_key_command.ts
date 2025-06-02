@@ -1,7 +1,10 @@
 // utils/delete_key_command.ts
-import { App, Modal, Notice, Plugin } from "obsidian";
+
+import { App, Modal, Notice, Plugin, ButtonComponent } from "obsidian"; // Ensure ButtonComponent is imported
 import { deleteKey, listKeys } from "../storage/keyManager";
-import MyPlugin, { KeyItem } from "../main"; // *** NEW: Import KeyItem from main.ts ***
+import MyPlugin, { KeyItem } from "../main";
+// Assuming you have a ConfirmationModal available. If not, replace with simple `confirm()`
+// import { ConfirmationModal } from './path/to/ConfirmationModal'; 
 
 export function registerDeleteKeyCommand(plugin: MyPlugin) {
     plugin.addCommand({
@@ -23,7 +26,7 @@ class DeleteKeyModal extends Modal {
 
     async onOpen() {
         const { contentEl } = this;
-        const keys = await listKeys(this.plugin); // listKeys now returns KeyItem[]
+        const keys = await listKeys(this.plugin);
 
         contentEl.createEl("h2", { text: "Delete a Key" });
 
@@ -34,17 +37,27 @@ class DeleteKeyModal extends Modal {
 
         const listContainer = contentEl.createEl("div");
 
-        keys.forEach((keyItem: KeyItem) => { // Iterate over KeyItem objects
+        keys.forEach((keyItem: KeyItem) => {
             const button = listContainer.createEl("button", { text: `Delete "${keyItem.ip}" (Note: ${keyItem.note}, Access: ${keyItem.access})` });
             button.onclick = async () => {
-                // Pass the ID of the key item to delete
-                const success = await deleteKey(this.plugin, keyItem.ip);
-                if (success !== undefined) { // Ensure success is not void
+                // IMPORTANT CHANGE HERE: Pass keyItem.ip, which is the unique ID
+                // Use a simple confirm if you don't have a custom ConfirmationModal
+                const confirmDelete = await new Promise<boolean>(resolve => {
+                    const confirmed = confirm(`Are you sure you want to delete the key for "${keyItem.note}" (${keyItem.access})?`);
+                    resolve(confirmed);
+                });
+
+
+                if (confirmDelete) {
+                    await deleteKey(this.plugin, keyItem.ip); // <<< Pass keyItem.ip here
                     new Notice(`Key "${keyItem.ip}" deleted successfully.`);
+                    this.close(); // Close after deletion, or re-render if you want to stay open and show updated list
+                    // If you want to re-render the list without closing, you'd call this.onOpen() again
+                    // after clearing contentEl, or have a specific re-render method.
+                    // For simplicity, closing the modal after action is often fine.
                 } else {
-                    new Notice(`Failed to delete "${keyItem.ip}".`);
+                    new Notice(`Deletion of "${keyItem.ip}" cancelled.`);
                 }
-                this.close(); // Close after deletion
             };
         });
     }
