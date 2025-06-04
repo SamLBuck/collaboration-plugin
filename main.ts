@@ -32,6 +32,7 @@ import { registerSyncFromServerToSettings, syncRegistryFromServer } from './util
 import { registerUpdateRegistryCommand } from './utils/share_active_note';
 import { registerAddPersonalCommentCommand } from './utils/addPersonalCommentCommand';
 import { showAllPersonalCommentsForKey } from './utils/showCommentModal';
+const { generateMACKey } = require("./utils/generateMACKey");
 
 
 export type NoteRegistry = Record<string, string>; // key => content
@@ -44,10 +45,12 @@ export interface PersonalComment {
 }
 
 export interface KeyItem {
-    ip: string; // This now stores the full key string (e.g., "IP-NoteName")
+    ip: string; // This now stores the full key string 
+    macAddress?: string; // Optional: MAC address if generated with MACbased key
     note: string; // The parsed note name
-    access: string; // The access type (e.g., "Edit", "View", "Pulled")
+    access: string; // The access type 
 }
+  
 interface noteRegistry {
     key: string;
     content: string;
@@ -65,7 +68,8 @@ interface MyPluginSettings {
 const DEFAULT_SETTINGS: MyPluginSettings = {
     mySetting: 'default',
     keys: [
-        { ip: 'default-ip-default_note', note: 'Default Shared Note', access: 'View' },
+        { ip: 'default-ip-default_note',  macAddress: "00:00:00:00:00:00",
+            note: 'Default Shared Note', access: 'View' },
     ],
     linkedKeys: [], // NEW: Initialize as empty array
     registry: [],
@@ -150,6 +154,21 @@ export default class MyPlugin extends Plugin {
                 modal.open();
             },
         });
+        this.addCommand({
+            id: "generate-mac-key-test",
+            name: "Test: Generate MAC-based Key",
+            callback: async () => {
+              try {
+                const key = await generateMACKey("TestNote.md", "view");
+                console.log("[MAC Key Test] Generated key:", key);
+                new Notice(`MAC key: ${key.macAddress}\nKey: ${key.key}`);
+              } catch (err: any) {
+                console.error("[MAC Key Test] Error:", err);
+                new Notice(`Failed to generate MAC key: ${err.message}`);
+              }
+            },
+          });
+          
         this.registerEvent(
             this.app.workspace.on("file-open", (file) => {
                 if (!file) return;
@@ -175,47 +194,6 @@ export default class MyPlugin extends Plugin {
             }
         });
 
-
-        // Removed: Ribbon icon for quick key generation for the active note (direct action)
-        /*
-        this.addRibbonIcon('key', 'Generate Key for Active Note', async () => {
-            const activeFile = this.app.workspace.getActiveFile();
-            const noteName = activeFile ? activeFile.basename : 'No Active Note';
-            const accessType = 'Edit'; // Default for generated keys
-
-            if (!activeFile) {
-                new Notice("No active note open to generate a key for. Please open a note.", 4000);
-                return;
-            }
-            try {
-                const newKeyItem = await generateKey(this, noteName, accessType);
-                const success = await addKey(this, newKeyItem);
-                if (success) {
-                    new Notice(`Generated & Stored:\n${newKeyItem.ip}\nFor Note: "${newKeyItem.note}" (Access: ${newKeyItem.access})`, 6000);
-                    await navigator.clipboard.writeText(newKeyItem.ip);
-                } else {
-                    new Notice('Failed to add generated key. It might already exist (password collision).', 4000);
-                }
-            } catch (error: any) {
-                console.error("Error generating or adding key:", error);
-                new Notice(`Error generating key: ${error.message}`, 5000);
-            }
-        }).addClass('my-plugin-ribbon-class');
-        */
-
-        // Removed: Ribbon icon for View All Collaboration Keys
-        /*
-        this.addRibbonIcon('list', 'View All Collaboration Keys', () => {
-            new KeyListModal(this.app, this).open();
-        });
-        */
-
-        // Removed: Ribbon icon for Link / Pull a Collaborative Note
-        /*
-        this.addRibbonIcon('link', 'Link / Pull a Collaborative Note', () => {
-            new LinkNoteModal(this.app, this).open();
-        });
-        */
         this.addSettingTab(new PluginSettingsTab(this.app, this));
     }
 

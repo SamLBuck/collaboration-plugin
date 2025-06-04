@@ -3,6 +3,7 @@
 import { App, Modal, Notice, ButtonComponent } from "obsidian"; // Ensure ButtonComponent is imported
 import { addKey, generateKey } from "../storage/keyManager";
 import MyPlugin, { KeyItem } from "../main";
+import { generateMACKey } from "./generateMACKey";
 
 export function registerAddKeyCommand(plugin: MyPlugin) {
     plugin.addCommand({
@@ -86,7 +87,10 @@ class AddKeyModal extends Modal {
         }
 
         try {
-            const newKeyItem = await generateKey(this.plugin, noteName, accessType);
+            //const newKeyItem = await generateKey(this.plugin, noteName, accessType);
+            const newKeyItem = await generateMACKey(this.plugin, noteName, accessType);
+
+            //const success = await addKey(this.plugin, newKeyItem);
             const success = await addKey(this.plugin, newKeyItem);
 
             if (success) {

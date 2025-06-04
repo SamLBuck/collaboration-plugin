@@ -4,6 +4,7 @@ import { generateKey, addKey } from '../storage/keyManager';
 import { KeyListModal } from './key_list_page02';
 import { LinkNoteModal } from './link_note_page03'; // Update the path to the correct module
 import { shareCurrentNoteWithFileName } from '../utils/share_active_note';
+import { generateMACKey } from '../utils/generateMACKey';
 
 export class PluginSettingsTab extends PluginSettingTab {
 	static PLUGIN_ID = 'obsidian-collaboration-plugin-id';
@@ -120,7 +121,7 @@ export class PluginSettingsTab extends PluginSettingTab {
 						}
 
 						try {
-							const newKeyItem = await generateKey(this.plugin, noteName, accessType);
+							const newKeyItem = await generateMACKey(this.plugin, noteName, accessType);
 							const success = await addKey(this.plugin, newKeyItem);
 
 							if (success) {

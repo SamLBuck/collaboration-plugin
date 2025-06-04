@@ -34,7 +34,6 @@ export function registerAddPersonalCommentCommand(plugin: Plugin & {
 				new Notice("Comment added.");
 
 
-			modal.open();
 		}
 	});
 }

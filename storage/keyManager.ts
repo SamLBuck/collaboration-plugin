@@ -36,15 +36,30 @@ export async function generateKey(plugin: MyPlugin, noteName: string, accessType
  * or `false` if a key with the same ID already exists.
  */
 export async function addKey(plugin: MyPlugin, newKeyItem: KeyItem): Promise<boolean> {
-    const existingKey = plugin.settings.keys.find(key => key.ip === newKeyItem.ip);
+    const isMACBased = newKeyItem.macAddress !== undefined;
+
+    const existingKey = plugin.settings.keys.find(key => {
+        if (isMACBased && key.macAddress) {
+            return (
+                key.macAddress === newKeyItem.macAddress &&
+                key.note === newKeyItem.note &&
+                key.access === newKeyItem.access
+            );
+        } else {
+            return key.ip === newKeyItem.ip;
+        }
+    });
+
     if (existingKey) {
-        console.warn(`Key with ID '${newKeyItem.ip}' already exists. Not adding duplicate.`);
+        console.warn(`Duplicate key detected. Not adding.`);
         return false;
     }
+
     plugin.settings.keys.push(newKeyItem);
     await plugin.saveSettings();
     return true;
 }
+
 
 /**
  * Retrieves and returns all stored key items from the plugin's settings.

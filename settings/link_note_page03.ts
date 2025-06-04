@@ -3,6 +3,9 @@ import MyPlugin, { KeyItem } from "../main";
 import { requestNoteFromPeer } from "../networking/socket/client";
 import { pullNoteFromPeerNewNote, rewriteExistingNote } from "../utils/pull_note_command";
 import { parseKey } from "../utils/parse_key"; // Assuming parseKey is updated to handle full key string
+import { parseMACKey } from "../utils/parseMACKey";
+import { findIpForMac } from "../utils/generateMACKey";
+
 
 // Define a generic ConfirmationModal for reuse
 class ConfirmationModal extends Modal {
@@ -92,16 +95,16 @@ export class LinkNoteModal extends Modal {
 
                         let parsedKeyInfo;
                         try {
-                            parsedKeyInfo = parseKey(input);
-                            if (!parsedKeyInfo || !parsedKeyInfo.ip || !parsedKeyInfo.noteName) {
-                                throw new Error('Invalid key format. Expected "IP-NoteName".');
+                            parsedKeyInfo = parseMACKey(input);
+                            if (!parsedKeyInfo || !parsedKeyInfo.mac || !parsedKeyInfo.noteName) {
+                                throw new Error('Invalid key format');
                             }
                         } catch (error: any) {
                             new Notice(`Key parsing error: ${error.message}`, 5000);
                             return;
                         }
 
-                        const { ip, noteName: keyBasename } = parsedKeyInfo;
+                        const { mac, noteName: keyBasename } = parsedKeyInfo;
                         const filePath = `${keyBasename}.md`; // Use parsed noteName for file path
                         
                         let file: TFile | null = this.app.vault.getAbstractFileByPath(filePath) as TFile;
@@ -117,7 +120,18 @@ export class LinkNoteModal extends Modal {
                                 return;
                             }
                         }
-
+						let ip = "";
+						try{
+                            const resolvedIp = await findIpForMac(mac);
+                            if (!resolvedIp) {
+                                new Notice(`Could not resolve IP for MAC: ${mac}`, 4000);
+                                return;
+                            }
+                            ip = resolvedIp;
+						}
+						catch (error: any) {
+							new Notice(`Error resolving IP for MAC: ${error.message}`, 5000);
+						    return;}
                         try {
                             if (file && overwrite) {
                                 await rewriteExistingNote(this.app, ip, keyBasename);
