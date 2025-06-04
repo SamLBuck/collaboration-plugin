@@ -5,11 +5,12 @@ import {
     Setting,
     Notice,
     TFile,
+    WorkspaceLeaf, // Import WorkspaceLeaf
 } from 'obsidian';
 import { registerAddKeyCommand } from './utils/add_key_command';
 import { registerDeleteKeyCommand } from './utils/delete_key_command';
-import { KeyListModal } from './settings/key_list_page02';
-import { LinkNoteModal } from './settings/link_note_page03';
+import { KeyListModal } from './settings/key_list_page02'; // Still needed for ConfirmationModal
+import { LinkNoteModal } from './settings/link_note_page03'; // Still needed for ConfirmationModal
 import { generateKey, addKey } from './storage/keyManager';
 import { registerNoteWithPeer, requestNoteFromPeer } from './networking/socket/client';
 import { PluginSettingsTab } from "./settings/plugin_setting_tab";
@@ -23,8 +24,8 @@ import { tempKeyInputModal } from "./settings/tempKeyInputModal";
 import { tempIPInputModal } from "./settings/tempIPInputModal";
 import { getLocalIP } from "./utils/get-ip"
 import { registerGenerateKeyCommand } from './utils/generate_key_command';
-import { registerPullNoteCommand } from "./utils/pull_note_command";
-import { registerStartServerCommand, startWebSocketServerProcess } from "./utils/start_server_command";
+import { registerPullNoteCommand } from './utils/pull_note_command';
+import { registerStartServerCommand, startWebSocketServerProcess } from './utils/start_server_command';
 import { registerShowIPCommand } from './utils/show_ip_command';
 import { registerListSharedKeysCommand } from './utils/list_keys_command';
 import { registerShareCurrentNoteCommand } from './utils/share_active_note';
@@ -32,6 +33,11 @@ import { registerSyncFromServerToSettings, syncRegistryFromServer } from './util
 import { registerUpdateRegistryCommand } from './utils/share_active_note';
 import { registerAddPersonalCommentCommand } from './utils/addPersonalCommentCommand';
 import { showAllPersonalCommentsForKey } from './utils/showCommentModal';
+
+// Import the new Collaboration Panel Views
+import { CollaborationPanelView, COLLABORATION_VIEW_TYPE } from './views/CollaborationPanelView';
+import { KeyListView, KEY_LIST_VIEW_TYPE } from './views/KeyListView';
+import { LinkNoteView, LINK_NOTE_VIEW_TYPE } from './views/LinkNoteView';
 
 
 export type NoteRegistry = Record<string, string>; // key => content
@@ -64,9 +70,7 @@ interface MyPluginSettings {
 
 const DEFAULT_SETTINGS: MyPluginSettings = {
     mySetting: 'default',
-    keys: [
-        { ip: 'default-ip-default_note', note: 'Default Shared Note', access: 'View' },
-    ],
+    keys: [], // MODIFIED: Removed the default key entry here
     linkedKeys: [], // NEW: Initialize as empty array
     registry: [],
     autoUpdateRegistry: true,
@@ -115,7 +119,7 @@ export default class MyPlugin extends Plugin {
         this.startServer();
 
         // Start WebSocket server
-        startWebSocketServerProcess(this.app, this);
+        this.startWebSocketServer();
 
         // Register custom commands (Command Palette commands)
         registerGenerateKeyCommand(this.app, this);
@@ -159,7 +163,35 @@ export default class MyPlugin extends Plugin {
             })
         );
         
-        
+        // Register all Collaboration Panel Views
+        this.registerView(
+            COLLABORATION_VIEW_TYPE,
+            (leaf) => new CollaborationPanelView(leaf, this)
+        );
+        this.registerView(
+            KEY_LIST_VIEW_TYPE,
+            (leaf) => new KeyListView(leaf, this)
+        );
+        this.registerView(
+            LINK_NOTE_VIEW_TYPE,
+            (leaf) => new LinkNoteView(leaf, this)
+        );
+
+        // --- REMOVED: Ribbon icon to open your Collaboration Panel ---
+        // this.addRibbonIcon('share', 'Open Collaboration Panel', () => {
+        //     this.activateView(COLLABORATION_VIEW_TYPE); // Open the main control panel
+        // });
+        // --- END REMOVED ---
+
+        // --- ACTIVE: Original Status Bar Item ---
+        const statusBarItemEl = this.addStatusBarItem();
+        statusBarItemEl.setText('Control Panel');
+        statusBarItemEl.onClickEvent(() => {
+            this.activateView(COLLABORATION_VIEW_TYPE); // Open the main control panel
+        });
+        statusBarItemEl.addClass('collaboration-status-bar-item');
+        // --- END ACTIVE ---
+
 
         // Listen for file changes if auto-update is enabled
         this.app.vault.on("modify", async (file) => {
@@ -219,6 +251,43 @@ export default class MyPlugin extends Plugin {
         this.addSettingTab(new PluginSettingsTab(this.app, this));
     }
 
+    // New method to activate/open a specific collaboration panel view
+    async activateView(viewType: string) {
+        let leaf: WorkspaceLeaf | null = null;
+
+        // 1. Try to find an existing leaf of the target view type
+        const existingTargetLeaves = this.app.workspace.getLeavesOfType(viewType);
+        if (existingTargetLeaves.length > 0) {
+            leaf = existingTargetLeaves[0]; // Use the first existing leaf
+        } else {
+            // 2. If no existing leaf of the target type, try to reuse the current active leaf
+            //    if it's one of *our* plugin's views.
+            const currentActiveLeaf = this.app.workspace.activeLeaf;
+            if (currentActiveLeaf && (
+                currentActiveLeaf.view.getViewType() === COLLABORATION_VIEW_TYPE ||
+                currentActiveLeaf.view.getViewType() === KEY_LIST_VIEW_TYPE ||
+                currentActiveLeaf.view.getViewType() === LINK_NOTE_VIEW_TYPE
+            )) {
+                leaf = currentActiveLeaf;
+            } else {
+                // 3. If neither, get a new right leaf.
+                leaf = this.app.workspace.getRightLeaf(true); // `true` means create if not found
+            }
+        }
+        
+        if (leaf) {
+            await leaf.setViewState({
+                type: viewType,
+                active: true,
+            });
+            // Reveal the leaf in case the sidebar is collapsed
+            this.app.workspace.revealLeaf(leaf);
+        } else {
+            new Notice(`Failed to open ${viewType} panel.`, 4000);
+            console.error(`Collaboration Panel: Could not obtain a workspace leaf for ${viewType}.`);
+        }
+    }
+
     startServer() {
         const server = http.createServer((req, res) => {
             res.writeHead(200, { "Content-Type": "text/plain" });
@@ -231,13 +300,49 @@ export default class MyPlugin extends Plugin {
         });
     }
 
+    startWebSocketServer() {
+        try {
+            const serverPath = this.manifest.dir + "/networking/socket/dist/server.cjs";
+            const childProcess = require("child_process");
+            
+            const serverProcess = childProcess.fork(serverPath, [], {
+                silent: false,
+                stdio: 'inherit'
+            });
+
+            serverProcess.on('error', (err) => {
+                console.error('[Plugin] WebSocket server process error:', err);
+                new Notice(`WebSocket server process encountered an error: ${err.message}`, 5000);
+            });
+
+            serverProcess.on('exit', (code, signal) => {
+                if (code !== 0) {
+                    console.error(`[Plugin] WebSocket server process exited with code ${code} and signal ${signal}`);
+                    new Notice(`WebSocket server process exited unexpectedly. Code: ${code}`, 5000);
+                } else {
+                    console.log('[Plugin] WebSocket server process exited cleanly.');
+                }
+            });
+
+            console.log("[Plugin] WebSocket server started at ws://localhost:3010");
+            new Notice("WebSocket server started at ws://localhost:3010");
+        } catch (err: any) {
+            console.error("[Plugin] Failed to start WebSocket server:", err);
+            new Notice(`Failed to start WebSocket server: ${err.message}. Check console for details.`, 5000);
+        }
+    }
 
     onunload() {
         new Notice('Plugin is unloading!');
-    
+        
+        // Detach all custom views when the plugin unloads
+        this.app.workspace.detachLeavesOfType(COLLABORATION_VIEW_TYPE);
+        this.app.workspace.detachLeavesOfType(KEY_LIST_VIEW_TYPE);
+        this.app.workspace.detachLeavesOfType(LINK_NOTE_VIEW_TYPE);
+
         const adapter = this.app.vault.adapter;
         if (!(adapter instanceof FileSystemAdapter)) return;
-    
+        
         const vaultPath = adapter.getBasePath();
         const pidPath = path.join(
             vaultPath,
@@ -246,7 +351,7 @@ export default class MyPlugin extends Plugin {
             "collaboration-plugin",
             "ws-server.pid"
         );
-    
+        
         if (fs.existsSync(pidPath)) {
             const pid = parseInt(fs.readFileSync(pidPath, "utf8"));
             if (!isNaN(pid)) {

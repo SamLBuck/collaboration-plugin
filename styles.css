@@ -257,3 +257,20 @@ h3 {
     background-position: right 8px center;
     background-size: 10px;
 }
+
+/* --- Status Bar Item Styling --- */
+.collaboration-status-bar-item {
+    /* Basic styling for visibility */
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
+}
+
+.collaboration-status-bar-item:hover {
+    background-color: var(--background-modifier-hover); /* Obsidian's hover background */
+    color: var(--text-accent); /* Obsidian's accent color for text */
+    /* You can add more effects here, e.g., a slight scale or shadow */
+    /* transform: scale(1.05); */
+    /* box-shadow: 0 0 5px rgba(0, 0, 0, 0.2); */
+}

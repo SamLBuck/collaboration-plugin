@@ -1,19 +1,56 @@
+// src/commands/pullCommands.ts - REVISED for consistency with original names in keys/server
+
 import { App, Notice, TFile } from "obsidian";
 import MyPlugin from "../main";
 import { tempIPInputModal } from "../settings/tempIPInputModal";
 import { requestNoteFromPeer } from "../networking/socket/client";
 
-/**
- * Registers the 'Pull Note from Peer (modal)' command.
- * @param app The Obsidian App instance.
- * @param plugin The plugin instance.
- */
+// This helper is for INTERNAL FILE MATCHING IN OBSIDIAN'S VAULT,
+// acknowledging Obsidian's implicit filename sanitization (e.g., spaces to underscores).
+// It does NOT sanitize the key for server communication, as the server expects the original name.
+function getPotentialFilenames(userProvidedKey: string): string[] {
+    const originalFilename = `${userProvidedKey}.md`;
+    // Common Obsidian sanitization: space to underscore, often retaining apostrophes.
+    const sanitizedFilename = `${userProvidedKey.replace(/\s/g, '_')}.md`;
+    // More aggressive sanitization (if Obsidian does more than just spaces or apostrophes, e.g., strips apostrophe)
+    const aggressiveSanitizedFilename = `${userProvidedKey.replace(/[^a-zA-Z0-9_']/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '')}.md`;
+
+    // Return in order of preference/likelihood
+    const potentialNames = [originalFilename]; // Try original first
+    if (sanitizedFilename !== originalFilename) {
+        potentialNames.push(sanitizedFilename); // Then the common space-to-underscore
+    }
+    if (aggressiveSanitizedFilename !== originalFilename && aggressiveSanitizedFilename !== sanitizedFilename) {
+        potentialNames.push(aggressiveSanitizedFilename); // Then a more aggressive, just in case
+    }
+    // Remove duplicates if any (e.g., if original is already "Jon_s_Note")
+    return [...new Set(potentialNames)];
+}
+
+async function findNoteFileInVault(app: App, userProvidedKey: string): Promise<TFile | null> {
+    const potentialPaths = getPotentialFilenames(userProvidedKey);
+
+    for (const path of potentialPaths) {
+        const file = app.vault.getAbstractFileByPath(path);
+        if (file instanceof TFile) {
+            console.log(`[PullCommands] Found existing file: ${path} for key: ${userProvidedKey}`);
+            return file;
+        }
+    }
+    console.log(`[PullCommands] No existing file found for key: '${userProvidedKey}' with potential paths: ${potentialPaths.join(', ')}`);
+    return null;
+}
+
+
 export function registerPullNoteCommand(app: App, plugin: MyPlugin) {
     plugin.addCommand({
         id: "pull-note-from-peer-modal",
-        name: "Pull Note from Server Registry (enter key and IP)",
-        callback: () => {
-          //pullNoteFromPeerNewNote(app);  // pullNoteFromPeerNewNote takes a ip nad key 
+        name: "Pull Note from Server Registry (enter key and IP) (NEW)",
+        callback: async () => {
+            new tempIPInputModal(app, async (ip: string, key: string) => {
+                // Pass the raw user-provided key. Server will handle it as is (no sanitization).
+                await pullNoteFromPeerNewNote(app, ip, key);
+            }).open();
         },
     });
 
@@ -22,6 +59,7 @@ export function registerPullNoteCommand(app: App, plugin: MyPlugin) {
         name: "Rewrite Existing Note (enter key and IP)",
         callback: async () => {
             new tempIPInputModal(app, async (ip: string, key: string) => {
+                // Pass the raw user-provided key.
                 await rewriteExistingNote(app, ip, key);
             }).open();
         },
@@ -32,32 +70,56 @@ export function registerPullNoteCommand(app: App, plugin: MyPlugin) {
         name: "Overwrite Current Note (enter key and IP)",
         callback: async () => {
             new tempIPInputModal(app, async (ip: string, key: string) => {
+                // Pass the raw user-provided key.
                 await overwriteCurrentNote(app, ip, key);
             }).open();
         },
     });
 }
+
+// pullNoteFromPeerNewNote will try to create a new file
 export async function pullNoteFromPeerNewNote(app: App, ip: string, key: string) {
-      try {
+    try {
+        // 'key' here is the raw user input (e.g., "Jon's Note"). Send it directly to server.
         const content = await requestNoteFromPeer(`ws://${ip}:3010`, key);
-        await app.vault.create(`${key}.md`, content);
-        new Notice(`Note '${key}' pulled and created.`);
-      } catch (err) {
+        
+        // Find the most likely filename Obsidian would create/expect for this key.
+        // This is still subject to Obsidian's internal filename sanitization,
+        // but we'll try to provide the most original name possible for creation.
+        const potentialFilenamesForCreation = getPotentialFilenames(key);
+        const desiredFilenamePath = potentialFilenamesForCreation[0]; 
+
+        // Check if a file representing this note already exists (e.g., Jon's Note.md OR Jon's_Note.md)
+        const existingFileCheck = await findNoteFileInVault(app, key);
+        if (existingFileCheck) {
+            new Notice(`Note '${existingFileCheck.basename}' already exists for key '${key}'. Use 'Rewrite Existing Note' to overwrite or delete it first.`);
+            return;
+        }
+
+        // Create the new note. Obsidian will apply its own sanitization here.
+        // So, if `desiredFilenamePath` is 'Jon's Note.md', the actual file created might be 'Jon's_Note.md'.
+        await app.vault.create(desiredFilenamePath, content);
+        new Notice(`Note '${key}' pulled and created as '${desiredFilenamePath}'.`); // Clarify the actual filename
+    } catch (err) {
         console.error("Failed to pull note:", err);
         new Notice(`Failed to pull note: ${err}`);
-      }
-  }
+    }
+}
 
-  export async function rewriteExistingNote(app: App, ip: string, key: string) {
+// rewriteExistingNote will try to find and overwrite an existing file
+export async function rewriteExistingNote(app: App, ip: string, key: string) {
     try {
+        // 'key' here is the raw user input (e.g., "Jon's Note"). Send it directly to server.
         const content = await requestNoteFromPeer(`ws://${ip}:3010`, key);
-        const existingFile = app.vault.getAbstractFileByPath(`${key}.md`);
         
-        if (existingFile && existingFile instanceof TFile) {
+        // Find the existing file in the vault, considering Obsidian's potential renaming
+        const existingFile = await findNoteFileInVault(app, key);
+
+        if (existingFile) {
             await app.vault.modify(existingFile, content);
-            new Notice(`Note '${key}' pulled and rewritten.`);
+            new Notice(`Note '${key}' pulled and rewritten as '${existingFile.basename}'.`);
         } else {
-            new Notice(`Note '${key}' does not exist or is not a file. Cannot rewrite.`);
+            new Notice(`Note based on '${key}' not found in vault. Cannot rewrite. Consider using 'Pull Note (NEW)' to create it.`);
         }
     } catch (err) {
         console.error("Failed to rewrite note:", err);
@@ -67,6 +129,7 @@ export async function pullNoteFromPeerNewNote(app: App, ip: string, key: string)
 
 export async function overwriteCurrentNote(app: App, ip: string, key: string) {
     try {
+        // 'key' here is the raw user input (e.g., "Jon's Note"). Send it directly to server.
         const content = await requestNoteFromPeer(`ws://${ip}:3010`, key);
         const activeFile = app.workspace.getActiveFile();
 
@@ -81,4 +144,3 @@ export async function overwriteCurrentNote(app: App, ip: string, key: string) {
         new Notice(`Failed to overwrite current note: ${err}`);
     }
 }
-

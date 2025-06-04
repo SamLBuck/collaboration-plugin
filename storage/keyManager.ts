@@ -17,11 +17,11 @@ import { getLocalIP } from "../utils/get-ip";
  */
 export async function generateKey(plugin: MyPlugin, noteName: string, accessType: string): Promise<KeyItem> {
     const localIP = await getLocalIP();
-    const sanitizedNoteName = noteName.replace(/\s/g, '_');
-    const newKeyId = `${localIP}-${sanitizedNoteName}|${accessType}`;
+    // const sanitizedNoteName = noteName.replace(/\s/g, '_'); // REMOVE OR COMMENT OUT THIS LINE
+    const newKeyId = `${localIP}-${noteName}|${accessType}`; // USE noteName DIRECTLY
     return {
         ip: newKeyId,
-        note: noteName,
+        note: noteName, // Keep original note name here too for KeyItem.note
         access: accessType
     };
 }
