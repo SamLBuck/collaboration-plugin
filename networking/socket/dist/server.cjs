@@ -1,4 +1,5 @@
 //import { getNoteRegistry } from "main.ts";
+
 process.on("uncaughtException", (err) => {
   console.error("Uncaught Exception in server.cjs:", err);
 });
@@ -46,7 +47,7 @@ wss.on("connection", (socket) => {
         const { key, content } = message;
         registerNote(key, content);
         socket.send(
-          JSON.stringify({
+          JSON.stringify({     
             type: "ack",
             payload: { message: `Loaded note '${key}' into registry` },
           })

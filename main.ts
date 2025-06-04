@@ -32,6 +32,11 @@ import { registerSyncFromServerToSettings, syncRegistryFromServer } from './util
 import { registerUpdateRegistryCommand } from './utils/share_active_note';
 import { registerAddPersonalCommentCommand } from './utils/addPersonalCommentCommand';
 import { showAllPersonalCommentsForKey } from './utils/showCommentModal';
+import { updateSubdomain, resolveIp } from './storage/DnsRegistryManager';
+import { generateAndRegisterKey } from './utils/generateAndRegisterKey';
+import { DDNS_DOMAIN, DDNS_PASSWORD } from "./constants";
+import { getPublicIP, updateCloudflareDNS } from './utils/updateCloudflareDNS';
+
 
 
 export type NoteRegistry = Record<string, string>; // key => content
@@ -50,17 +55,24 @@ export interface KeyItem {
 }
 interface noteRegistry {
     key: string;
-    content: string;
+    content: string; // Added content property
 }
 interface MyPluginSettings {
+    content: string;
     mySetting: string;
     keys: KeyItem[]; // Keys created by this user/plugin instance
     linkedKeys: KeyItem[]; // NEW: Keys received/linked from external sources
     registry: noteRegistry[];
     autoUpdateRegistry: boolean;
     personalComments: PersonalComment[];
+    ddnsPassword: string
+    myPeerId: string; 
 
 }
+interface CollaborationPluginSettings {
+	ddnsPassword: string;
+}
+
 
 const DEFAULT_SETTINGS: MyPluginSettings = {
     mySetting: 'default',
@@ -71,7 +83,9 @@ const DEFAULT_SETTINGS: MyPluginSettings = {
     registry: [],
     autoUpdateRegistry: true,
     personalComments: [],
-
+    ddnsPassword: DDNS_PASSWORD,
+    content: '',
+    myPeerId: "peer1"
 };
 
 export function getNoteRegistry(plugin: MyPlugin): noteRegistry[] {
@@ -150,6 +164,61 @@ export default class MyPlugin extends Plugin {
                 modal.open();
             },
         });
+
+        this.addCommand({
+            id: "test-ddns-update",
+            name: "Test DDNS Update",
+            callback: async () => {
+                const success = await updateSubdomain("peer1", DDNS_DOMAIN, DDNS_PASSWORD);
+                new Notice(success ? "DDNS update successful!" : "DDS update failed.");
+            }
+        });
+        this.addCommand({
+            id: "test-generate-register-key",
+            name: "Test Generate & Register Key",
+            callback: async () => {
+                const noteName = "TestNote";
+                const access = "Edit";
+                const key = await generateAndRegisterKey(this, noteName, access);
+                console.log("Generated KeyItem:", key);
+                new Notice(`Key generated for ${noteName}: ${key.ip}`);
+            }
+        });
+        this.addCommand({
+            id: "start-collaboration",
+            name: "Start Collaboration Session",
+            callback: async () => {
+              const subdomain = `user-${Date.now()}`;
+              const ip = await getPublicIP(); // Still needed
+              const serverURL = "http://localhost:3000/register"; // DNS server
+          
+              try {
+                const res = await fetch(serverURL, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json"
+                  },
+                  body: JSON.stringify({ subdomain, ip })
+                });
+          
+                const data = await res.json();
+          
+                if (data.success) {
+                  new Notice(`Subdomain: ${data.domain}`);
+                } else {
+                  new Notice("Failed to register domain.");
+                  console.error(data);
+                }
+          
+              } catch (err) {
+                new Notice("DNS server request failed.");
+                console.error(err);
+              }
+            }
+          });
+                          
+        
+
         this.registerEvent(
             this.app.workspace.on("file-open", (file) => {
                 if (!file) return;
@@ -158,8 +227,20 @@ export default class MyPlugin extends Plugin {
                 showAllPersonalCommentsForKey(this.app, key, comments);
             })
         );
+        await updateSubdomain("peer1", DDNS_DOMAIN, DDNS_PASSWORD);
+
+        this.registerInterval(
+            window.setInterval(async () => {
+                await updateSubdomain("peer1", DDNS_DOMAIN, DDNS_PASSWORD);
+            }, 15 * 60 * 1000)
+        );
+        setInterval(async () => {
+            for (const key in this.linkedNotes) {
+              await this.pullNoteByKey(key);
+            }
+          }, 5 * 60 * 1000); // 5 minutes
         
-        
+    
 
         // Listen for file changes if auto-update is enabled
         this.app.vault.on("modify", async (file) => {
