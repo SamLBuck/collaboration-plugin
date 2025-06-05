@@ -34,6 +34,8 @@ import { registerAddPersonalCommentCommand } from './utils/addPersonalCommentCom
 import { showAllPersonalCommentsForKey } from './utils/showCommentModal';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+const execAsync = promisify(exec);
+
 const { generateMACKey } = require("./utils/generateMACKey");
 
 
@@ -105,17 +107,25 @@ export function getNoteContentByKey(plugin: MyPlugin, key: string): string | und
     const registry = getNoteRegistry(plugin);
     return registry.find(item => item.key === key)?.content;
 }
-function pingSweep(startIp: string, end: number = 254) {
-    const base = startIp.split(".").slice(0, 3).join(".");
-    for (let i = 1; i <= end; i++) {
-      exec(`ping -n 1 ${base}.${i}`, (err) => {
-        if (err) {
-          return;
-        }
-      });
-    }
-  }
-  
+export async function quickPingSweep(): Promise<void> {
+	const base = "10.19.56"; // hardcoded your /18 subnet range
+	const activeIps: string[] = [];
+
+	for (let i = 1; i <= 50; i++) {
+		const ip = `${base}.${i}`;
+		try {
+			const { stdout } = await execAsync(`ping -n 1 -w 100 ${ip}`);
+			if (stdout.includes("TTL=")) {
+				console.log(`✅ Alive: ${ip}`);
+				activeIps.push(ip);
+			}
+		} catch {
+			// silent fail for no response
+		}
+	}
+
+	console.log(`Done. ${activeIps.length} hosts responded.`);
+}
 
 
 export default class MyPlugin extends Plugin {
@@ -126,7 +136,7 @@ export default class MyPlugin extends Plugin {
     async onload() {
         console.log("Loading collaboration plugin...");
         await this.loadSettings();
-        pingSweep("192.168.1.1");
+        quickPingSweep();
         
         // Start the HTTP server
         this.startServer();
