@@ -80,29 +80,23 @@ function normalizeMac(mac: string): string {
         const lines = stdout.split("\n");
         for (const line of lines) {
           console.log(line);
-        }
-        console.log("=====================");
-  
-        const normalizedTarget = normalizeMac(macAddress);
-  
-        for (const line of lines) {
           const parts = line.trim().split(/\s+/);
           if (parts.length >= 2) {
             const ip = parts[0];
-            const mac = normalizeMac(parts[1]);
-            if (mac === normalizedTarget) {
+            const mac = parts[1];
+            if (mac.toLowerCase() === macAddress.toLowerCase()) {
               console.log(`[MATCH] Found IP ${ip} for MAC ${mac}`);
               return resolve(ip);
             }
           }
         }
   
-        console.warn(`[No Match] Could not find IP for MAC: ${normalizedTarget}`);
+        console.warn(`[MISS] MAC ${macAddress} not found in ARP table`);
         resolve(null);
       });
     });
   }
-      async function pullNoteByKey(key: string): Promise<string | null> {
+    async function pullNoteByKey(key: string): Promise<string | null> {
     const macHash = key.split("::")[0];
     const ip = await findIpForMac(macHash);
     if (!ip) {
