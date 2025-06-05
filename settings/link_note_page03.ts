@@ -99,6 +99,7 @@ export class LinkNoteModal extends Modal {
                             if (!parsedKeyInfo || !parsedKeyInfo.mac || !parsedKeyInfo.noteName) {
                                 throw new Error('Invalid key format');
                             }
+							console.log("Parsed Key Info:", parsedKeyInfo, parsedKeyInfo.mac, parsedKeyInfo.noteName);
                         } catch (error: any) {
                             new Notice(`Key parsing error: ${error.message}`, 5000);
                             return;

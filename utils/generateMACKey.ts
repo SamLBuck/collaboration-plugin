@@ -67,29 +67,29 @@ function normalizeMac(mac: string): string {
     return mac.toLowerCase().replace(/[^a-f0-9]/gi, "").match(/.{1,2}/g)?.join("-") ?? "";
   }
 
-function findIpForMac(macAddress: string): Promise<string | null> {
+
+  function findIpForMac(macAddress: string): Promise<string | null> {
     return new Promise((resolve, reject) => {
       exec("arp -a", (error, stdout) => {
-        if (error) return reject(`ARP command failed: ${error}`);
-  
-        const normalizedTargetMac = normalizeMac(macAddress);
-        const lines = stdout.split("\n");
-  
-        for (const line of lines) {
-          const match = line.match(/(\d{1,3}(?:\.\d{1,3}){3})\s+([\da-fA-F:-]{17})/);
-          if (match) {
-            const [_, ip, mac] = match;
-            if (normalizeMac(mac) === normalizedTargetMac) {
-              return resolve(ip);
-            }
-          }
+        if (error) {
+          console.error("ARP command failed:", error);
+          return reject(`ARP command failed: ${error}`);
         }
   
-        resolve(null);
+        console.log("=== arp -a output ===");
+        const lines = stdout.split("\n");
+        for (const line of lines) {
+          console.log(line); // just print each line for now
+        }
+        console.log("=====================");
+  
+        // You can put a simple matching logic here later if you want
+  
+        resolve(null); // Just for now
       });
     });
   }
-  async function pullNoteByKey(key: string): Promise<string | null> {
+    async function pullNoteByKey(key: string): Promise<string | null> {
     const macHash = key.split("::")[0];
     const ip = await findIpForMac(macHash);
     if (!ip) {
