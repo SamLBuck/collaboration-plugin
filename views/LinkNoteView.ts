@@ -1,15 +1,52 @@
-import { App, ItemView, WorkspaceLeaf, Setting, TextComponent, ButtonComponent, Notice, TFile } from 'obsidian';
+// views/LinkNoteView.ts
+import { App, ItemView, WorkspaceLeaf, ButtonComponent, Notice, Setting, TextComponent, Modal, DropdownComponent, TFile } from 'obsidian';
 import MyPlugin, { KeyItem } from '../main';
+import { requestNoteFromPeer } from '../networking/socket/client';
 import { pullNoteFromPeerNewNote, rewriteExistingNote } from '../utils/pull_note_command';
 import { parseKey } from '../utils/parse_key';
-import { ConfirmationModal } from '../settings/key_list_page02'; // Re-using ConfirmationModal
+
+// Re-use ConfirmationModal as it's identical
+class ConfirmationModal extends Modal {
+    message: string;
+    callback: (confirmed: boolean) => void;
+
+    constructor(app: App, message: string, callback: (confirmed: boolean) => void) {
+        super(app);
+        this.message = message;
+        this.callback = callback;
+    }
+
+    onOpen() {
+        const { contentEl } = this;
+        contentEl.empty();
+        contentEl.createEl('h2', { text: 'Confirmation' });
+        contentEl.createEl('p', { text: this.message });
+        new Setting(contentEl)
+            .addButton(button => {
+                button.setButtonText('Confirm').setCta().setClass('mod-warning').onClick(() => {
+                    this.callback(true);
+                    this.close();
+                });
+            })
+            .addButton(button => {
+                button.setButtonText('Cancel').onClick(() => {
+                    this.callback(false);
+                    this.close();
+                });
+            });
+    }
+    onClose() {
+        this.contentEl.empty();
+    }
+}
+// --- END INLINED: ConfirmationModal class definition ---
 
 export const LINK_NOTE_VIEW_TYPE = 'link-note-view';
 
 export class LinkNoteView extends ItemView {
     plugin: MyPlugin;
     linkNoteKeyInput: TextComponent;
-    private linkedKeysContainer: HTMLElement;
+    private linkedKeysContainer: HTMLElement; // Container for displaying linked keys
 
     constructor(leaf: WorkspaceLeaf, plugin: MyPlugin) {
         super(leaf);
@@ -25,28 +62,28 @@ export class LinkNoteView extends ItemView {
     }
 
     getIcon(): string {
-        return 'link'; // Icon for linking
+        return 'link';
     }
 
     async onOpen(): Promise<void> {
-        const { contentEl } = this;
-        contentEl.empty();
-        contentEl.addClass('link-note-panel'); // Add a class for potential styling
+        this.contentEl.empty();
+        this.contentEl.addClass('link-note-panel');
 
         // Back button to main Collaboration Panel
-        new Setting(contentEl)
+        new Setting(this.contentEl)
             .addButton(button => {
                 button.setButtonText('← Back to Control Panel')
                     .onClick(() => {
-                        this.plugin.activateView('collaboration-panel-view'); // Go back to main panel
+                        this.plugin.activateView('collaboration-panel-view');
                     });
             });
 
-        // --- Section: Pull Collaborative Note ---
-        contentEl.createEl("h2", { text: "Pull Collaborative Note" });
-        contentEl.createEl('p', { text: 'Use this section to pull a shared note from a peer using a key.' });
+        // --- Start copying UI and logic from LinkNoteModal ---
+        this.contentEl.createEl("h2", { text: "Pull Collaborative Note" });
+        this.contentEl.createEl('p', { text: 'Use this section to pull a shared note from a peer using a key.' });
 
-        new Setting(contentEl)
+        // Input for the Share Key / Password (consistent with modal)
+        new Setting(this.contentEl)
             .setName('Share Key / Password')
             .setDesc('Enter the key/password for the shared note you want to pull (e.g., IP-NoteName).')
             .addText(text => {
@@ -54,7 +91,8 @@ export class LinkNoteView extends ItemView {
                 text.setPlaceholder('e.g., 192.168.1.100-MySharedNote');
             });
 
-        new Setting(contentEl)
+        // Pull Button (consistent with modal)
+        new Setting(this.contentEl)
             .addButton(button => {
                 button.setButtonText('Pull Note')
                     .setCta()
@@ -77,8 +115,8 @@ export class LinkNoteView extends ItemView {
                         }
 
                         const { ip, noteName: keyBasename } = parsedKeyInfo;
-                        const filePath = `${keyBasename}.md`;
-                        
+                        const filePath = `${keyBasename}.md`; // Assuming all notes are in the root for now
+
                         let file: TFile | null = this.app.vault.getAbstractFileByPath(filePath) as TFile;
                         let overwrite = false;
 
@@ -103,19 +141,25 @@ export class LinkNoteView extends ItemView {
                             // Add the successfully used key to linkedKeys if it's not already there
                             const existingLinkedKey = this.plugin.settings.linkedKeys.find(item => item.ip === input);
                             if (!existingLinkedKey) {
-                                const newLinkedKeyItem: KeyItem = { ip: input, note: keyBasename, access: 'Pulled' }; // Use 'Pulled' access type for linked keys
+                                const newLinkedKeyItem: KeyItem = {
+                                    ip: input, note: keyBasename, access: 'Pulled',
+                                    content: undefined
+                                };
                                 this.plugin.settings.linkedKeys.push(newLinkedKeyItem);
                                 await this.plugin.saveSettings();
                                 new Notice(`Key "${input}" added to your linked keys list.`, 3000);
                             }
 
                             // Open the created/updated note
-                            file = this.app.vault.getAbstractFileByPath(filePath) as TFile;
+                            file = this.app.vault.getAbstractFileByPath(filePath) as TFile; // Re-fetch in case it was newly created
                             if (file) {
-                                this.app.workspace.openLinkText(file.path, '', false);
+                                await this.app.workspace.getLeaf(true).openFile(file); // Open in a new leaf
+                                new Notice(`Pulled and opened "${file.basename}" successfully.`, 4000);
+                            } else {
+                                new Notice(`Pulled "${keyBasename}" successfully, but could not open the file.`, 4000);
                             }
-                            
-                            // Re-render the linked keys list
+
+                            // Re-render the linked keys list regardless of note opening success
                             await this.renderLinkedKeysContent(this.linkedKeysContainer);
 
                         } catch (error: any) {
@@ -125,20 +169,15 @@ export class LinkNoteView extends ItemView {
                     });
             });
 
-        // --- Section for displaying Linked Keys ---
-        contentEl.createEl("h2", { text: "My Linked Keys (from others)" });
-        this.linkedKeysContainer = contentEl.createDiv({ cls: 'linked-keys-container' });
+        // --- End copying UI and logic from LinkNoteModal ---
+
+        this.contentEl.createEl("h3", { text: "My Linked Keys (from others)" });
+        this.linkedKeysContainer = this.contentEl.createDiv({ cls: 'linked-keys-container' });
         await this.renderLinkedKeysContent(this.linkedKeysContainer);
     }
 
     async onClose(): Promise<void> {
         console.log('Link Note View closed');
-    }
-
-    // Method to re-render the linked keys display
-    async refreshDisplay(): Promise<void> {
-        console.log('Refreshing Link Note View display...');
-        await this.renderLinkedKeysContent(this.linkedKeysContainer);
     }
 
     private async renderLinkedKeysContent(containerToRenderInto: HTMLElement): Promise<void> {
@@ -147,22 +186,50 @@ export class LinkNoteView extends ItemView {
         const linkedKeys = this.plugin.settings.linkedKeys ?? [];
 
         if (linkedKeys.length === 0) {
-            containerToRenderInto.createEl('p', { text: 'No external keys linked yet. Pull a note using a key from a peer to add it here.' , cls: 'empty-list-message' });
+            containerToRenderInto.createEl('p', { text: 'No external keys linked yet. Pull a note using a key from a peer to add it here.', cls: 'empty-list-message' });
         } else {
             const listHeader = containerToRenderInto.createDiv({ cls: 'linked-keys-header' });
             listHeader.style.display = 'grid';
-            listHeader.style.gridTemplateColumns = '2fr 1.5fr 0.5fr';
-            listHeader.createSpan({ text: 'Key (Full)' });
-            listHeader.createSpan({ text: 'Note Name' });
-            listHeader.createSpan({ text: 'Actions' });
+            listHeader.style.gridTemplateColumns = '2fr 1.5fr 1fr 3fr 0.5fr'; // 5 columns
 
-            linkedKeys.forEach((keyItem: KeyItem) => {
+            // CORRECTED: Using .classList.add() instead of .setClass()
+            listHeader.createSpan({ text: 'Key (Full)' }).classList.add('list-header-cell');
+            listHeader.createSpan({ text: 'Note Name' }).classList.add('list-header-cell');
+            listHeader.createSpan({ text: 'Access Type' }).classList.add('list-header-cell');
+            listHeader.createSpan({ text: 'Content (Partial)' }).classList.add('list-header-cell');
+            listHeader.createSpan({ text: 'Actions' }).classList.add('list-header-cell');
+
+            for (const keyItem of linkedKeys) {
                 const keyRow = containerToRenderInto.createDiv({ cls: 'linked-keys-row' });
                 keyRow.style.display = 'grid';
-                keyRow.style.gridTemplateColumns = '2fr 1.5fr 0.5fr';
+                keyRow.style.gridTemplateColumns = '2fr 1.5fr 1fr 3fr 0.5fr'; // 5 columns
 
-                keyRow.createDiv({ text: keyItem.ip, cls: ['linked-key-id-display', 'field-content-box'] });
-                keyRow.createDiv({ text: keyItem.note, cls: ['linked-note-name-display', 'field-content-box'] });
+                keyRow.createDiv({ text: keyItem.ip, cls: ['key-id-display', 'field-content-box'] });
+                keyRow.createDiv({ text: keyItem.note, cls: ['note-name-display', 'field-content-box'] });
+
+                // Access Type display (always 'Pulled' for this view)
+                keyRow.createDiv({ text: 'Pulled', cls: ['access-type-display', 'field-content-box'] });
+
+                // Content display for the pulled note
+                const contentDiv = keyRow.createDiv({ cls: ['note-content-display', 'field-content-box'] });
+                const filePath = `${keyItem.note}.md`; // Assuming note is in root and is .md
+                const noteFile = this.app.vault.getAbstractFileByPath(filePath);
+
+                if (noteFile instanceof TFile) {
+                    try {
+                        const content = await this.app.vault.read(noteFile);
+                        const snippet = content.substring(0, 100) + (content.length > 100 ? '...' : '');
+                        contentDiv.setText(snippet);
+                        contentDiv.setAttr('title', content); // Full content on hover
+                    } catch (readError) {
+                        console.error(`Error reading note content for "${keyItem.note}":`, readError);
+                        contentDiv.setText('Error reading content.');
+                        contentDiv.setAttr('title', 'Could not read file content.');
+                    }
+                } else {
+                    contentDiv.setText('File not found.');
+                    contentDiv.setAttr('title', `Note file "${filePath}" not found in vault.`);
+                }
 
                 const actionsDiv = keyRow.createDiv({ cls: 'linked-key-actions' });
 
@@ -175,26 +242,26 @@ export class LinkNoteView extends ItemView {
                         new Notice(`Key "${keyItem.ip}" copied to clipboard!`, 2000);
                     });
 
-                // Delete button for linked keys
+                // Delete button for linked keys (trash icon)
                 new ButtonComponent(actionsDiv)
                     .setIcon('trash')
-                    .setTooltip('Remove from Linked Keys')
+                    .setTooltip('Remove from Linked Keys (Does NOT delete the note file)')
                     .setClass('mod-warning')
                     .onClick(async () => {
                         const confirmDelete = await new Promise<boolean>(resolve => {
-                            new ConfirmationModal(this.app, `Are you sure you want to remove the linked key for "${keyItem.note}"? This will not delete the note itself.`, resolve).open();
+                            new ConfirmationModal(this.app, `Are you sure you want to remove the linked key for "${keyItem.note}"? This will NOT delete the actual note file from your vault.`, resolve).open();
                         });
 
                         if (confirmDelete) {
                             this.plugin.settings.linkedKeys = this.plugin.settings.linkedKeys.filter(item => item.ip !== keyItem.ip);
                             await this.plugin.saveSettings();
-                            new Notice(`Linked key for "${keyItem.note}" removed.`, 3000);
-                            await this.refreshDisplay(); // Re-render the list
+                            new Notice(`Linked key for "${keyItem.note}" removed. The note file remains.`, 3000);
+                            await this.renderLinkedKeysContent(containerToRenderInto); // Re-render the list
                         } else {
                             new Notice("Removal cancelled.", 2000);
                         }
                     });
-            });
+            }
         }
     }
 }

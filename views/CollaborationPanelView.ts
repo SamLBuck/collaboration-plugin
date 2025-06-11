@@ -1,24 +1,62 @@
 // views/CollaborationPanelView.ts
-import { App, ItemView, WorkspaceLeaf, ButtonComponent, Notice, Setting, TextComponent, setIcon, TFile } from 'obsidian';
-import MyPlugin, { deleteNoteFromRegistry } from '../main'; // Adjust this path if your 'main.ts' is not one level up
-import { generateKey, addKey } from '../storage/keyManager';
+import { App, ItemView, WorkspaceLeaf, ButtonComponent, Notice, Setting, TextComponent, setIcon, TFile, Modal } from 'obsidian';
+import MyPlugin from '../main';
+// UPDATED IMPORT: Added deleteKeyAndContent
+import { generateKey, addKey, deleteKeyAndContent } from '../storage/keyManager';
 import { shareCurrentNoteWithFileName } from '../utils/share_active_note';
-import { requestNoteFromPeer } from '../networking/socket/client'; // Ensure this is imported
+import { requestNoteFromPeer } from '../networking/socket/client';
+// Removed deleteNoteFromRegistry import from main, as deleteKeyAndContent handles it
+// import { deleteNoteFromRegistry } from '../main'; 
 
 // Import the new view types for navigation
 import { KEY_LIST_VIEW_TYPE } from './KeyListView';
 import { LINK_NOTE_VIEW_TYPE } from './LinkNoteView';
 
+// --- INLINED: ConfirmationModal class definition (consistent with other views) ---
+class ConfirmationModal extends Modal {
+    message: string;
+    callback: (confirmed: boolean) => void;
+
+    constructor(app: App, message: string, callback: (confirmed: boolean) => void) {
+        super(app);
+        this.message = message;
+        this.callback = callback;
+    }
+
+    onOpen() {
+        const { contentEl } = this;
+        contentEl.empty();
+        contentEl.createEl('h2', { text: 'Confirmation' });
+        contentEl.createEl('p', { text: this.message });
+        new Setting(contentEl)
+            .addButton(button => {
+                button.setButtonText('Confirm').setCta().setClass('mod-warning').onClick(() => {
+                    this.callback(true);
+                    this.close();
+                });
+            })
+            .addButton(button => {
+                button.setButtonText('Cancel').onClick(() => {
+                    this.callback(false);
+                    this.close();
+                });
+            });
+    }
+    onClose() {
+        this.contentEl.empty();
+    }
+}
+// --- END INLINED: ConfirmationModal class definition ---
 
 export const COLLABORATION_VIEW_TYPE = 'collaboration-panel-view';
 
-// Define types for note categorization
-type NoteType = 'normal' | 'pushable' | 'pullable';
+// Define types for note categorization with new names
+type NoteType = 'none' | 'push' | 'pulled';
 
 export class CollaborationPanelView extends ItemView {
     plugin: MyPlugin;
-    activeNoteFile: TFile | null = null; // Store the active file
-    noteType: NoteType = 'normal'; // Store the determined note type
+    activeNoteFile: TFile | null = null;
+    noteType: NoteType = 'none';
 
     noteInput: TextComponent;
     accessTypeView: HTMLInputElement;
@@ -47,14 +85,11 @@ export class CollaborationPanelView extends ItemView {
         this.contentEl.empty();
         this.contentEl.addClass('collaboration-panel');
 
-        // Initial determination of note type when the panel is opened
         this.activeNoteFile = this.app.workspace.getActiveFile();
         this.noteType = await this.determineNoteType(this.activeNoteFile);
         
-        // Render the UI based on the determined note type
         this.renderPanelContent();
 
-        // Register a file-open event listener to update the panel when a new note is opened
         this.registerEvent(
             this.app.workspace.on("file-open", async (file) => {
                 if (file) {
@@ -70,62 +105,70 @@ export class CollaborationPanelView extends ItemView {
         console.log('Collaboration Panel View closed');
     }
 
-    // New method to determine the type of the active note
     private async determineNoteType(file: TFile | null): Promise<NoteType> {
         if (!file) {
-            return 'normal'; // No file open, consider it normal/generic
+            return 'none';
         }
 
         const noteName = file.basename;
 
-        // Check if a key has been generated for this note (pushable)
         const isPushable = this.plugin.settings.keys.some(keyItem => keyItem.note === noteName);
         if (isPushable) {
-            return 'pushable';
+            return 'push';
         }
 
-        // Check if this note has been pulled/linked from an external source (pullable)
         const isPullable = this.plugin.settings.linkedKeys.some(keyItem => keyItem.note === noteName);
         if (isPullable) {
-            return 'pullable';
+            return 'pulled';
         }
 
-        return 'normal'; // Default if neither pushable nor pullable
+        return 'none';
     }
 
-    // New method to render the appropriate UI based on note type
     private renderPanelContent(): void {
-        this.contentEl.empty(); // Clear existing content
+        this.contentEl.empty();
 
         this.contentEl.createEl('h1', { text: `Control Panel for: ${this.activeNoteFile?.basename || 'No Note Open'}` });
-        this.contentEl.createEl('p', { text: `Note Type: ${this.noteType.charAt(0).toUpperCase() + this.noteType.slice(1)}` });
+        
+        let displayNoteTypeName: string;
+        switch (this.noteType) {
+            case 'none':
+                displayNoteTypeName = 'None';
+                break;
+            case 'push':
+                displayNoteTypeName = 'Push';
+                break;
+            case 'pulled':
+                displayNoteTypeName = 'Pulled';
+                break;
+            default:
+                displayNoteTypeName = 'Unknown';
+        }
+        this.contentEl.createEl('p', { text: `Note Type: ${displayNoteTypeName}` });
+
         this.contentEl.createEl('hr');
 
         switch (this.noteType) {
-            case 'pushable':
-                this.renderPushableNotePanel();
+            case 'push':
+                this.renderPushNotePanel();
                 break;
-            case 'pullable':
-                this.renderPullableNotePanel();
+            case 'pulled':
+                this.renderPulledNotePanel();
                 break;
-            case 'normal':
+            case 'none':
             default:
-                this.renderNormalNotePanel();
+                this.renderNoneNotePanel();
                 break;
         }
 
-        // Always include navigation buttons at the bottom for consistency
         this.renderNavigationButtons();
-
-        // Always include Automatic Note Registry Updates for consistency
         this.renderAutomaticUpdatesSection();
     }
 
-    private renderNormalNotePanel(): void {
+    private renderNoneNotePanel(): void {
         this.contentEl.createEl('h2', { text: 'Create New Shareable Note' });
         this.contentEl.createEl('p', { text: 'This note is not currently shared. Generate a new key to share it.' });
         
-        // Original Generate New Key section
         new Setting(this.contentEl)
             .setName('Generate New Key')
             .setDesc('Generate a new key (IP-NoteName format) for the specified note and access type. The generated key will be copied to your clipboard and saved.')
@@ -163,7 +206,6 @@ export class CollaborationPanelView extends ItemView {
                                 new Notice(`Generated & Saved:\n${newKeyItem.ip}\nFor Note: "${newKeyItem.note}" (Access: ${newKeyItem.access})`, 8000);
                                 await navigator.clipboard.writeText(newKeyItem.ip);
                                 shareCurrentNoteWithFileName(this.plugin, this.app, newKeyItem.note);
-                                // After generating, re-render to potentially switch to 'pushable' panel
                                 this.activeNoteFile = this.app.workspace.getActiveFile();
                                 this.noteType = await this.determineNoteType(this.activeNoteFile);
                                 this.renderPanelContent();
@@ -236,11 +278,11 @@ export class CollaborationPanelView extends ItemView {
         this.accessTypeEditWithApproval = createCheckbox('Edit w/ Approval', false);
     }
 
-    private renderPushableNotePanel(): void {
+    private renderPushNotePanel(): void {
         const noteName = this.activeNoteFile?.basename || '';
         const keyItem = this.plugin.settings.keys.find(k => k.note === noteName);
 
-        this.contentEl.createEl('h2', { text: 'Pushable Note Tools' });
+        this.contentEl.createEl('h2', { text: 'Push Note Tools' });
         this.contentEl.createEl('p', { text: `This note ("${noteName}") has a key associated with it. You can push changes.` });
         
         if (keyItem) {
@@ -264,20 +306,35 @@ export class CollaborationPanelView extends ItemView {
                 );
             
             new Setting(this.contentEl)
-                .setName('Delete Key')
-                .setDesc('Delete the key associated with this note. It will no longer be shareable via this key.')
+                .setName('Delete Key & Registry Content') // UPDATED: Name to reflect both actions
+                .setDesc('Delete the key associated with this note AND remove its content from your local sharing registry. It will no longer be shareable via this key.') // UPDATED: Description
                 .addButton(button =>
                     button
-                        .setButtonText('Delete Key')
+                        .setButtonText('Delete Key & Content') // UPDATED: Button text
                         .setWarning()
                         .onClick(async () => {
                             if (keyItem) {
-                                await deleteNoteFromRegistry(this.plugin, keyItem.ip); // Use the full key (ip) to delete
-                                new Notice(`Key for "${noteName}" deleted.`);
-                                // After deletion, re-render to potentially switch to 'normal' panel
-                                this.activeNoteFile = this.app.workspace.getActiveFile();
-                                this.noteType = await this.determineNoteType(this.activeNoteFile);
-                                this.renderPanelContent();
+                                const confirmDelete = await new Promise<boolean>(resolve => {
+                                    new ConfirmationModal(this.app, `Are you sure you want to delete the key for "${noteName}" AND remove its content from your local sharing registry? This action cannot be undone.`, resolve).open(); // UPDATED: Confirmation message
+                                });
+
+                                if (confirmDelete) {
+                                    // UPDATED: Call deleteKeyAndContent to delete both
+                                    const deleted = await deleteKeyAndContent(this.plugin, keyItem.note);
+                                    if (deleted) {
+                                        // UPDATED: Success notice
+                                        new Notice(`Key for "${noteName}" and its content deleted from registry.`, 5000);
+                                        // After deletion, re-render to potentially switch to 'none' panel
+                                        this.activeNoteFile = this.app.workspace.getActiveFile();
+                                        this.noteType = await this.determineNoteType(this.activeNoteFile);
+                                        this.renderPanelContent();
+                                    } else {
+                                        // UPDATED: Failure notice
+                                        new Notice(`Failed to delete key for "${noteName}". It might not exist.`, 4000);
+                                    }
+                                } else {
+                                    new Notice("Deletion cancelled.", 2000);
+                                }
                             }
                         })
                 );
@@ -286,11 +343,11 @@ export class CollaborationPanelView extends ItemView {
         }
     }
 
-    private renderPullableNotePanel(): void {
+    private renderPulledNotePanel(): void {
         const noteName = this.activeNoteFile?.basename || '';
         const keyItem = this.plugin.settings.linkedKeys.find(k => k.note === noteName);
 
-        this.contentEl.createEl('h2', { text: 'Pullable Note Tools' });
+        this.contentEl.createEl('h2', { text: 'Pulled Note Tools' });
         this.contentEl.createEl('p', { text: `This note ("${noteName}") has been pulled from a peer. You can pull the latest changes.` });
 
         if (keyItem) {
@@ -305,7 +362,6 @@ export class CollaborationPanelView extends ItemView {
                         .setCta()
                         .onClick(async () => {
                             if (keyItem) {
-                                // Corrected order of arguments: key (string) then plugin (MyPlugin instance)
                                 await requestNoteFromPeer(keyItem.ip, keyItem.note);
                                 new Notice(`Requested latest changes for "${noteName}".`);
                             } else {
@@ -330,7 +386,7 @@ export class CollaborationPanelView extends ItemView {
             .addButton(button => {
                 button.setButtonText('List of keys')
                     .onClick(() => {
-                        this.plugin.activateView(KEY_LIST_VIEW_TYPE); // Navigate to KeyListView
+                        this.plugin.activateView(KEY_LIST_VIEW_TYPE);
                     });
             });
 
@@ -339,7 +395,7 @@ export class CollaborationPanelView extends ItemView {
             .addButton(button => {
                 button.setButtonText('Link Note')
                     .onClick(() => {
-                        this.plugin.activateView(LINK_NOTE_VIEW_TYPE); // Navigate to LinkNoteView
+                        this.plugin.activateView(LINK_NOTE_VIEW_TYPE);
                     });
             });
 

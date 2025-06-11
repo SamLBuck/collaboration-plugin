@@ -1,15 +1,52 @@
-import { App, ItemView, WorkspaceLeaf, ButtonComponent, Notice, Setting } from 'obsidian';
-import MyPlugin, { KeyItem } from '../main';
-import { listKeys, deleteKey } from '../storage/keyManager';
-import { getNoteRegistry, deleteNoteFromRegistry } from '../main';
-import { ConfirmationModal } from '../settings/key_list_page02'; // Re-using ConfirmationModal
+// views/KeyListView.ts
+import { App, ItemView, WorkspaceLeaf, Setting, ButtonComponent, Notice, Modal } from 'obsidian';
+import MyPlugin, { deleteNoteFromRegistry, KeyItem } from '../main';
+// IMPORTANT: Updated import to use deleteSpecificKey
+import { deleteSpecificKey } from '../storage/keyManager'; // Now importing deleteSpecificKey
+import { getNoteRegistry } from '../storage/registryStore'; // Import from registryStore
+import { KEY_LIST_VIEW_TYPE } from '../constants/viewTypes';
 
-export const KEY_LIST_VIEW_TYPE = 'key-list-view';
+// --- INLINED: ConfirmationModal class definition (consistent with other views) ---
+class ConfirmationModal extends Modal {
+    message: string;
+    callback: (confirmed: boolean) => void;
+
+    constructor(app: App, message: string, callback: (confirmed: boolean) => void) {
+        super(app);
+        this.message = message;
+        this.callback = callback;
+    }
+
+    onOpen() {
+        const { contentEl } = this;
+        contentEl.empty();
+        contentEl.createEl('h2', { text: 'Confirmation' });
+        contentEl.createEl('p', { text: this.message });
+        new Setting(contentEl)
+            .addButton(button => {
+                button.setButtonText('Confirm').setCta().setClass('mod-warning').onClick(() => {
+                    this.callback(true);
+                    this.close();
+                });
+            })
+            .addButton(button => {
+                button.setButtonText('Cancel').onClick(() => {
+                    this.callback(false);
+                    this.close();
+                });
+            });
+    }
+    onClose() {
+        this.contentEl.empty();
+    }
+}
+// --- END INLINED: ConfirmationModal class definition ---
+
 
 export class KeyListView extends ItemView {
     plugin: MyPlugin;
-    private keyListContainer: HTMLElement;
-    private registryDisplayContainer: HTMLElement;
+    private keysContainer: HTMLElement; // Container for displaying generated keys
+    private registryListContainer: HTMLElement; // Container for displaying local registry
 
     constructor(leaf: WorkspaceLeaf, plugin: MyPlugin) {
         super(leaf);
@@ -21,74 +58,71 @@ export class KeyListView extends ItemView {
     }
 
     getDisplayText(): string {
-        return 'Your Keys & Registry';
+        return 'My Shared Keys & Registry';
     }
 
     getIcon(): string {
-        return 'list'; // Icon for a list
+        return 'key';
     }
 
     async onOpen(): Promise<void> {
-        const { contentEl } = this;
-        contentEl.empty();
-        contentEl.addClass('key-list-panel'); // Add a class for potential styling
+        this.contentEl.empty();
+        this.contentEl.addClass('key-list-panel');
 
         // Back button to main Collaboration Panel
-        new Setting(contentEl)
+        new Setting(this.contentEl)
             .addButton(button => {
                 button.setButtonText('← Back to Control Panel')
                     .onClick(() => {
-                        this.plugin.activateView('collaboration-panel-view'); // Go back to main panel
+                        this.plugin.activateView('collaboration-panel-view');
                     });
             });
 
-        // --- Section: Your Local Keys ---
-        contentEl.createEl('h2', { text: 'Your Local Keys' });
-        this.keyListContainer = contentEl.createDiv({ cls: 'key-list-container' });
-        await this.renderKeyListContent(this.keyListContainer);
+        // --- Section 1: Your Shared Keys ---
+        this.contentEl.createEl("h2", { text: "Your Generated Collaboration Keys" });
+        this.contentEl.createEl('p', { text: 'These are the keys you have generated to share your notes with others.' });
 
-        // --- Section: Server Shared Notes (Registry) ---
-        contentEl.createEl("h2", { text: "Server Shared Notes (Registry)" });
-        this.registryDisplayContainer = contentEl.createDiv({ cls: 'note-registry-container' });
-        await this.renderNoteRegistryContent(this.registryDisplayContainer);
+        this.keysContainer = this.contentEl.createDiv({ cls: 'generated-keys-container' });
+        await this.renderKeysContent(this.keysContainer);
+
+        // --- Section 2: Local Shared Notes Registry ---
+        this.contentEl.createEl("h2", { text: "Local Shared Notes Registry" });
+        this.contentEl.createEl('p', { text: 'This registry lists notes that are currently configured to be shared by your local server.' });
+        
+        this.registryListContainer = this.contentEl.createDiv({ cls: 'registry-list-container' });
+        await this.renderRegistryContent(this.registryListContainer);
     }
 
     async onClose(): Promise<void> {
         console.log('Key List View closed');
     }
 
-    // Method to re-render the entire display
-    async refreshDisplay(): Promise<void> {
-        console.log('Refreshing Key List View display...');
-        await this.renderKeyListContent(this.keyListContainer);
-        await this.renderNoteRegistryContent(this.registryDisplayContainer);
-    }
-
-    // Re-used from previous modal/panel
-    private async renderKeyListContent(containerToRenderInto: HTMLElement): Promise<void> {
+    private async renderKeysContent(containerToRenderInto: HTMLElement): Promise<void> {
         containerToRenderInto.empty();
 
-        const currentKeys = await listKeys(this.plugin);
+        const keys = this.plugin.settings.keys ?? [];
 
-        if (currentKeys.length === 0) {
-            containerToRenderInto.createEl('p', { text: 'No keys currently stored.', cls: 'empty-list-message' });
+        if (keys.length === 0) {
+            containerToRenderInto.createEl('p', { text: 'No keys generated yet. Use the settings tab to generate a new key.', cls: 'empty-list-message' });
         } else {
-            const listHeader = containerToRenderInto.createDiv({ cls: 'key-list-header' });
-            listHeader.style.gridTemplateColumns = '2.8fr 1.5fr 1fr 0.7fr';
+            const listHeader = containerToRenderInto.createDiv({ cls: 'shared-keys-header' });
+            listHeader.style.display = 'grid';
+            listHeader.style.gridTemplateColumns = '2fr 1.5fr 1fr 0.5fr';
             listHeader.createSpan({ text: 'Key (Full)' });
             listHeader.createSpan({ text: 'Note Name' });
-            listHeader.createSpan({ text: 'Access Type' });
+            listHeader.createSpan({ text: 'Access' });
             listHeader.createSpan({ text: 'Actions' });
 
-            currentKeys.forEach((keyItem: KeyItem) => {
-                const keyRow = containerToRenderInto.createDiv({ cls: 'key-list-row' });
-                keyRow.style.gridTemplateColumns = '2.8fr 1.5fr 1fr 0.7fr';
+            keys.forEach((keyItem: KeyItem) => {
+                const keyRow = containerToRenderInto.createDiv({ cls: 'shared-keys-row' });
+                keyRow.style.display = 'grid';
+                keyRow.style.gridTemplateColumns = '2fr 1.5fr 1fr 0.5fr';
 
-                keyRow.createDiv({ text: keyItem.ip, cls: ['key-id-display', 'field-content-box'] });
-                keyRow.createDiv({ text: keyItem.note, cls: ['note-name-display', 'field-content-box'] });
-                keyRow.createDiv({ text: keyItem.access, cls: ['access-type-display', 'field-content-box'] });
+                keyRow.createDiv({ text: keyItem.ip, cls: ['shared-key-id-display', 'field-content-box'] });
+                keyRow.createDiv({ text: keyItem.note, cls: ['shared-note-name-display', 'field-content-box'] });
+                keyRow.createDiv({ text: keyItem.access, cls: ['shared-access-type-display', 'field-content-box'] });
 
-                const actionsDiv = keyRow.createDiv({ cls: 'key-actions'});
+                const actionsDiv = keyRow.createDiv({ cls: 'shared-key-actions' });
 
                 new ButtonComponent(actionsDiv)
                     .setIcon('copy')
@@ -100,88 +134,88 @@ export class KeyListView extends ItemView {
 
                 new ButtonComponent(actionsDiv)
                     .setIcon('trash')
-                    .setTooltip('Delete Key')
+                    // UPDATED TOOLTIP AND CONFIRMATION MESSAGE
+                    .setTooltip('Stop Sharing this Note (Removes Key, Keeps Registry Content)')
                     .setClass('mod-warning')
                     .onClick(async () => {
-                        const confirmDelete = await new Promise<boolean>((resolve) => {
-                            new ConfirmationModal(
-                                this.app,
-                                `Are you sure you want to delete the key for "${keyItem.note}" (${keyItem.access})?`,
-                                resolve
-                            ).open();
+                        const confirmDelete = await new Promise<boolean>(resolve => {
+                            new ConfirmationModal(this.app, `Are you sure you want to stop sharing "${keyItem.note}" (Access: ${keyItem.access})? This will remove the key but leave the note content in your registry.`, resolve).open();
                         });
 
                         if (confirmDelete) {
-                            await deleteKey(this.plugin, keyItem.ip); // This deletes from keys only
-                            new Notice(`Key for "${keyItem.note}" deleted.`, 3000);
-                            await this.refreshDisplay(); // Refresh the panel after deletion
+                            // UPDATED: Calling deleteSpecificKey instead of deleteKeyAndContent
+                            const deleted = await deleteSpecificKey(this.plugin, keyItem.ip); // Pass the full key string
+                            if (deleted) {
+                                // UPDATED: Notice message
+                                new Notice(`Stopped sharing "${keyItem.note}". Key removed.`, 3000);
+                                await this.renderKeysContent(containerToRenderInto); // Re-render only the keys list
+                                // REMOVED: No need to re-render registry as its content is not affected by this action
+                                // await this.renderRegistryContent(this.registryListContainer);
+                            } else {
+                                // UPDATED: Notice message
+                                new Notice(`Failed to remove key for "${keyItem.note}". It might not exist.`, 4000);
+                            }
                         } else {
-                            new Notice("Key deletion cancelled.", 2000);
+                            new Notice("Action cancelled.", 2000);
                         }
                     });
             });
         }
     }
 
-    // Re-used from previous modal/panel
-    private async renderNoteRegistryContent(containerEl: HTMLElement): Promise<void> {
-        containerEl.empty(); // Always clear existing content before re-rendering
+    private async renderRegistryContent(containerToRenderInto: HTMLElement): Promise<void> {
+        containerToRenderInto.empty();
 
-        // Load settings to ensure we're working with the absolute latest state of the registry
-        await this.plugin.loadSettings();
-        const registry = this.plugin.settings.registry ?? [];
-
-        console.log("[Registry Render] Current registry loaded:", JSON.stringify(registry));
+        const registry = getNoteRegistry(this.plugin); // Get data from registryStore
 
         if (registry.length === 0) {
-            containerEl.createEl('p', { text: 'No notes currently shared in the local registry.', cls: 'empty-list-message' });
+            containerToRenderInto.createEl('p', { text: 'No notes are currently registered for sharing by your local server.', cls: 'empty-list-message' });
         } else {
-            const registryHeader = containerEl.createDiv({ cls: 'registry-list-header' });
-            registryHeader.style.gridTemplateColumns = '1.5fr 3fr 1fr';
-            registryHeader.createSpan({ text: 'Note Key' });
-            registryHeader.createSpan({ text: 'Content (Partial)' });
-            registryHeader.createSpan({ text: 'Actions' });
+            const listHeader = containerToRenderInto.createDiv({ cls: 'registry-list-header' });
+            listHeader.style.display = 'grid';
+            // UPDATED: Removed column for 'Access Status'
+            listHeader.style.gridTemplateColumns = '1.5fr 3fr 0.5fr'; // Adjusted column widths
+            listHeader.createSpan({ text: 'Note Name (Registered Key)' });
+            listHeader.createSpan({ text: 'Content (Partial)' }); // Content header
+            listHeader.createSpan({ text: 'Actions' });
 
-            registry.forEach(item => {
-                const row = containerEl.createDiv({ cls: 'registry-list-row' });
-                row.style.gridTemplateColumns = '1.5fr 3fr 1fr';
+            registry.forEach(item => { // Iterate over NoteRegistryItem
+                const row = containerToRenderInto.createDiv({ cls: 'registry-list-row' });
+                row.style.display = 'grid';
+                // UPDATED: Removed column for 'Access Status'
+                row.style.gridTemplateColumns = '1.5fr 3fr 0.5fr'; // Match header columns
 
-                row.createDiv({ text: item.key, cls: ['registry-key-display', 'field-content-box'] });
-                row.createDiv({ text: item.content, cls: ['registry-content-display', 'field-content-box'] });
+                row.createDiv({ text: item.key, cls: ['registry-note-name', 'field-content-box'] });
+                // Display note content, now with a title attribute for full text on hover
+                row.createDiv({ 
+                    text: item.content.substring(0, 50) + (item.content.length > 50 ? '...' : ''), // Display first 50 chars + ellipsis
+                    cls: ['registry-content-display', 'field-content-box'],
+                    title: item.content // Add title attribute for full content on hover
+                });
+                
+                const actionsDiv = row.createDiv({ cls: 'registry-actions' });
 
-                const actionsDiv = row.createDiv({ cls: 'registry-actions'});
                 new ButtonComponent(actionsDiv)
                     .setIcon('trash')
-                    .setTooltip('Delete from Registry')
+                    .setTooltip('Remove from Registry (Stop Sharing this Content)')
                     .setClass('mod-warning')
                     .onClick(async () => {
-                        const confirmDelete = await new Promise<boolean>(resolve => {
-                            new ConfirmationModal(this.app, `Are you sure you want to delete note "${item.key}" from the registry?`, resolve).open();
+                        const confirmStop = await new Promise<boolean>(resolve => {
+                            new ConfirmationModal(this.app, `Are you sure you want to remove "${item.key}" from the local registry? This will stop sharing its content.`, resolve).open();
                         });
 
-                        if (confirmDelete) {
-                            console.log("[Registry Delete] Attempting to delete note:", item.key);
-                            console.log("[Registry Delete] Registry BEFORE filter:", JSON.stringify(this.plugin.settings.registry));
-
-                            // Correctly filter and reassign the registry directly
-                            this.plugin.settings.registry = this.plugin.settings.registry.filter(
-                                regItem => regItem.key !== item.key
-                            );
-
-                            console.log("[Registry Delete] Registry AFTER filter:", JSON.stringify(this.plugin.settings.registry));
-
-                            // Save the updated settings to persist the change to data.json
-                            await this.plugin.saveSettings();
-                            console.log("[Registry Delete] Settings saved.");
-
-                            new Notice(`Note '${item.key}' deleted from registry.`, 3000);
-
-                            await this.refreshDisplay(); // Refresh the panel after deletion
+                        if (confirmStop) {
+                            // This button still explicitly removes from registry
+                            await deleteNoteFromRegistry(this.plugin, item.key); // Use deleteNoteFromRegistry
+                            new Notice(`Removed "${item.key}" from registry.`, 3000);
+                            await this.renderRegistryContent(containerToRenderInto); // Re-render registry
                         } else {
-                            new Notice("Registry deletion cancelled.", 2000);
+                            new Notice("Action cancelled.", 2000);
                         }
                     });
             });
         }
     }
 }
+
+export { KEY_LIST_VIEW_TYPE };

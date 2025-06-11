@@ -1,3 +1,4 @@
+// main.ts
 import {
     App,
     Plugin,
@@ -5,7 +6,11 @@ import {
     Setting,
     Notice,
     TFile,
-    WorkspaceLeaf, // Import WorkspaceLeaf
+    WorkspaceLeaf,
+    WorkspaceTabs,
+    WorkspaceSidedock,
+    Editor, // NEW: Import Editor for cursor position
+	MarkdownView,
 } from 'obsidian';
 import { registerAddKeyCommand } from './utils/add_key_command';
 import { registerDeleteKeyCommand } from './utils/delete_key_command';
@@ -31,25 +36,39 @@ import { registerListSharedKeysCommand } from './utils/list_keys_command';
 import { registerShareCurrentNoteCommand } from './utils/share_active_note';
 import { registerSyncFromServerToSettings, syncRegistryFromServer } from './utils/sync_command';
 import { registerUpdateRegistryCommand } from './utils/share_active_note';
-import { registerAddPersonalCommentCommand } from './utils/addPersonalCommentCommand';
-import { showAllPersonalCommentsForKey } from './utils/showCommentModal';
+// Removed: registerAddPersonalCommentCommand and showAllPersonalCommentsForKey
+// import { registerAddPersonalCommentCommand } from './utils/addPersonalCommentCommand';
+// import { showAllPersonalCommentsForKey } from './utils/showCommentModal';
+import { v4 as uuidv4 } from 'uuid'; // NEW: For generating unique IDs for personal notes
 
-// Import the new Collaboration Panel Views
-import { CollaborationPanelView, COLLABORATION_VIEW_TYPE } from './views/CollaborationPanelView';
-import { KeyListView, KEY_LIST_VIEW_TYPE } from './views/KeyListView';
-import { LinkNoteView, LINK_NOTE_VIEW_TYPE } from './views/LinkNoteView';
+// --- MODIFIED IMPORTS:
+// Import view type constants from the central constants file
+import { COLLABORATION_VIEW_TYPE, KEY_LIST_VIEW_TYPE, LINK_NOTE_VIEW_TYPE, PERSONAL_NOTES_VIEW_TYPE } from './constants/viewTypes';
+// Import view classes individually from their respective view files
+import { CollaborationPanelView } from './views/CollaborationPanelView';
+import { KeyListView } from './views/KeyListView';
+import { LinkNoteView } from './views/LinkNoteView';
+// --- END MODIFIED IMPORTS ---
 
 
 export type NoteRegistry = Record<string, string>; // key => content
 
-export interface PersonalComment {
-    key: string;            // matches key used to identify the shared note
-    line: number;           // approximate line number in the note
-    column: number;         // optional: horizontal offset
-    content: string;        // the actual comment content
+// --- MODIFIED: PersonalNote Interface (based on our discussion) ---
+export interface PersonalNote {
+    id: string;             // Unique ID (UUID)
+    targetFilePath: string; // Full path to the Obsidian note file (e.g., "Daily Notes/2025-06-11.md")
+    lineNumber: number;     // The 0-indexed line number in the target file
+    title?: string;         // Optional user-defined title for the personal note
+    content: string;        // The main text of the personal note
+    createdAt: number;      // Timestamp of creation (for sorting)
+    updatedAt: number;      // Timestamp of last modification
+    isExpanded?: boolean;   // UI state: whether this note is currently expanded in the view
 }
+// --- END MODIFIED ---
+
 
 export interface KeyItem {
+    content: any;
     ip: string; // This now stores the full key string (e.g., "IP-NoteName")
     note: string; // The parsed note name
     access: string; // The access type (e.g., "Edit", "View", "Pulled")
@@ -64,17 +83,17 @@ interface MyPluginSettings {
     linkedKeys: KeyItem[]; // NEW: Keys received/linked from external sources
     registry: noteRegistry[];
     autoUpdateRegistry: boolean;
-    personalComments: PersonalComment[];
+    personalNotes: PersonalNote[]; // MODIFIED: Renamed and type changed for personal notes
 
 }
 
 const DEFAULT_SETTINGS: MyPluginSettings = {
     mySetting: 'default',
-    keys: [], // MODIFIED: Removed the default key entry here
-    linkedKeys: [], // NEW: Initialize as empty array
+    keys: [],
+    linkedKeys: [],
     registry: [],
     autoUpdateRegistry: true,
-    personalComments: [],
+    personalNotes: [], // MODIFIED: Initialize as empty array for new PersonalNote interface
 
 };
 
@@ -109,7 +128,9 @@ export function getNoteContentByKey(plugin: MyPlugin, key: string): string | und
 export default class MyPlugin extends Plugin {
     settings: MyPluginSettings;
     registry: noteRegistry[] = []; // This will be deprecated in favor of settings.registry
-    personalComments: PersonalComment[] = []; // Store personal comments
+    // Removed: personalComments property as it's now part of settings
+    // personalComments: PersonalComment[] = [];
+
 
     async onload() {
         console.log("Loading collaboration plugin...");
@@ -131,7 +152,8 @@ export default class MyPlugin extends Plugin {
         registerListSharedKeysCommand(this);
         registerShareCurrentNoteCommand(this);
         registerUpdateRegistryCommand(this);
-        registerAddPersonalCommentCommand(this);
+        // Removed old personal comment command registration
+        // registerAddPersonalCommentCommand(this);
 
 
         this.addCommand({
@@ -154,6 +176,9 @@ export default class MyPlugin extends Plugin {
                 modal.open();
             },
         });
+
+        // Removed old file-open event for personal comments
+        /*
         this.registerEvent(
             this.app.workspace.on("file-open", (file) => {
                 if (!file) return;
@@ -162,7 +187,8 @@ export default class MyPlugin extends Plugin {
                 showAllPersonalCommentsForKey(this.app, key, comments);
             })
         );
-        
+        */
+
         // Register all Collaboration Panel Views
         this.registerView(
             COLLABORATION_VIEW_TYPE,
@@ -177,19 +203,62 @@ export default class MyPlugin extends Plugin {
             (leaf) => new LinkNoteView(leaf, this)
         );
 
-        // --- REMOVED: Ribbon icon to open your Collaboration Panel ---
-        // this.addRibbonIcon('share', 'Open Collaboration Panel', () => {
-        //     this.activateView(COLLABORATION_VIEW_TYPE); // Open the main control panel
-        // });
-        // --- END REMOVED ---
 
-        // --- ACTIVE: Original Status Bar Item ---
-        const statusBarItemEl = this.addStatusBarItem();
-        statusBarItemEl.setText('Control Panel');
-        statusBarItemEl.onClickEvent(() => {
+        // Ribbon icon to open your Collaboration Panel (re-added as per previous requests)
+        this.addRibbonIcon('share', 'Open Collaboration Panel', () => {
+            console.log("Ribbon icon clicked! Calling activateView for Collaboration Panel")
             this.activateView(COLLABORATION_VIEW_TYPE); // Open the main control panel
         });
-        statusBarItemEl.addClass('collaboration-status-bar-item');
+
+        // NEW: Ribbon icon for creating a personal note
+        this.addRibbonIcon('sticky-note', 'Create Personal Note', async () => {
+            const activeFile = this.app.workspace.getActiveFile();
+            // Get the active Markdown view, which contains the editor
+            const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+
+            if (!activeFile) {
+                new Notice("Please open a note to create a personal note.", 3000);
+                return;
+            }
+
+            // Check if there's an active Markdown editor view
+            if (!activeView) {
+                new Notice("No active Markdown editor found. Please focus on a note.", 3000);
+                return;
+            }
+
+            // Now, safely access the editor object from the activeView
+            const editor = activeView.editor;
+            const lineNumber = editor.getCursor().line;
+
+            const newPersonalNote: PersonalNote = {
+                id: uuidv4(), // Generate a unique ID
+                targetFilePath: activeFile.path,
+                lineNumber: lineNumber,
+                title: '', // Start with an empty title
+                content: '', // Start with empty content
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                isExpanded: true, // Auto-expand when created
+            };
+        
+            this.settings.personalNotes.push(newPersonalNote);
+            await this.saveSettings();
+            new Notice(`New personal note created for "${activeFile.basename}" at line ${lineNumber + 1}.`, 3000);
+        
+            // Activate the Personal Notes view and trigger a re-render
+            await this.activateView(PERSONAL_NOTES_VIEW_TYPE);
+            this.app.workspace.trigger('plugin:personal-notes-updated'); // Trigger custom event for view update
+        });
+
+
+        // --- ACTIVE: Original StatusBar Item ---
+        //const statusBarItemEl = this.addStatusBarItem();
+        //statusBarItemEl.setText('Control Panel');
+        //statusBarItemEl.onClickEvent(() => {
+        //    this.activateView(COLLABORATION_VIEW_TYPE); // Open the main control panel
+        //});
+        //statusBarItemEl.addClass('collaboration-status-bar-item');
         // --- END ACTIVE ---
 
 
@@ -208,85 +277,128 @@ export default class MyPlugin extends Plugin {
         });
 
 
-        // Removed: Ribbon icon for quick key generation for the active note (direct action)
-        /*
-        this.addRibbonIcon('key', 'Generate Key for Active Note', async () => {
-            const activeFile = this.app.workspace.getActiveFile();
-            const noteName = activeFile ? activeFile.basename : 'No Active Note';
-            const accessType = 'Edit'; // Default for generated keys
-
-            if (!activeFile) {
-                new Notice("No active note open to generate a key for. Please open a note.", 4000);
-                return;
-            }
-            try {
-                const newKeyItem = await generateKey(this, noteName, accessType);
-                const success = await addKey(this, newKeyItem);
-                if (success) {
-                    new Notice(`Generated & Stored:\n${newKeyItem.ip}\nFor Note: "${newKeyItem.note}" (Access: ${newKeyItem.access})`, 6000);
-                    await navigator.clipboard.writeText(newKeyItem.ip);
-                } else {
-                    new Notice('Failed to add generated key. It might already exist (password collision).', 4000);
-                }
-            } catch (error: any) {
-                console.error("Error generating or adding key:", error);
-                new Notice(`Error generating key: ${error.message}`, 5000);
-            }
-        }).addClass('my-plugin-ribbon-class');
-        */
-
-        // Removed: Ribbon icon for View All Collaboration Keys
-        /*
-        this.addRibbonIcon('list', 'View All Collaboration Keys', () => {
-            new KeyListModal(this.app, this).open();
-        });
-        */
-
-        // Removed: Ribbon icon for Link / Pull a Collaborative Note
-        /*
-        this.addRibbonIcon('link', 'Link / Pull a Collaborative Note', () => {
-            new LinkNoteModal(this.app, this).open();
-        });
-        */
         this.addSettingTab(new PluginSettingsTab(this.app, this));
+
+        // --- MODIFIED: Activate the Collaboration Panel AFTER layout is ready ---
+        // This ensures the panel is opened when Obsidian itself finishes loading its layout.
+        //this.app.workspace.onLayoutReady(() => {
+        //    this.activateView(COLLABORATION_VIEW_TYPE);
+        // });
+        // --- END MODIFIED ---
+    }
+
+    onunload() {
+        new Notice('Plugin is unloading!');
+
+        // Detach all custom views when the plugin unloads
+        this.app.workspace.detachLeavesOfType(COLLABORATION_VIEW_TYPE);
+        this.app.workspace.detachLeavesOfType(KEY_LIST_VIEW_TYPE);
+        this.app.workspace.detachLeavesOfType(LINK_NOTE_VIEW_TYPE);
+        this.app.workspace.detachLeavesOfType(PERSONAL_NOTES_VIEW_TYPE); // NEW: Detach PersonalNotesView
+
+        const adapter = this.app.vault.adapter;
+        if (!(adapter instanceof FileSystemAdapter)) return;
+
+        const vaultPath = adapter.getBasePath();
+        const pidPath = path.join(
+            vaultPath,
+            ".obsidian",
+            "plugins",
+            "collaboration-plugin",
+            "ws-server.pid"
+        );
+
+        if (fs.existsSync(pidPath)) {
+            const pid = parseInt(fs.readFileSync(pidPath, "utf8"));
+            if (!isNaN(pid)) {
+                try {
+                    process.kill(pid);
+                    console.log(`[Plugin] Cleanly killed previous WebSocket server with PID ${pid}`);
+                } catch (err) {
+                    console.warn(`[Plugin] Failed to kill server PID ${pid}:`, err);
+                }
+            }
+            fs.unlinkSync(pidPath);
+        }
+    }
+    async loadSettings() {
+        const raw = await this.loadData();
+        this.settings = Object.assign({}, DEFAULT_SETTINGS, raw ?? {});
+        this.registry = this.settings.registry;
+        // Removed: old personalComments property loading
+        // this.personalComments = this.settings.personalComments;
+    }
+
+    async saveSettings() {
+        // Save all settings, including linkedKeys and personalNotes
+        await this.saveData(this.settings);
     }
 
     // New method to activate/open a specific collaboration panel view
     async activateView(viewType: string) {
-        let leaf: WorkspaceLeaf | null = null;
+        console.log(`[ActivateView] Attempting to activate view: ${viewType}`);
+        const { workspace } = this.app;
+        let targetLeaf: WorkspaceLeaf | null = null;
 
-        // 1. Try to find an existing leaf of the target view type
-        const existingTargetLeaves = this.app.workspace.getLeavesOfType(viewType);
-        if (existingTargetLeaves.length > 0) {
-            leaf = existingTargetLeaves[0]; // Use the first existing leaf
-        } else {
-            // 2. If no existing leaf of the target type, try to reuse the current active leaf
-            //    if it's one of *our* plugin's views.
-            const currentActiveLeaf = this.app.workspace.activeLeaf;
-            if (currentActiveLeaf && (
-                currentActiveLeaf.view.getViewType() === COLLABORATION_VIEW_TYPE ||
-                currentActiveLeaf.view.getViewType() === KEY_LIST_VIEW_TYPE ||
-                currentActiveLeaf.view.getViewType() === LINK_NOTE_VIEW_TYPE
-            )) {
-                leaf = currentActiveLeaf;
-            } else {
-                // 3. If neither, get a new right leaf.
-                leaf = this.app.workspace.getRightLeaf(true); // `true` means create if not found
+        // Helper to check if a leaf is in the right sidebar
+        const isLeafInRightSidebar = (leaf: WorkspaceLeaf): boolean => {
+            if (!leaf || !workspace.rightSplit) return false;
+            // Check if the leaf's direct parent or its parent's parent is the rightSplit
+            // This covers leaves directly in the sidebar or within a tab group in the sidebar.
+            return (leaf.parent instanceof WorkspaceSidedock && leaf.parent === workspace.rightSplit) ||
+                   (leaf.parent?.parent instanceof WorkspaceSidedock && leaf.parent?.parent === workspace.rightSplit);
+        };
+
+        // 1. Check if the active leaf is already the target view type and in the right sidebar
+        //    This means we don't need to do anything, it's already visible.
+        if (workspace.activeLeaf &&
+            workspace.activeLeaf.view.getViewType() === viewType &&
+            isLeafInRightSidebar(workspace.activeLeaf)) {
+            console.log(`[ActivateView] Target view (${viewType}) is already active in the right sidebar.`);
+            return; // Already where we want to be.
+        }
+
+        // 2. Try to find an existing leaf of this viewType in the right sidebar to reuse.
+        const allLeavesOfViewType = workspace.getLeavesOfType(viewType);
+        for (const l of allLeavesOfViewType) {
+            const isPopout = !!l.view?.containerEl?.closest('.mod-popout-window');
+            if (!isPopout && isLeafInRightSidebar(l)) {
+                targetLeaf = l;
+                console.log(`[ActivateView] Found existing leaf of type ${viewType} in right sidebar. Reusing it.`);
+                break;
             }
         }
+
+        // 3. If no suitable existing leaf was found, try to reuse the current active leaf
+        //    IF it's in the right sidebar. This ensures the current sidebar tab gets replaced.
+        if (!targetLeaf && workspace.activeLeaf && isLeafInRightSidebar(workspace.activeLeaf)) {
+            targetLeaf = workspace.activeLeaf;
+            console.log(`[ActivateView] Reusing active leaf in right sidebar for view type: ${viewType}`);
+        }
         
-        if (leaf) {
-            await leaf.setViewState({
+        // 4. If still no leaf, get a new leaf specifically for the right sidebar.
+        //    getRightLeaf(true) will create it if it doesn't exist and ensures it's in the right sidebar.
+        if (!targetLeaf) {
+            console.log(`[ActivateView] No suitable leaf found or reused. Getting a new leaf for the right sidebar for view type: ${viewType}`);
+            targetLeaf = workspace.getRightLeaf(false);
+        }
+
+        // 5. Final check and set view state
+        if (targetLeaf) {
+            console.log(`[ActivateView] Setting view state for leaf. Parent: ${targetLeaf.parent?.constructor.name}`);
+            await targetLeaf.setViewState({
                 type: viewType,
-                active: true,
+                active: true, // Make this the active tab in its pane
             });
-            // Reveal the leaf in case the sidebar is collapsed
-            this.app.workspace.revealLeaf(leaf);
+            workspace.revealLeaf(targetLeaf);
+            console.log(`[ActivateView] View ${viewType} activated and revealed in right sidebar.`);
         } else {
-            new Notice(`Failed to open ${viewType} panel.`, 4000);
-            console.error(`Collaboration Panel: Could not obtain a workspace leaf for ${viewType}.`);
+            console.error(`[ActivateView] Failed to obtain or activate a leaf for view type: ${viewType}.`);
+            new Notice(`Failed to open ${viewType} panel. Could not find or create a suitable pane.`, 6000);
         }
     }
+
+
 
     startServer() {
         const server = http.createServer((req, res) => {
@@ -330,50 +442,5 @@ export default class MyPlugin extends Plugin {
             console.error("[Plugin] Failed to start WebSocket server:", err);
             new Notice(`Failed to start WebSocket server: ${err.message}. Check console for details.`, 5000);
         }
-    }
-
-    onunload() {
-        new Notice('Plugin is unloading!');
-        
-        // Detach all custom views when the plugin unloads
-        this.app.workspace.detachLeavesOfType(COLLABORATION_VIEW_TYPE);
-        this.app.workspace.detachLeavesOfType(KEY_LIST_VIEW_TYPE);
-        this.app.workspace.detachLeavesOfType(LINK_NOTE_VIEW_TYPE);
-
-        const adapter = this.app.vault.adapter;
-        if (!(adapter instanceof FileSystemAdapter)) return;
-        
-        const vaultPath = adapter.getBasePath();
-        const pidPath = path.join(
-            vaultPath,
-            ".obsidian",
-            "plugins",
-            "collaboration-plugin",
-            "ws-server.pid"
-        );
-        
-        if (fs.existsSync(pidPath)) {
-            const pid = parseInt(fs.readFileSync(pidPath, "utf8"));
-            if (!isNaN(pid)) {
-                try {
-                    process.kill(pid);
-                    console.log(`[Plugin] Cleanly killed previous WebSocket server with PID ${pid}`);
-                } catch (err) {
-                    console.warn(`[Plugin] Failed to kill server PID ${pid}:`, err);
-                }
-            }
-            fs.unlinkSync(pidPath);
-        }
-    }
-        async loadSettings() {
-        const raw = await this.loadData();
-        this.settings = Object.assign({}, DEFAULT_SETTINGS, raw ?? {});
-        this.registry = this.settings.registry;
-        this.personalComments = this.settings.personalComments;
-    }
-    
-    async saveSettings() {
-        // Save all settings, including linkedKeys
-        await this.saveData(this.settings);
     }
 }

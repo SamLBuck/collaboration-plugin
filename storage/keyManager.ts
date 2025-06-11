@@ -1,82 +1,85 @@
-// src/storage/keyManager.ts
+// storage/keyManager.ts
 
-import MyPlugin, { KeyItem } from "../main"; // Removed deleteNoteFromRegistry import as it's no longer called here
-import { getLocalIP } from "../utils/get-ip"; 
-// import { sendDeleteNoteToServer } from "../networking/socket/client"; // Keep if used elsewhere
-// import { updateNoteRegistry } from "../main"; // Keep if used elsewhere
+// Assuming these imports are present in your actual keyManager.ts file
+// You might need to adjust the path for MyPlugin based on your file structure.
+import MyPlugin, { KeyItem } from '../main';
+import { Notice } from 'obsidian'; // Import Notice for error/success messages
+import { getLocalIP } from '../utils/get-ip'; // Assuming getLocalIP is defined here or imported
+import { deleteNoteFromRegistry } from './registryStore';
 
-/**
- * Generates a unique key based on the note name and local IP address.
- * This function now creates a deterministic key by concatenating these two elements.
- * The generated key is in 'IP-NoteName' format.
- *
- * @param plugin The plugin instance (not directly used for key generation, but for context).
- * @param noteName The name of the note for which the key is being generated.
- * @param accessType The type of access (e.g., "View", "Edit") associated with the key.
- * @returns A Promise that resolves to a KeyItem object containing the generated ID (as 'ip'), note name, and access type.
- */
+
+// --- Existing functions (example structure - replace with your actual implementations) ---
 export async function generateKey(plugin: MyPlugin, noteName: string, accessType: string): Promise<KeyItem> {
-    const localIP = await getLocalIP();
-    // const sanitizedNoteName = noteName.replace(/\s/g, '_'); // REMOVE OR COMMENT OUT THIS LINE
-    const newKeyId = `${localIP}-${noteName}|${accessType}`; // USE noteName DIRECTLY
+    const localIp = await getLocalIP(); // Or however you get the IP
+    // For simplicity, let's just combine them for the 'key' (ip property)
+    const newIpKey = `${localIp}-${noteName}`;
+    
+    // In a real scenario, you might want more robust key generation,
+    // e.g., cryptographic hash, or a server-generated key.
+    
     return {
-        ip: newKeyId,
-        note: noteName, // Keep original note name here too for KeyItem.note
-        access: accessType
+        ip: newIpKey, // This is the full key string
+        note: noteName,
+        access: accessType,
     };
 }
 
-/**
- * Adds a new key item to the plugin's settings.
- * This function checks if a key with the exact same ID already exists to prevent duplicates.
- *
- * @param plugin The plugin instance where the settings are stored.
- * @param newKeyItem The KeyItem object to be added to the plugin's key list.
- * @returns A Promise that resolves to `true` if the key was successfully added,
- * or `false` if a key with the same ID already exists.
- */
-export async function addKey(plugin: MyPlugin, newKeyItem: KeyItem): Promise<boolean> {
-    const existingKey = plugin.settings.keys.find(key => key.ip === newKeyItem.ip);
-    if (existingKey) {
-        console.warn(`Key with ID '${newKeyItem.ip}' already exists. Not adding duplicate.`);
+export async function addKey(plugin: MyPlugin, keyItem: KeyItem): Promise<boolean> {
+    // Check for duplicate key (based on 'ip' property which holds the full key string)
+    const exists = plugin.settings.keys.some(k => k.ip === keyItem.ip);
+    if (exists) {
+        console.warn(`[KeyManager] Key '${keyItem.ip}' already exists. Not adding.`);
         return false;
     }
-    plugin.settings.keys.push(newKeyItem);
+    
+    plugin.settings.keys.push(keyItem);
     await plugin.saveSettings();
+    console.log(`[KeyManager] Added new key: ${keyItem.ip}`);
     return true;
 }
 
-/**
- * Retrieves and returns all stored key items from the plugin's settings.
- *
- * @param plugin The plugin instance from which to retrieve the keys.
- * @returns A Promise that resolves to an array of KeyItem objects.
- */
-export async function listKeys(plugin: MyPlugin): Promise<KeyItem[]> {
-    if (!plugin.settings) {
-        await plugin.loadSettings();
+// You might also have a function to delete a specific key (not comprehensive)
+export async function deleteSpecificKey(plugin: MyPlugin, keyString: string): Promise<boolean> {
+    const initialLength = plugin.settings.keys.length;
+    plugin.settings.keys = plugin.settings.keys.filter(item => item.ip !== keyString);
+    await plugin.saveSettings();
+    if (plugin.settings.keys.length < initialLength) {
+        new Notice(`Key '${keyString}' removed from your generated keys.`);
+        return true;
+    } else {
+        new Notice(`Key '${keyString}' not found in your generated keys.`, 3000);
+        return false;
     }
-    return plugin.settings.keys;
 }
 
-/**
- * Deletes a key item from the plugin's settings based on its unique 'ip' string.
- * This function now ONLY handles deleting the key from the keys list.
- * It DOES NOT affect the note registry.
- *
- * @param plugin The plugin instance from which to delete the key.
- * @param keyIdToDelete The full unique ID string of the key to be deleted (e.g., "IP-NoteName|AccessType").
- * @returns A Promise that resolves once the key has been deleted and settings are saved.
- */
-export async function deleteKey(plugin: MyPlugin, keyIdToDelete: string): Promise<void> {
-    // Filter out the key based on its unique 'ip' string
-    plugin.settings.keys = plugin.settings.keys.filter(key => key.ip !== keyIdToDelete);
+// --- NEW: Comprehensive delete function for Push notes ---
+export async function deleteKeyAndContent(plugin: MyPlugin, noteName: string): Promise<boolean> {
+    console.log(`[KeyManager] Initiating comprehensive delete for note: '${noteName}'`);
 
-    // REMOVED: The logic to extract noteName and call deleteNoteFromRegistry is removed from here.
-    // This function will no longer automatically delete from the registry.
-    // The responsibility for deleting from the registry is now completely separate.
+    let keyItemRemoved = false;
+    // 1. Remove the KeyItem from plugin.settings.keys
+    const initialKeysLength = plugin.settings.keys.length;
+    plugin.settings.keys = plugin.settings.keys.filter(item => {
+        const shouldKeep = item.note !== noteName;
+        if (!shouldKeep) {
+            console.log(`[KeyManager] Removing KeyItem: ${item.ip}`);
+            keyItemRemoved = true; // Mark that at least one key item was removed
+        }
+        return shouldKeep;
+    });
 
-    // Save changes to persist the deleted key
+    // 2. Remove the content from plugin.settings.registry using the existing deleteNoteFromRegistry function
+    //    Note: deleteNoteFromRegistry expects the 'key' (which is the noteName in the registry context)
+    console.log(`[KeyManager] Calling deleteNoteFromRegistry for note content: '${noteName}'`);
+    await deleteNoteFromRegistry(plugin, noteName); 
+
+    // 3. Save the updated settings
     await plugin.saveSettings();
-    console.log(`[KeyManager] Key '${keyIdToDelete}' deleted from keys list.`);
+    
+    if (keyItemRemoved) {
+        console.log(`[KeyManager] Comprehensive delete successful for note: '${noteName}'. Key item and registry content removed.`);
+    } else {
+        console.warn(`[KeyManager] Comprehensive delete: No matching KeyItem found for note: '${noteName}'. Only registry content (if any) was targeted.`);
+    }
+    return keyItemRemoved; // Returns true if a KeyItem was found and removed
 }

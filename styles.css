@@ -274,3 +274,106 @@ h3 {
     /* transform: scale(1.05); */
     /* box-shadow: 0 0 5px rgba(0, 0, 0, 0.2); */
 }
+
+/* styles.css */
+
+/* --- General Styling for Key List View --- */
+.key-list-panel {
+    padding: 20px;
+    font-family: var(--font-text); /* Use Obsidian's default font */
+    color: var(--text-normal); /* Default text color */
+}
+
+/* Headings */
+.key-list-panel h2 {
+    color: var(--text-title-h2);
+    border-bottom: 1px solid var(--background-modifier-border);
+    padding-bottom: 5px;
+    margin-top: 25px;
+    margin-bottom: 15px;
+}
+
+.key-list-panel p {
+    color: var(--text-muted);
+    margin-bottom: 15px;
+}
+
+/* --- Container Styling for Keys and Registry --- */
+.generated-keys-container,
+.registry-list-container {
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--radius-l); /* Rounded corners */
+    padding: 15px;
+    background-color: var(--background-primary); /* Lighter background for the container */
+    margin-bottom: 20px;
+}
+
+/* --- Grid Headers (Keys and Registry) --- */
+.shared-keys-header,
+.registry-list-header {
+    font-weight: bold;
+    border-bottom: 1px solid var(--background-modifier-border);
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+    color: var(--text-accent); /* Header text color */
+}
+
+.shared-keys-header > span,
+.registry-list-header > span {
+    padding: 0 5px;
+    text-align: left;
+}
+
+/* --- Row Styling (Keys and Registry) --- */
+.shared-keys-row,
+.registry-list-row {
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px dashed var(--background-modifier-border-hover); /* Light separator */
+}
+
+.shared-keys-row:last-child,
+.registry-list-row:last-child {
+    border-bottom: none; /* No border for the last row */
+}
+
+/* --- "Neat Boxes" for content fields --- */
+.field-content-box {
+    background-color: var(--background-secondary); /* Slightly darker background than container */
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--radius-s); /* Smaller rounded corners for fields */
+    padding: 6px 10px;
+    margin: 2px 5px; /* Small margin between boxes */
+    white-space: nowrap; /* Prevent text from wrapping inside the box */
+    overflow: hidden; /* Hide overflow content */
+    text-overflow: ellipsis; /* Add ellipsis for hidden content */
+    color: var(--text-normal);
+}
+
+/* Specific styling for copy/trash buttons */
+.shared-key-actions button.mod-cta,
+.registry-actions button.mod-warning {
+    margin: 0 2px;
+}
+
+.shared-key-actions,
+.registry-actions {
+    display: flex;
+    justify-content: flex-end; /* Align actions to the right */
+    gap: 5px; /* Space between buttons */
+}
+
+/* Empty list message */
+.empty-list-message {
+    font-style: italic;
+    color: var(--text-muted);
+    text-align: center;
+    padding: 15px;
+}
+
+/* Adjust button sizes if needed */
+.shared-key-actions .button,
+.registry-actions .button {
+    min-width: unset; /* Remove default min-width */
+    padding: 5px; /* Smaller padding */
+}
