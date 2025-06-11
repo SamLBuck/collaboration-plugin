@@ -1,6 +1,7 @@
 import { getNoteRegistry } from "../storage/registryStore";
-import { registerNoteWithPeer } from "../networking/socket/client";
 import type MyPlugin from "../main";
+import { registerNoteWithPeer } from '../networking/socket/client';
+
 
 /**
  * Sends all notes in plugin.settings.registry to the live WebSocket server.

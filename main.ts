@@ -17,7 +17,7 @@ import { registerDeleteKeyCommand } from './utils/delete_key_command';
 import { KeyListModal } from './settings/key_list_page02'; // Still needed for ConfirmationModal
 import { LinkNoteModal } from './settings/link_note_page03'; // Still needed for ConfirmationModal
 import { generateKey, addKey } from './storage/keyManager';
-import { registerNoteWithPeer, requestNoteFromPeer } from './networking/socket/client';
+import { registerNoteWithPeer, requestNoteFromPeer, sendNoteToHost } from './networking/socket/client';
 import { PluginSettingsTab } from "./settings/plugin_setting_tab";
 import { FileSystemAdapter } from "obsidian";
 const { spawn } = require("child_process");
@@ -123,7 +123,30 @@ export function getNoteContentByKey(plugin: MyPlugin, key: string): string | und
     return registry.find(item => item.key === key)?.content;
 }
 
-
+function hasEditAccess(plugin: MyPlugin, note: string): boolean {
+    return plugin.settings.keys.some(k => k.note === note && k.access === "Edit") ||
+           plugin.settings.linkedKeys.some(k => k.note === note && k.ip.includes("|Edit"));
+  }
+  
+  function pushNoteToHost(plugin: MyPlugin, note: string, content: string ) {
+    const key = plugin.settings.linkedKeys.find(k =>
+      k.note.trim().toLowerCase() === note.trim().toLowerCase() &&
+      k.ip.includes("|Edit")
+    );
+    if (!key) {
+      new Notice(`No edit link found for '${note}'`, 4000);
+      return;
+    }
+  
+    const ipSegment = key.ip.split("|")[0]; // "10.19.21.190-noteName"
+    const ip = ipSegment.split("-")[0];     // "10.19.21.190"
+    console.log(ip)
+    console.log(note)
+    console.log(content)
+    sendNoteToHost(ip, note, content);  // ✅ now correctly references push-note logic
+    new Notice(`Pushed '${note}' to host at ${ip}`, 4000);
+  }
+    
 
 export default class MyPlugin extends Plugin {
     settings: MyPluginSettings;
@@ -131,16 +154,15 @@ export default class MyPlugin extends Plugin {
     // Removed: personalComments property as it's now part of settings
     // personalComments: PersonalComment[] = [];
 
+    autoRegistryUpdate: boolean = false; // Auto-update registry setting
 
     async onload() {
         console.log("Loading collaboration plugin...");
         await this.loadSettings();
 
-        // Start the HTTP server
-        this.startServer();
 
-        // Start WebSocket server
-        this.startWebSocketServer();
+        // Sart WebSocket server
+        startWebSocketServerProcess(this.app, this);
 
         // Register custom commands (Command Palette commands)
         registerGenerateKeyCommand(this.app, this);
@@ -177,8 +199,34 @@ export default class MyPlugin extends Plugin {
             },
         });
 
-        // Removed old file-open event for personal comments
-        /*
+        this.addCommand({
+            id: "manually-push-note-to-host",
+            name: "Manually Push Active Note to Host",
+            callback: async () => {
+              const file = this.app.workspace.getActiveFile();
+              if (!file) {
+                new Notice("No active note open.");
+                return;
+              }
+          
+              const note = file.basename;
+          
+              const editKey = this.settings.linkedKeys.find(k =>
+                k.note === note && k.ip.includes("|Edit")
+              );
+              if (!editKey) {
+                new Notice("You do not have edit access to push this note.");
+                return;
+              }
+          
+              const ip = editKey.ip.split("|")[0].split("-")[0]; // extract "10.19.21.190"
+              const content = await this.app.vault.read(file);
+              console.log(`Pushing note '${note}' to host at ${ip}...`);
+              pushNoteToHost(this, note, content);
+            }
+          });
+          
+
         this.registerEvent(
             this.app.workspace.on("file-open", (file) => {
                 if (!file) return;
@@ -332,6 +380,22 @@ export default class MyPlugin extends Plugin {
     async saveSettings() {
         // Save all settings, including linkedKeys and personalNotes
         await this.saveData(this.settings);
+        // // Listen for file changes if auto-update is enabled
+        // this.app.vault.on("modify", async (file) => {
+        //     if (this.settings.autoUpdateRegistry) {
+        //         if (file instanceof TFile) {
+        //             const key = file.basename; // Uses basename as key for auto-update
+        //             const content = await this.app.vault.read(file);
+        //             await updateNoteRegistry(this, key, content);
+        //             console.log(`[Auto-Update] Registry updated for note '${key}'.`);
+        //         } else {
+        //             console.warn(`[Auto-Update] Skipped updating registry for non-TFile instance.`);
+        //         }
+        //     }
+        // });
+
+
+        this.addSettingTab(new PluginSettingsTab(this.app, this));
     }
 
     // New method to activate/open a specific collaboration panel view
@@ -398,49 +462,50 @@ export default class MyPlugin extends Plugin {
         }
     }
 
+    onunload() {
+        new Notice('Plugin is unloading!');
+        
+        // Detach all custom views when the plugin unloads
+        this.app.workspace.detachLeavesOfType(COLLABORATION_VIEW_TYPE);
+        this.app.workspace.detachLeavesOfType(KEY_LIST_VIEW_TYPE);
+        this.app.workspace.detachLeavesOfType(LINK_NOTE_VIEW_TYPE);
 
-
-    startServer() {
-        const server = http.createServer((req, res) => {
-            res.writeHead(200, { "Content-Type": "text/plain" });
-            res.end("Collaboration Plugin Server is running.\n");
-        });
-
-        const PORT = 3000;
-        server.listen(PORT, () => {
-            console.log(`Server started on port ${PORT}`);
-        });
-    }
-
-    startWebSocketServer() {
-        try {
-            const serverPath = this.manifest.dir + "/networking/socket/dist/server.cjs";
-            const childProcess = require("child_process");
-            
-            const serverProcess = childProcess.fork(serverPath, [], {
-                silent: false,
-                stdio: 'inherit'
-            });
-
-            serverProcess.on('error', (err) => {
-                console.error('[Plugin] WebSocket server process error:', err);
-                new Notice(`WebSocket server process encountered an error: ${err.message}`, 5000);
-            });
-
-            serverProcess.on('exit', (code, signal) => {
-                if (code !== 0) {
-                    console.error(`[Plugin] WebSocket server process exited with code ${code} and signal ${signal}`);
-                    new Notice(`WebSocket server process exited unexpectedly. Code: ${code}`, 5000);
-                } else {
-                    console.log('[Plugin] WebSocket server process exited cleanly.');
+        const adapter = this.app.vault.adapter;
+        if (!(adapter instanceof FileSystemAdapter)) return;
+        
+        const vaultPath = adapter.getBasePath();
+        const pidPath = path.join(
+            vaultPath,
+            ".obsidian",
+            "plugins",
+            "collaboration-plugin",
+            "ws-server.pid"
+        );
+        
+        if (fs.existsSync(pidPath)) {
+            const pid = parseInt(fs.readFileSync(pidPath, "utf8"));
+            if (!isNaN(pid)) {
+                try {
+                    process.kill(pid);
+                    console.log(`[Plugin] Cleanly killed previous WebSocket server with PID ${pid}`);
+                } catch (err) {
+                    console.warn(`[Plugin] Failed to kill server PID ${pid}:`, err);
                 }
-            });
-
-            console.log("[Plugin] WebSocket server started at ws://localhost:3010");
-            new Notice("WebSocket server started at ws://localhost:3010");
-        } catch (err: any) {
-            console.error("[Plugin] Failed to start WebSocket server:", err);
-            new Notice(`Failed to start WebSocket server: ${err.message}. Check console for details.`, 5000);
+            }
+            fs.unlinkSync(pidPath);
         }
     }
+        async loadSettings() {
+        const raw = await this.loadData();
+        this.settings = Object.assign({}, DEFAULT_SETTINGS, raw ?? {});
+        this.registry = this.settings.registry;
+        this.personalComments = this.settings.personalComments;
+    }
+    
+    async saveSettings() {
+        // Save all settings, including linkedKeys
+        await this.saveData(this.settings);
+    }
+
+
 }
