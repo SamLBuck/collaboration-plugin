@@ -84,8 +84,8 @@ export class PluginSettingsTab extends PluginSettingTab {
 			return checkbox;
 		};
 
-		this.accessTypeView = createCheckbox('View', true);
-		this.accessTypeEdit = createCheckbox('Edit', false);
+		this.accessTypeView = createCheckbox('View', false);
+		this.accessTypeEdit = createCheckbox('Edit', true);
 		this.accessTypeViewAndComment = createCheckbox('View and Comment', false);
 		this.accessTypeEditWithApproval = createCheckbox('Edit w/ Approval', false);
 

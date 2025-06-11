@@ -61,3 +61,21 @@ export function registerNoteWithPeer(url: string, key: string, content: string) 
       console.error("[Plugin] Failed to connect to peer for registration", err);
   };
 }
+
+export function sendNoteToHost(ip: string, key: string, content: string) {
+    const socket = new WebSocket(`ws://${ip}:3010`);
+  
+    socket.onopen = () => {
+      socket.send(JSON.stringify({
+        type: "push-note",
+        payload: { key, content }
+      }));
+      console.log(`[Client] Pushed '${key}' to host at ${ip}`);
+      socket.close();
+    };
+  
+    socket.onerror = (err) => {
+      console.error(`[Client] Failed to push note to host at ${ip}:`, err);
+    };
+  }
+  

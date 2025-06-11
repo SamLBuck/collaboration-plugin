@@ -12,7 +12,7 @@ import { registerDeleteKeyCommand } from './utils/delete_key_command';
 import { KeyListModal } from './settings/key_list_page02'; // Still needed for ConfirmationModal
 import { LinkNoteModal } from './settings/link_note_page03'; // Still needed for ConfirmationModal
 import { generateKey, addKey } from './storage/keyManager';
-import { registerNoteWithPeer, requestNoteFromPeer } from './networking/socket/client';
+import { registerNoteWithPeer, requestNoteFromPeer, sendNoteToHost } from './networking/socket/client';
 import { PluginSettingsTab } from "./settings/plugin_setting_tab";
 import { FileSystemAdapter } from "obsidian";
 const { spawn } = require("child_process");
@@ -104,7 +104,28 @@ export function getNoteContentByKey(plugin: MyPlugin, key: string): string | und
     return registry.find(item => item.key === key)?.content;
 }
 
-
+function hasEditAccess(plugin: MyPlugin, note: string): boolean {
+    return plugin.settings.keys.some(k => k.note === note && k.access === "Edit") ||
+           plugin.settings.linkedKeys.some(k => k.note === note && k.ip.includes("|Edit"));
+  }
+  
+  function pushNoteToHost(plugin: MyPlugin, note: string, content: string ) {
+    const key = plugin.settings.linkedKeys.find(k =>
+      k.note.trim().toLowerCase() === note.trim().toLowerCase() &&
+      k.ip.includes("|Edit")
+    );
+    if (!key) {
+      new Notice(`No edit link found for '${note}'`, 4000);
+      return;
+    }
+  
+    const ipSegment = key.ip.split("|")[0]; // "10.19.21.190-noteName"
+    const ip = ipSegment.split("-")[0];     // "10.19.21.190"
+  
+    sendNoteToHost(ip, note, content);  // ✅ now correctly references push-note logic
+    new Notice(`Pushed '${note}' to host at ${ip}`, 4000);
+  }
+    
 
 export default class MyPlugin extends Plugin {
     settings: MyPluginSettings;
@@ -154,6 +175,35 @@ export default class MyPlugin extends Plugin {
                 modal.open();
             },
         });
+
+        this.addCommand({
+            id: "manually-push-note-to-host",
+            name: "Manually Push Active Note to Host",
+            callback: async () => {
+              const file = this.app.workspace.getActiveFile();
+              if (!file) {
+                new Notice("No active note open.");
+                return;
+              }
+          
+              const note = file.basename;
+          
+              const editKey = this.settings.linkedKeys.find(k =>
+                k.note === note && k.ip.includes("|Edit")
+              );
+              if (!editKey) {
+                new Notice("You do not have edit access to push this note.");
+                return;
+              }
+          
+              const ip = editKey.ip.split("|")[0].split("-")[0]; // extract "10.19.21.190"
+              const content = await this.app.vault.read(file);
+          
+              pushNoteToHost(this, note, content);
+            }
+          });
+          
+
         this.registerEvent(
             this.app.workspace.on("file-open", (file) => {
                 if (!file) return;
@@ -177,13 +227,6 @@ export default class MyPlugin extends Plugin {
             (leaf) => new LinkNoteView(leaf, this)
         );
 
-        // --- REMOVED: Ribbon icon to open your Collaboration Panel ---
-        // this.addRibbonIcon('share', 'Open Collaboration Panel', () => {
-        //     this.activateView(COLLABORATION_VIEW_TYPE); // Open the main control panel
-        // });
-        // --- END REMOVED ---
-
-        // --- ACTIVE: Original Status Bar Item ---
         const statusBarItemEl = this.addStatusBarItem();
         statusBarItemEl.setText('Control Panel');
         statusBarItemEl.onClickEvent(() => {
@@ -208,46 +251,6 @@ export default class MyPlugin extends Plugin {
         });
 
 
-        // Removed: Ribbon icon for quick key generation for the active note (direct action)
-        /*
-        this.addRibbonIcon('key', 'Generate Key for Active Note', async () => {
-            const activeFile = this.app.workspace.getActiveFile();
-            const noteName = activeFile ? activeFile.basename : 'No Active Note';
-            const accessType = 'Edit'; // Default for generated keys
-
-            if (!activeFile) {
-                new Notice("No active note open to generate a key for. Please open a note.", 4000);
-                return;
-            }
-            try {
-                const newKeyItem = await generateKey(this, noteName, accessType);
-                const success = await addKey(this, newKeyItem);
-                if (success) {
-                    new Notice(`Generated & Stored:\n${newKeyItem.ip}\nFor Note: "${newKeyItem.note}" (Access: ${newKeyItem.access})`, 6000);
-                    await navigator.clipboard.writeText(newKeyItem.ip);
-                } else {
-                    new Notice('Failed to add generated key. It might already exist (password collision).', 4000);
-                }
-            } catch (error: any) {
-                console.error("Error generating or adding key:", error);
-                new Notice(`Error generating key: ${error.message}`, 5000);
-            }
-        }).addClass('my-plugin-ribbon-class');
-        */
-
-        // Removed: Ribbon icon for View All Collaboration Keys
-        /*
-        this.addRibbonIcon('list', 'View All Collaboration Keys', () => {
-            new KeyListModal(this.app, this).open();
-        });
-        */
-
-        // Removed: Ribbon icon for Link / Pull a Collaborative Note
-        /*
-        this.addRibbonIcon('link', 'Link / Pull a Collaborative Note', () => {
-            new LinkNoteModal(this.app, this).open();
-        });
-        */
         this.addSettingTab(new PluginSettingsTab(this.app, this));
     }
 
@@ -294,7 +297,7 @@ export default class MyPlugin extends Plugin {
             res.end("Collaboration Plugin Server is running.\n");
         });
 
-        const PORT = 3000;
+        const PORT = 3010;
         server.listen(PORT, () => {
             console.log(`Server started on port ${PORT}`);
         });
@@ -376,4 +379,6 @@ export default class MyPlugin extends Plugin {
         // Save all settings, including linkedKeys
         await this.saveData(this.settings);
     }
+
+
 }

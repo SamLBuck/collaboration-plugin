@@ -67,6 +67,19 @@ wss.on("connection", (socket) => {
         return;
       }
 
+      if (message.type === "push-note") {
+        const { key, content } = message.payload;
+        console.log(`[Server] Received push-note for '${key}'`);
+      
+        registerNote(key, content); // Overwrites or creates in registry
+        socket.send(JSON.stringify({
+          type: "ack",
+          payload: { message: `Note '${key}' pushed and stored.` }
+        }));
+        return;
+      }
+      
+
       if (message.type === "note") {
         const key = message.payload.key;
         const content = getNote(key);
@@ -88,6 +101,7 @@ wss.on("connection", (socket) => {
           })
         );
         return;
+
       }
     } catch (err) {
       console.error("[Server] Error handling message:", err);
