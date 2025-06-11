@@ -129,7 +129,10 @@ export class LinkNoteModal extends Modal {
                             const existingLinkedKey = this.plugin.settings.linkedKeys.find(item => item.ip === input);
                             if (!existingLinkedKey) {
                                 // Default access type for linked keys could be 'Pulled' or 'View'
-                                const newLinkedKeyItem: KeyItem = { ip: input, note: keyBasename, access: 'Pulled' };
+                                const newLinkedKeyItem: KeyItem = {
+                                    ip: input, note: keyBasename, access: 'Pulled',
+                                    content: undefined
+                                };
                                 this.plugin.settings.linkedKeys.push(newLinkedKeyItem);
                                 await this.plugin.saveSettings();
                                 new Notice(`Key "${input}" added to your linked keys list.`, 3000);
@@ -159,45 +162,7 @@ export class LinkNoteModal extends Modal {
                         }
                     });
             });
-            new Setting(contentEl)
-            new Setting(contentEl)
-            .addButton(button => {
-                button.setButtonText("Push Note")
-                    .setCta()
-                    .onClick(async () => {
-                        const input = this.linkNoteKeyInput.getValue().trim();
-                        if (!input) {
-                            new Notice("Please enter a Share Key / Password to push a note.", 3000);
-                            return;
-                        }
-        
-                        let parsedKeyInfo;
-                        try {
-                            parsedKeyInfo = parseKey(input);
-                            if (!parsedKeyInfo || !parsedKeyInfo.ip || !parsedKeyInfo.noteName) {
-                                throw new Error('Invalid key format. Expected "IP-NoteName".');
-                            }
-                        } catch (error: any) {
-                            new Notice(`Key parsing error: ${error.message}`, 5000);
-                            return;
-                        }
-        
-                        const { ip, noteName } = parsedKeyInfo;
-                        const file = this.app.vault.getAbstractFileByPath(`${noteName}.md`) as TFile;
-        
-                        if (!file) {
-                            new Notice(`Note "${noteName}" not found in your vault.`, 3000);
-                            return;
-                        }
-        
-                        const content = await this.app.vault.read(file);
-        
-                        const { sendNoteToHost } = await import("../networking/socket/client");
-                        sendNoteToHost(ip, noteName, content);
-                        new Notice(`Pushed '${noteName}' to ${ip}`, 3000);
-                    });
-            });
-        
+
         contentEl.createEl("h3", { text: "My Linked Keys (from others)" });
         this.linkedKeysContainer = contentEl.createDiv({ cls: 'linked-keys-container' });
         await this.renderLinkedKeysContent(this.linkedKeysContainer);

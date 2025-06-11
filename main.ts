@@ -227,7 +227,7 @@ export default class MyPlugin extends Plugin {
           });
           
 
-        this.registerEvent(
+        /*this.registerEvent(
             this.app.workspace.on("file-open", (file) => {
                 if (!file) return;
                 const key = file.basename;
@@ -461,51 +461,5 @@ export default class MyPlugin extends Plugin {
             new Notice(`Failed to open ${viewType} panel. Could not find or create a suitable pane.`, 6000);
         }
     }
-
-    onunload() {
-        new Notice('Plugin is unloading!');
-        
-        // Detach all custom views when the plugin unloads
-        this.app.workspace.detachLeavesOfType(COLLABORATION_VIEW_TYPE);
-        this.app.workspace.detachLeavesOfType(KEY_LIST_VIEW_TYPE);
-        this.app.workspace.detachLeavesOfType(LINK_NOTE_VIEW_TYPE);
-
-        const adapter = this.app.vault.adapter;
-        if (!(adapter instanceof FileSystemAdapter)) return;
-        
-        const vaultPath = adapter.getBasePath();
-        const pidPath = path.join(
-            vaultPath,
-            ".obsidian",
-            "plugins",
-            "collaboration-plugin",
-            "ws-server.pid"
-        );
-        
-        if (fs.existsSync(pidPath)) {
-            const pid = parseInt(fs.readFileSync(pidPath, "utf8"));
-            if (!isNaN(pid)) {
-                try {
-                    process.kill(pid);
-                    console.log(`[Plugin] Cleanly killed previous WebSocket server with PID ${pid}`);
-                } catch (err) {
-                    console.warn(`[Plugin] Failed to kill server PID ${pid}:`, err);
-                }
-            }
-            fs.unlinkSync(pidPath);
-        }
-    }
-        async loadSettings() {
-        const raw = await this.loadData();
-        this.settings = Object.assign({}, DEFAULT_SETTINGS, raw ?? {});
-        this.registry = this.settings.registry;
-        this.personalComments = this.settings.personalComments;
-    }
-    
-    async saveSettings() {
-        // Save all settings, including linkedKeys
-        await this.saveData(this.settings);
-    }
-
 
 }
