@@ -71,9 +71,9 @@ interface MyPluginSettings {
 const DEFAULT_SETTINGS: MyPluginSettings = {
     mySetting: 'default',
     keys: [], // MODIFIED: Removed the default key entry here
-    linkedKeys: [], // NEW: Initialize as empty array
+    linkedKeys: [], // 
     registry: [],
-    autoUpdateRegistry: true,
+    autoUpdateRegistry: false, // changed to test whether the push note works. 
     personalComments: [],
 
 };
@@ -121,7 +121,9 @@ function hasEditAccess(plugin: MyPlugin, note: string): boolean {
   
     const ipSegment = key.ip.split("|")[0]; // "10.19.21.190-noteName"
     const ip = ipSegment.split("-")[0];     // "10.19.21.190"
-  
+    console.log(ip)
+    console.log(note)
+    console.log(content)
     sendNoteToHost(ip, note, content);  // ✅ now correctly references push-note logic
     new Notice(`Pushed '${note}' to host at ${ip}`, 4000);
   }
@@ -131,16 +133,15 @@ export default class MyPlugin extends Plugin {
     settings: MyPluginSettings;
     registry: noteRegistry[] = []; // This will be deprecated in favor of settings.registry
     personalComments: PersonalComment[] = []; // Store personal comments
+    autoRegistryUpdate: boolean = false; // Auto-update registry setting
 
     async onload() {
         console.log("Loading collaboration plugin...");
         await this.loadSettings();
 
-        // Start the HTTP server
-        this.startServer();
 
-        // Start WebSocket server
-        this.startWebSocketServer();
+        // Sart WebSocket server
+        startWebSocketServerProcess(this.app, this);
 
         // Register custom commands (Command Palette commands)
         registerGenerateKeyCommand(this.app, this);
@@ -198,7 +199,7 @@ export default class MyPlugin extends Plugin {
           
               const ip = editKey.ip.split("|")[0].split("-")[0]; // extract "10.19.21.190"
               const content = await this.app.vault.read(file);
-          
+              console.log(`Pushing note '${note}' to host at ${ip}...`);
               pushNoteToHost(this, note, content);
             }
           });
@@ -236,19 +237,19 @@ export default class MyPlugin extends Plugin {
         // --- END ACTIVE ---
 
 
-        // Listen for file changes if auto-update is enabled
-        this.app.vault.on("modify", async (file) => {
-            if (this.settings.autoUpdateRegistry) {
-                if (file instanceof TFile) {
-                    const key = file.basename; // Uses basename as key for auto-update
-                    const content = await this.app.vault.read(file);
-                    await updateNoteRegistry(this, key, content);
-                    console.log(`[Auto-Update] Registry updated for note '${key}'.`);
-                } else {
-                    console.warn(`[Auto-Update] Skipped updating registry for non-TFile instance.`);
-                }
-            }
-        });
+        // // Listen for file changes if auto-update is enabled
+        // this.app.vault.on("modify", async (file) => {
+        //     if (this.settings.autoUpdateRegistry) {
+        //         if (file instanceof TFile) {
+        //             const key = file.basename; // Uses basename as key for auto-update
+        //             const content = await this.app.vault.read(file);
+        //             await updateNoteRegistry(this, key, content);
+        //             console.log(`[Auto-Update] Registry updated for note '${key}'.`);
+        //         } else {
+        //             console.warn(`[Auto-Update] Skipped updating registry for non-TFile instance.`);
+        //         }
+        //     }
+        // });
 
 
         this.addSettingTab(new PluginSettingsTab(this.app, this));
@@ -288,50 +289,6 @@ export default class MyPlugin extends Plugin {
         } else {
             new Notice(`Failed to open ${viewType} panel.`, 4000);
             console.error(`Collaboration Panel: Could not obtain a workspace leaf for ${viewType}.`);
-        }
-    }
-
-    startServer() {
-        const server = http.createServer((req, res) => {
-            res.writeHead(200, { "Content-Type": "text/plain" });
-            res.end("Collaboration Plugin Server is running.\n");
-        });
-
-        const PORT = 3010;
-        server.listen(PORT, () => {
-            console.log(`Server started on port ${PORT}`);
-        });
-    }
-
-    startWebSocketServer() {
-        try {
-            const serverPath = this.manifest.dir + "/networking/socket/dist/server.cjs";
-            const childProcess = require("child_process");
-            
-            const serverProcess = childProcess.fork(serverPath, [], {
-                silent: false,
-                stdio: 'inherit'
-            });
-
-            serverProcess.on('error', (err) => {
-                console.error('[Plugin] WebSocket server process error:', err);
-                new Notice(`WebSocket server process encountered an error: ${err.message}`, 5000);
-            });
-
-            serverProcess.on('exit', (code, signal) => {
-                if (code !== 0) {
-                    console.error(`[Plugin] WebSocket server process exited with code ${code} and signal ${signal}`);
-                    new Notice(`WebSocket server process exited unexpectedly. Code: ${code}`, 5000);
-                } else {
-                    console.log('[Plugin] WebSocket server process exited cleanly.');
-                }
-            });
-
-            console.log("[Plugin] WebSocket server started at ws://localhost:3010");
-            new Notice("WebSocket server started at ws://localhost:3010");
-        } catch (err: any) {
-            console.error("[Plugin] Failed to start WebSocket server:", err);
-            new Notice(`Failed to start WebSocket server: ${err.message}. Check console for details.`, 5000);
         }
     }
 
