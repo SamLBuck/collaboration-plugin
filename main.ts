@@ -135,13 +135,56 @@ function pushNoteToHost(plugin: MyPlugin, note: string, content: string ) {
  
     const ipSegment = key.ip.split("|")[0]; // "10.19.21.190-noteName"
     const ip = ipSegment.split("-")[0];     // "10.19.21.190"
-    console.log(ip)
-    console.log(note)
-    console.log(content)
+    console.log("ip" + ip)
+    console.log("note name" + note)
+    console.log("content" + content)
     sendNoteToHost(ip, note, content);  // ✅ now correctly references push-note logic
     new Notice(`Pushed '${note}' to host at ${ip}`, 4000);
 }
     
+  export function waitForWebSocketConnection(url: string, plugin: MyPlugin, retries = 15): void {
+	let attempt = 0;
+
+	const tryConnect = () => {
+		const socket = new WebSocket(url);
+
+		socket.onopen = () => {
+			console.log("[Plugin] Connected to WebSocket server");
+		};
+
+		socket.onerror = (err: Event) => {
+			console.warn(`[Plugin] Attempt ${attempt + 1} failed to connect to WebSocket server`, err);
+
+			if (++attempt < retries) {
+				setTimeout(tryConnect, 300);
+			} else {
+				console.error("[Plugin] Failed to connect to WebSocket server after multiple attempts.");
+			}
+		};
+
+		socket.onmessage = async (event: MessageEvent) => {
+			try {
+				const msg = JSON.parse(event.data.toString());
+
+				if (msg.type === "push-note") {
+					const { key, content } = msg.payload;
+					console.log(`[Plugin] Received push-note for '${key}'`);
+
+					const noteManager = new NoteManager(plugin, "ws://localhost:3010");
+					await noteManager.handleIncomingPush(key, content);
+				}
+			} catch (err) {
+				console.error("[Plugin] Failed to parse incoming WebSocket message:", err);
+			}
+		};
+
+		socket.onclose = () => {
+			console.log("[Plugin] WebSocket connection closed.");
+		};
+	};
+
+	tryConnect();
+}
 
 export default class MyPlugin extends Plugin {
     settings: MyPluginSettings;
@@ -152,9 +195,11 @@ export default class MyPlugin extends Plugin {
     async onload() {
         console.log("Loading collaboration plugin...");
         await this.loadSettings();
+        // Sart WebSocket server
+startWebSocketServerProcess(this.app, this);
 
-        // Start WebSocket server
-        startWebSocketServerProcess(this.app, this);
+waitForWebSocketConnection("ws://localhost:3010", this);
+
 
         // Register custom commands (Command Palette commands)
         registerGenerateKeyCommand(this.app, this);

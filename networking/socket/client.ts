@@ -65,6 +65,7 @@ export function sendNoteToHost(ip: string, key: string, content: string) {
     const socket = new WebSocket(`ws://${ip}:3010`);
 
     socket.onopen = () => {
+        console.log("[Client] Connection established. Sending note request...");
         const message = {
             type: "push-note",
             payload: { key, content }

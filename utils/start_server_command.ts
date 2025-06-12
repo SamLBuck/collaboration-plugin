@@ -77,17 +77,11 @@ export function startWebSocketServerProcess(app: App, plugin: MyPlugin): void {
 
     const PORT = 3010;
     isPortAvailable(PORT).then((available) => {
-        if (!available) {
-            console.warn(`[Plugin] Port ${PORT} is already in use. Skipping server start.`);
-            new Notice(`WebSocket server already running on port ${PORT}, or port is in use. Try using the command "Start WebSocket Server" if you expect it to start.`);
-            return;
-        }
-
         console.log(`[Plugin] Attempting to launch WebSocket server from: ${serverPath}`);
         const subprocess = spawn("node", [serverPath], {
             shell: false, // Prevents shell interpolation issues
             detached: true, // Allows the child process to run independently
-            stdio: 'inherit' // <<< CRITICAL CHANGE: Inherit parent's stdio for debugging
+            stdio: 'inherit' 
         });
 
         // Save the new PID
