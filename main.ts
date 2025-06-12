@@ -7,15 +7,14 @@ import {
     Notice,
     TFile,
     WorkspaceLeaf,
-    WorkspaceTabs,
     WorkspaceSidedock,
-    Editor, // NEW: Import Editor for cursor position
-	MarkdownView,
+    Editor,
+    MarkdownView,
 } from 'obsidian';
 import { registerAddKeyCommand } from './utils/add_key_command';
 import { registerDeleteKeyCommand } from './utils/delete_key_command';
-import { KeyListModal } from './settings/key_list_page02'; // Still needed for ConfirmationModal
-import { LinkNoteModal } from './settings/link_note_page03'; // Still needed for ConfirmationModal
+import { KeyListModal } from './settings/key_list_page02';
+import { LinkNoteModal } from './settings/link_note_page03';
 import { generateKey, addKey } from './storage/keyManager';
 import { registerNoteWithPeer, requestNoteFromPeer, sendNoteToHost } from './networking/socket/client';
 import { PluginSettingsTab } from "./settings/plugin_setting_tab";
@@ -23,11 +22,11 @@ import { FileSystemAdapter } from "obsidian";
 const { spawn } = require("child_process");
 import * as path from "path";
 import * as fs from "fs";
-const noteRegistry = require("./networking/socket/dist/noteRegistry.cjs");
+const noteRegistry = require("./networking/socket/dist/noteRegistry.cjs"); // Assuming this is part of your server logic
 import * as http from "http";
-import { tempKeyInputModal } from "./settings/tempKeyInputModal";
-import { tempIPInputModal } from "./settings/tempIPInputModal";
-import { getLocalIP } from "./utils/get-ip"
+import { tempKeyInputModal } from './settings/tempKeyInputModal';
+import { tempIPInputModal } from './settings/tempIPInputModal';
+import { getLocalIP } from './utils/get-ip';
 import { registerGenerateKeyCommand } from './utils/generate_key_command';
 import { registerPullNoteCommand } from './utils/pull_note_command';
 import { registerStartServerCommand, startWebSocketServerProcess } from './utils/start_server_command';
@@ -36,15 +35,9 @@ import { registerListSharedKeysCommand } from './utils/list_keys_command';
 import { registerShareCurrentNoteCommand } from './utils/share_active_note';
 import { registerSyncFromServerToSettings, syncRegistryFromServer } from './utils/sync_command';
 import { registerUpdateRegistryCommand } from './utils/share_active_note';
-// Removed: registerAddPersonalCommentCommand and showAllPersonalCommentsForKey
-// import { registerAddPersonalCommentCommand } from './utils/addPersonalCommentCommand';
-// import { showAllPersonalCommentsForKey } from './utils/showCommentModal';
- import { v4 as uuidv4 } from 'uuid'; // NEW: For generating unique IDs for personal notes
 
 // --- MODIFIED IMPORTS:
-// Import view type constants from the central constants file
-import { COLLABORATION_VIEW_TYPE, KEY_LIST_VIEW_TYPE, LINK_NOTE_VIEW_TYPE, PERSONAL_NOTES_VIEW_TYPE } from './constants/viewTypes';
-// Import view classes individually from their respective view files
+import { COLLABORATION_VIEW_TYPE, KEY_LIST_VIEW_TYPE, LINK_NOTE_VIEW_TYPE } from './constants/viewTypes';
 import { CollaborationPanelView } from './views/CollaborationPanelView';
 import { KeyListView } from './views/KeyListView';
 import { LinkNoteView } from './views/LinkNoteView';
@@ -53,38 +46,23 @@ import { LinkNoteView } from './views/LinkNoteView';
 
 export type NoteRegistry = Record<string, string>; // key => content
 
-// --- MODIFIED: PersonalNote Interface (based on our discussion) ---
-export interface PersonalNote {
-    id: string;             // Unique ID (UUID)
-    targetFilePath: string; // Full path to the Obsidian note file (e.g., "Daily Notes/2025-06-11.md")
-    lineNumber: number;     // The 0-indexed line number in the target file
-    title?: string;         // Optional user-defined title for the personal note
-    content: string;        // The main text of the personal note
-    createdAt: number;      // Timestamp of creation (for sorting)
-    updatedAt: number;      // Timestamp of last modification
-    isExpanded?: boolean;   // UI state: whether this note is currently expanded in the view
-}
-// --- END MODIFIED ---
-
-
 export interface KeyItem {
     content: any;
     ip: string; // This now stores the full key string (e.g., "IP-NoteName")
     note: string; // The parsed note name
     access: string; // The access type (e.g., "Edit", "View", "Pulled")
 }
-interface noteRegistry {
+interface noteRegistry { // This interface seems redundant with the type alias above, but kept as is for now
     key: string;
     content: string;
 }
 interface MyPluginSettings {
     mySetting: string;
     keys: KeyItem[]; // Keys created by this user/plugin instance
-    linkedKeys: KeyItem[]; // NEW: Keys received/linked from external sources
+    linkedKeys: KeyItem[]; // Keys received/linked from external sources
     registry: noteRegistry[];
     autoUpdateRegistry: boolean;
-    personalNotes: PersonalNote[]; // MODIFIED: Renamed and type changed for personal notes
-
+    // REMOVED: personalNotes: PersonalNote[];
 }
 
 const DEFAULT_SETTINGS: MyPluginSettings = {
@@ -93,8 +71,7 @@ const DEFAULT_SETTINGS: MyPluginSettings = {
     linkedKeys: [],
     registry: [],
     autoUpdateRegistry: true,
-    personalNotes: [], // MODIFIED: Initialize as empty array for new PersonalNote interface
-
+    // REMOVED: personalNotes: [],
 };
 
 export function getNoteRegistry(plugin: MyPlugin): noteRegistry[] {
@@ -126,9 +103,9 @@ export function getNoteContentByKey(plugin: MyPlugin, key: string): string | und
 function hasEditAccess(plugin: MyPlugin, note: string): boolean {
     return plugin.settings.keys.some(k => k.note === note && k.access === "Edit") ||
            plugin.settings.linkedKeys.some(k => k.note === note && k.ip.includes("|Edit"));
-  }
-  
-  function pushNoteToHost(plugin: MyPlugin, note: string, content: string ) {
+}
+ 
+function pushNoteToHost(plugin: MyPlugin, note: string, content: string ) {
     const key = plugin.settings.linkedKeys.find(k =>
       k.note.trim().toLowerCase() === note.trim().toLowerCase() &&
       k.ip.includes("|Edit")
@@ -137,7 +114,7 @@ function hasEditAccess(plugin: MyPlugin, note: string): boolean {
       new Notice(`No edit link found for '${note}'`, 4000);
       return;
     }
-  
+ 
     const ipSegment = key.ip.split("|")[0]; // "10.19.21.190-noteName"
     const ip = ipSegment.split("-")[0];     // "10.19.21.190"
     console.log(ip)
@@ -145,14 +122,12 @@ function hasEditAccess(plugin: MyPlugin, note: string): boolean {
     console.log(content)
     sendNoteToHost(ip, note, content);  // ✅ now correctly references push-note logic
     new Notice(`Pushed '${note}' to host at ${ip}`, 4000);
-  }
+}
     
 
 export default class MyPlugin extends Plugin {
     settings: MyPluginSettings;
     registry: noteRegistry[] = []; // This will be deprecated in favor of settings.registry
-    // Removed: personalComments property as it's now part of settings
-    // personalComments: PersonalComment[] = [];
 
     autoRegistryUpdate: boolean = false; // Auto-update registry setting
 
@@ -160,8 +135,7 @@ export default class MyPlugin extends Plugin {
         console.log("Loading collaboration plugin...");
         await this.loadSettings();
 
-
-        // Sart WebSocket server
+        // Start WebSocket server
         startWebSocketServerProcess(this.app, this);
 
         // Register custom commands (Command Palette commands)
@@ -174,9 +148,6 @@ export default class MyPlugin extends Plugin {
         registerListSharedKeysCommand(this);
         registerShareCurrentNoteCommand(this);
         registerUpdateRegistryCommand(this);
-        // Removed old personal comment command registration
-        // registerAddPersonalCommentCommand(this);
-
 
         this.addCommand({
             id: 'delete-note-from-registry',
@@ -208,9 +179,9 @@ export default class MyPlugin extends Plugin {
                 new Notice("No active note open.");
                 return;
               }
-          
+            
               const note = file.basename;
-          
+            
               const editKey = this.settings.linkedKeys.find(k =>
                 k.note === note && k.ip.includes("|Edit")
               );
@@ -218,7 +189,7 @@ export default class MyPlugin extends Plugin {
                 new Notice("You do not have edit access to push this note.");
                 return;
               }
-          
+            
               const ip = editKey.ip.split("|")[0].split("-")[0]; // extract "10.19.21.190"
               const content = await this.app.vault.read(file);
               console.log(`Pushing note '${note}' to host at ${ip}...`);
@@ -226,17 +197,6 @@ export default class MyPlugin extends Plugin {
             }
           });
           
-
-        /*this.registerEvent(
-            this.app.workspace.on("file-open", (file) => {
-                if (!file) return;
-                const key = file.basename;
-                const comments = this.settings.personalComments || [];
-                showAllPersonalCommentsForKey(this.app, key, comments);
-            })
-        );
-        */
-
         // Register all Collaboration Panel Views
         this.registerView(
             COLLABORATION_VIEW_TYPE,
@@ -251,60 +211,17 @@ export default class MyPlugin extends Plugin {
             (leaf) => new LinkNoteView(leaf, this)
         );
 
-
-        // Ribbon icon to open your Collaboration Panel (re-added as per previous requests)
+        // Ribbon icon to open your Collaboration Panel
         this.addRibbonIcon('share', 'Open Collaboration Panel', () => {
             console.log("Ribbon icon clicked! Calling activateView for Collaboration Panel")
             this.activateView(COLLABORATION_VIEW_TYPE); // Open the main control panel
         });
 
-        // NEW: Ribbon icon for creating a personal note
-        this.addRibbonIcon('sticky-note', 'Create Personal Note', async () => {
-            const activeFile = this.app.workspace.getActiveFile();
-            // Get the active Markdown view, which contains the editor
-            const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-
-            if (!activeFile) {
-                new Notice("Please open a note to create a personal note.", 3000);
-                return;
-            }
-
-            // Check if there's an active Markdown editor view
-            if (!activeView) {
-                new Notice("No active Markdown editor found. Please focus on a note.", 3000);
-                return;
-            }
-
-            // Now, safely access the editor object from the activeView
-            const editor = activeView.editor;
-            const lineNumber = editor.getCursor().line;
-
-            const newPersonalNote: PersonalNote = {
-                id: uuidv4(), // Generate a unique ID
-                targetFilePath: activeFile.path,
-                lineNumber: lineNumber,
-                title: '', // Start with an empty title
-                content: '', // Start with empty content
-                createdAt: Date.now(),
-                updatedAt: Date.now(),
-                isExpanded: true, // Auto-expand when created
-            };
-        
-            this.settings.personalNotes.push(newPersonalNote);
-            await this.saveSettings();
-            new Notice(`New personal note created for "${activeFile.basename}" at line ${lineNumber + 1}.`, 3000);
-        
-            // Activate the Personal Notes view and trigger a re-render
-            await this.activateView(PERSONAL_NOTES_VIEW_TYPE);
-            this.app.workspace.trigger('plugin:personal-notes-updated'); // Trigger custom event for view update
-        });
-
-
         // --- ACTIVE: Original StatusBar Item ---
         //const statusBarItemEl = this.addStatusBarItem();
         //statusBarItemEl.setText('Control Panel');
         //statusBarItemEl.onClickEvent(() => {
-        //    this.activateView(COLLABORATION_VIEW_TYPE); // Open the main control panel
+        //   this.activateView(COLLABORATION_VIEW_TYPE); // Open the main control panel
         //});
         //statusBarItemEl.addClass('collaboration-status-bar-item');
         // --- END ACTIVE ---
@@ -324,13 +241,12 @@ export default class MyPlugin extends Plugin {
             }
         });
 
-
         this.addSettingTab(new PluginSettingsTab(this.app, this));
 
         // --- MODIFIED: Activate the Collaboration Panel AFTER layout is ready ---
         // This ensures the panel is opened when Obsidian itself finishes loading its layout.
         //this.app.workspace.onLayoutReady(() => {
-        //    this.activateView(COLLABORATION_VIEW_TYPE);
+        //   this.activateView(COLLABORATION_VIEW_TYPE);
         // });
         // --- END MODIFIED ---
     }
@@ -342,7 +258,6 @@ export default class MyPlugin extends Plugin {
         this.app.workspace.detachLeavesOfType(COLLABORATION_VIEW_TYPE);
         this.app.workspace.detachLeavesOfType(KEY_LIST_VIEW_TYPE);
         this.app.workspace.detachLeavesOfType(LINK_NOTE_VIEW_TYPE);
-        this.app.workspace.detachLeavesOfType(PERSONAL_NOTES_VIEW_TYPE); // NEW: Detach PersonalNotesView
 
         const adapter = this.app.vault.adapter;
         if (!(adapter instanceof FileSystemAdapter)) return;
@@ -373,32 +288,14 @@ export default class MyPlugin extends Plugin {
         const raw = await this.loadData();
         this.settings = Object.assign({}, DEFAULT_SETTINGS, raw ?? {});
         this.registry = this.settings.registry;
-        // Removed: old personalComments property loading
-        // this.personalComments = this.settings.personalComments;
     }
 
     async saveSettings() {
-        // Save all settings, including linkedKeys and personalNotes
+        // Save all settings, including linkedKeys
         await this.saveData(this.settings);
-        // // Listen for file changes if auto-update is enabled
-        // this.app.vault.on("modify", async (file) => {
-        //     if (this.settings.autoUpdateRegistry) {
-        //         if (file instanceof TFile) {
-        //             const key = file.basename; // Uses basename as key for auto-update
-        //             const content = await this.app.vault.read(file);
-        //             await updateNoteRegistry(this, key, content);
-        //             console.log(`[Auto-Update] Registry updated for note '${key}'.`);
-        //         } else {
-        //             console.warn(`[Auto-Update] Skipped updating registry for non-TFile instance.`);
-        //         }
-        //     }
-        // });
-
-
-        this.addSettingTab(new PluginSettingsTab(this.app, this));
     }
 
-    // New method to activate/open a specific collaboration panel view
+    // Method to activate/open a specific collaboration panel view
     async activateView(viewType: string) {
         console.log(`[ActivateView] Attempting to activate view: ${viewType}`);
         const { workspace } = this.app;
@@ -461,5 +358,4 @@ export default class MyPlugin extends Plugin {
             new Notice(`Failed to open ${viewType} panel. Could not find or create a suitable pane.`, 6000);
         }
     }
-
 }
