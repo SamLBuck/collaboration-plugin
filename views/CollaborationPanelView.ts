@@ -290,85 +290,6 @@ export class CollaborationPanelView extends ItemView {
         if (keyItem) {
              this.contentEl.createEl('p', { text: `Key: ${keyItem.ip} (Access: ${keyItem.access})` });
 
-            new Setting(this.contentEl)
-                .setName('Share Current Note')
-                .setDesc('Push the current changes of this note to connected peers.')
-                .addButton(button =>
-                    button
-                        .setButtonText('Push Changes')
-                        .setCta()
-                        .onClick(async () => {
-                        const input = keyItem.ip
-                        if (!input) {
-                            new Notice("Please enter a Share Key / Password to push a note.", 3000);
-                            return;
-                        }
-        
-                        let parsedKeyInfo;
-                        try {
-                            parsedKeyInfo = parseKey(input);
-                            if (!parsedKeyInfo || !parsedKeyInfo.ip || !parsedKeyInfo.noteName) {
-                                throw new Error('Invalid key format. Expected "IP-NoteName".');
-                            }
-                            console.log(parsedKeyInfo.ip)
-                            console.log(parsedKeyInfo.noteName)
-                        } catch (error: any) {
-                            new Notice(`Key parsing error: ${error.message}`, 5000);
-                            return;
-                        }
-                        if (parsedKeyInfo?.view !== "Edit") {
-                            new Notice("This key does not have edit permissions.");
-                            console.warn("Permission check failed:", parsedKeyInfo);
-                            return;
-                         } 
-                         
-        
-                        const { ip, noteName } = parsedKeyInfo;
-                        const file = this.app.vault.getAbstractFileByPath(`${noteName}.md`) as TFile;
-        
-                        if (!file) {
-                            new Notice(`Note "${noteName}" not found in your vault.`, 3000);
-                            return;
-                        }
-        
-                        const content = await this.app.vault.read(file);
-
-                        console.log(content)
-        
-                        console.log("Pushing with view:", parsedKeyInfo.view);
-
-                        const { sendNoteToHost } = await import("../networking/socket/client");
-                        sendNoteToHost(ip, noteName, content);
-                        new Notice(`Pushed '${noteName}' to ${ip}`, 3000);
-                    })
-                )
-                if (keyItem) {
-                    this.contentEl.createEl('p', { text: `Source Key: ${keyItem.ip} (Access: ${keyItem.access})` });
-                    const parsedKeyInfo = parseKey(keyItem.ip);
-                    new Setting(this.contentEl)
-                        .setName('Pull Latest Changes')
-                        .setDesc('Retrieve the latest version of this note from the original source.')
-                        .addButton(button =>
-                            button
-                                .setButtonText('Pull Changes')
-                                .setCta()
-                                .onClick(async () => {
-                                    if (keyItem) {
-                                        if(parsedKeyInfo?.ip === undefined || parsedKeyInfo?.noteName === undefined) {
-                                            new Notice("Invalid key format. Expected 'IP-NoteName|access type'.", 4000);
-                                            return;
-                                        }
-                                        //await requestNoteFromPeer(`ws://${parsedKeyInfo.ip}:3010`, keyItem.ip);
-                                        rewriteExistingNote(this.app, parsedKeyInfo.ip, keyItem.note); // I know it's goofy, but this is how the ip variable names work, didn't wanna go back and change everything
-                                        new Notice(`Requested latest changes for "${noteName}".`);
-                                    } else {
-                                        new Notice("Could not find key for this pullable note.", 4000);
-                                    }
-                                })
-                        );
-                } else {
-                    this.contentEl.createEl('p', { text: 'Error: Linked key not found for this pullable note.' });
-                }
         
             new Setting(this.contentEl)
                 .setName('Delete Key & Registry Content') // UPDATED: Name to reflect both actions
@@ -418,6 +339,61 @@ export class CollaborationPanelView extends ItemView {
         if (keyItem) {
             this.contentEl.createEl('p', { text: `Source Key: ${keyItem.ip} (Access: ${keyItem.access})` });
 
+        new Setting(this.contentEl)
+        .setName('Share Current Note')
+        .setDesc('Push the current changes of this note to connected peers.')
+        .addButton(button =>
+            button
+                .setButtonText('Push Changes')
+                .setCta()
+                .onClick(async () => {
+                const input = keyItem.ip
+                if (!input) {
+                    new Notice("Please enter a Share Key / Password to push a note.", 3000);
+                    return;
+                }
+
+                let parsedKeyInfo;
+                try {
+                    parsedKeyInfo = parseKey(input);
+                    if (!parsedKeyInfo || !parsedKeyInfo.ip || !parsedKeyInfo.noteName) {
+                        throw new Error('Invalid key format. Expected "IP-NoteName".');
+                    }
+                    console.log(parsedKeyInfo.ip)
+                    console.log(parsedKeyInfo.noteName)
+                } catch (error: any) {
+                    new Notice(`Key parsing error: ${error.message}`, 5000);
+                    return;
+                }
+                if (parsedKeyInfo?.view !== "Edit") {
+                    new Notice("This key does not have edit permissions.");
+                    console.warn("Permission check failed:", parsedKeyInfo);
+                    return;
+                 } 
+                 
+
+                const { ip, noteName } = parsedKeyInfo;
+                const file = this.app.vault.getAbstractFileByPath(`${noteName}.md`) as TFile;
+
+                if (!file) {
+                    new Notice(`Note "${noteName}" not found in your vault.`, 3000);
+                    return;
+                }
+
+                const content = await this.app.vault.read(file);
+
+                console.log(content)
+
+                console.log("Pushing with view:", parsedKeyInfo.view);
+
+                const { sendNoteToHost } = await import("../networking/socket/client");
+                sendNoteToHost(ip, noteName, content);
+                new Notice(`Pushed '${noteName}' to ${ip}`, 3000);
+            })
+        )
+        if (keyItem) {
+            this.contentEl.createEl('p', { text: `Source Key: ${keyItem.ip} (Access: ${keyItem.access})` });
+            const parsedKeyInfo = parseKey(keyItem.ip);
             new Setting(this.contentEl)
                 .setName('Pull Latest Changes')
                 .setDesc('Retrieve the latest version of this note from the original source.')
@@ -427,7 +403,12 @@ export class CollaborationPanelView extends ItemView {
                         .setCta()
                         .onClick(async () => {
                             if (keyItem) {
-                                await requestNoteFromPeer(keyItem.ip, keyItem.note);
+                                if(parsedKeyInfo?.ip === undefined || parsedKeyInfo?.noteName === undefined) {
+                                    new Notice("Invalid key format. Expected 'IP-NoteName|access type'.", 4000);
+                                    return;
+                                }
+                                //await requestNoteFromPeer(`ws://${parsedKeyInfo.ip}:3010`, keyItem.ip);
+                                rewriteExistingNote(this.app, parsedKeyInfo.ip, keyItem.note); // I know it's goofy, but this is how the ip variable names work, didn't wanna go back and change everything
                                 new Notice(`Requested latest changes for "${noteName}".`);
                             } else {
                                 new Notice("Could not find key for this pullable note.", 4000);
@@ -438,6 +419,7 @@ export class CollaborationPanelView extends ItemView {
             this.contentEl.createEl('p', { text: 'Error: Linked key not found for this pullable note.' });
         }
     }
+}
 
     private renderNavigationButtons(): void {
         this.contentEl.createEl('h2', { text: 'Navigation' });
