@@ -29,7 +29,7 @@ class SharedNoteManager {
 	
 		if (file) {
 			overwrite = await new Promise(resolve => {
-				new ConfirmationModal(this.plugin.app, `Note "${filePath}" already exists. Overwrite it?`, resolve).open();
+				new ReceivedPushConfirmation(this.plugin.app, `Note "${filePath}" already exists. Overwrite it?`, resolve).open();
 			});
 	
 			if (!overwrite) {
