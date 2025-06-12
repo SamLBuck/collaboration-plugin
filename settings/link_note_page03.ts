@@ -177,6 +177,8 @@ export class LinkNoteModal extends Modal {
                             if (!parsedKeyInfo || !parsedKeyInfo.ip || !parsedKeyInfo.noteName) {
                                 throw new Error('Invalid key format. Expected "IP-NoteName".');
                             }
+                            console.log(parsedKeyInfo.ip)
+                            console.log(parsedKeyInfo.noteName)
                         } catch (error: any) {
                             new Notice(`Key parsing error: ${error.message}`, 5000);
                             return;
@@ -191,6 +193,8 @@ export class LinkNoteModal extends Modal {
                         }
         
                         const content = await this.app.vault.read(file);
+
+                        console.log(content)
         
                         const { sendNoteToHost } = await import("../networking/socket/client");
                         sendNoteToHost(ip, noteName, content);

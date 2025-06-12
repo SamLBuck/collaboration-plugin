@@ -109,7 +109,6 @@ export async function pullNoteFromPeerNewNote(app: App, ip: string, key: string)
 // rewriteExistingNote will try to find and overwrite an existing file
 export async function rewriteExistingNote(app: App, ip: string, key: string) {
     try {
-        // 'key' here is the raw user input (e.g., "Jon's Note"). Send it directly to server.
         const content = await requestNoteFromPeer(`ws://${ip}:3010`, key);
         
         // Find the existing file in the vault, considering Obsidian's potential renaming
