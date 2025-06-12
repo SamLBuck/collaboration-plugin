@@ -67,7 +67,7 @@ export interface PersonalNote {
 
 
 export interface KeyItem {
-    content: any;
+    //content: any;
     ip: string; // This now stores the full key string (e.g., "IP-NoteName")
     note: string; // The parsed note name
     access: string; // The access type (e.g., "Edit", "View", "Pulled")

@@ -12,7 +12,7 @@ import { deleteNoteFromRegistry } from './registryStore';
 export async function generateKey(plugin: MyPlugin, noteName: string, accessType: string): Promise<KeyItem> {
     const localIp = await getLocalIP(); // Or however you get the IP
     // For simplicity, let's just combine them for the 'key' (ip property)
-    const newIpKey = `${localIp}-${noteName}`;
+    const newIpKey = `${localIp}-${noteName}|${accessType}`;
     
     // In a real scenario, you might want more robust key generation,
     // e.g., cryptographic hash, or a server-generated key.
