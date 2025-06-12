@@ -172,14 +172,13 @@ export default class MyPlugin extends Plugin {
     settings: MyPluginSettings;
     registry: noteRegistry[] = []; // This will be deprecated in favor of settings.registry
 
-    autoRegistryUpdate: boolean = false; // Auto-update registry setting
+    autoRegistryUpdate: boolean = true; // Auto-update registry setting
 
     async onload() {
         console.log("Loading collaboration plugin...");
         await this.loadSettings();
         // Sart WebSocket server
 startWebSocketServerProcess(this.app, this);
-
 waitForWebSocketConnection("ws://localhost:3010", this);
 
 

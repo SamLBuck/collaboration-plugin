@@ -12,6 +12,7 @@ import { requestNoteFromPeer } from '../networking/socket/client';
 import { KEY_LIST_VIEW_TYPE } from './KeyListView';
 import { LINK_NOTE_VIEW_TYPE } from './LinkNoteView';
 import { parseKey } from '../utils/parse_key';
+import { rewriteExistingNote } from '../utils/pull_note_command';
 
 // --- INLINED: ConfirmationModal class definition (consistent with other views) ---
 class ConfirmationModal extends Modal {
@@ -341,6 +342,34 @@ export class CollaborationPanelView extends ItemView {
                         new Notice(`Pushed '${noteName}' to ${ip}`, 3000);
                     })
                 )
+                if (keyItem) {
+                    this.contentEl.createEl('p', { text: `Source Key: ${keyItem.ip} (Access: ${keyItem.access})` });
+                    const parsedKeyInfo = parseKey(keyItem.ip);
+                    new Setting(this.contentEl)
+                        .setName('Pull Latest Changes')
+                        .setDesc('Retrieve the latest version of this note from the original source.')
+                        .addButton(button =>
+                            button
+                                .setButtonText('Pull Changes')
+                                .setCta()
+                                .onClick(async () => {
+                                    if (keyItem) {
+                                        if(parsedKeyInfo?.ip === undefined || parsedKeyInfo?.noteName === undefined) {
+                                            new Notice("Invalid key format. Expected 'IP-NoteName|access type'.", 4000);
+                                            return;
+                                        }
+                                        //await requestNoteFromPeer(`ws://${parsedKeyInfo.ip}:3010`, keyItem.ip);
+                                        rewriteExistingNote(this.app, parsedKeyInfo.ip, keyItem.note); // I know it's goofy, but this is how the ip variable names work, didn't wanna go back and change everything
+                                        new Notice(`Requested latest changes for "${noteName}".`);
+                                    } else {
+                                        new Notice("Could not find key for this pullable note.", 4000);
+                                    }
+                                })
+                        );
+                } else {
+                    this.contentEl.createEl('p', { text: 'Error: Linked key not found for this pullable note.' });
+                }
+        
             new Setting(this.contentEl)
                 .setName('Delete Key & Registry Content') // UPDATED: Name to reflect both actions
                 .setDesc('Delete the key associated with this note AND remove its content from your local sharing registry. It will no longer be shareable via this key.') // UPDATED: Description
