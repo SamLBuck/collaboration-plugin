@@ -46,6 +46,8 @@ import { KeyListView } from './views/KeyListView';
 import { LinkNoteView } from './views/LinkNoteView';
 import { PersonalNoteEditModal } from './settings/PersonalNoteEditModal'; // Import the Edit Modal
 // --- END MODIFIED IMPORTS ---
+import { NoteManager } from "./networking/socket/NoteManager";
+
 
 
 export type NoteRegistry = Record<string, string>; // key => content
