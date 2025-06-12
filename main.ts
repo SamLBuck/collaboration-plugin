@@ -124,26 +124,6 @@ function hasEditAccess(plugin: MyPlugin, note: string): boolean {
     return plugin.settings.keys.some(k => k.note === note && k.access === "Edit") ||
            plugin.settings.linkedKeys.some(k => k.note === note && k.ip.includes("|Edit"));
 }
- 
-function pushNoteToHost(plugin: MyPlugin, note: string, content: string ) {
-    const key = plugin.settings.linkedKeys.find(k =>
-      k.note.trim().toLowerCase() === note.trim().toLowerCase() &&
-      k.ip.includes("|Edit")
-    );
-    if (!key) {
-      new Notice(`No edit link found for '${note}'`, 4000);
-      return;
-    }
- 
-    const ipSegment = key.ip.split("|")[0]; // "10.19.21.190-noteName"
-    const ip = ipSegment.split("-")[0];     // "10.19.21.190"
-    console.log("ip" + ip)
-    console.log("note name" + note)
-    console.log("content" + content)
-    sendNoteToHost(ip, note, content);  // ✅ now correctly references push-note logic
-    new Notice(`Pushed '${note}' to host at ${ip}`, 4000);
-}
-    
   export function waitForWebSocketConnection(url: string, plugin: MyPlugin, retries = 15): void {
 	let attempt = 0;
 
@@ -235,32 +215,6 @@ waitForWebSocketConnection("ws://localhost:3010", this);
             },
         });
 
-        this.addCommand({
-            id: "manually-push-note-to-host",
-            name: "Manually Push Active Note to Host",
-            callback: async () => {
-              const file = this.app.workspace.getActiveFile();
-              if (!file) {
-                new Notice("No active note open.");
-                return;
-              }
-            
-              const note = file.basename;
-            
-              const editKey = this.settings.linkedKeys.find(k =>
-                k.note === note && k.ip.includes("|Edit")
-              );
-              if (!editKey) {
-                new Notice("You do not have edit access to push this note.");
-                return;
-              }
-            
-              const ip = editKey.ip.split("|")[0].split("-")[0]; // extract "10.19.21.190"
-              const content = await this.app.vault.read(file);
-              console.log(`Pushing note '${note}' to host at ${ip}...`);
-              pushNoteToHost(this, note, content);
-            }
-          });
           
         // Register all Collaboration Panel Views
         this.registerView(

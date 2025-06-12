@@ -11,6 +11,7 @@ import { requestNoteFromPeer } from '../networking/socket/client';
 // Import the new view types for navigation
 import { KEY_LIST_VIEW_TYPE } from './KeyListView';
 import { LINK_NOTE_VIEW_TYPE } from './LinkNoteView';
+import { parseKey } from '../utils/parse_key';
 
 // --- INLINED: ConfirmationModal class definition (consistent with other views) ---
 class ConfirmationModal extends Modal {
@@ -274,8 +275,8 @@ export class CollaborationPanelView extends ItemView {
 
         this.accessTypeView = createCheckbox('View', true);
         this.accessTypeEdit = createCheckbox('Edit', false);
-        this.accessTypeViewAndComment = createCheckbox('View and Comment', false);
-        this.accessTypeEditWithApproval = createCheckbox('Edit w/ Approval', false);
+        //this.accessTypeViewAndComment = createCheckbox('View and Comment', false);
+        //this.accessTypeEditWithApproval = createCheckbox('Edit w/ Approval', false);
     }
 
     private renderPushNotePanel(): void {
@@ -296,15 +297,50 @@ export class CollaborationPanelView extends ItemView {
                         .setButtonText('Push Changes')
                         .setCta()
                         .onClick(async () => {
-                            if (this.activeNoteFile) {
-                                await shareCurrentNoteWithFileName(this.plugin, this.app, this.activeNoteFile.basename);
-                                new Notice(`Pushed changes for "${this.activeNoteFile.basename}".`);
-                            } else {
-                                new Notice("No active note to push changes for.", 4000);
+                        const input = keyItem.ip
+                        if (!input) {
+                            new Notice("Please enter a Share Key / Password to push a note.", 3000);
+                            return;
+                        }
+        
+                        let parsedKeyInfo;
+                        try {
+                            parsedKeyInfo = parseKey(input);
+                            if (!parsedKeyInfo || !parsedKeyInfo.ip || !parsedKeyInfo.noteName) {
+                                throw new Error('Invalid key format. Expected "IP-NoteName".');
                             }
-                        })
-                );
-            
+                            console.log(parsedKeyInfo.ip)
+                            console.log(parsedKeyInfo.noteName)
+                        } catch (error: any) {
+                            new Notice(`Key parsing error: ${error.message}`, 5000);
+                            return;
+                        }
+                        if (parsedKeyInfo?.view !== "Edit") {
+                            new Notice("This key does not have edit permissions.");
+                            console.warn("Permission check failed:", parsedKeyInfo);
+                            return;
+                         } 
+                         
+        
+                        const { ip, noteName } = parsedKeyInfo;
+                        const file = this.app.vault.getAbstractFileByPath(`${noteName}.md`) as TFile;
+        
+                        if (!file) {
+                            new Notice(`Note "${noteName}" not found in your vault.`, 3000);
+                            return;
+                        }
+        
+                        const content = await this.app.vault.read(file);
+
+                        console.log(content)
+        
+                        console.log("Pushing with view:", parsedKeyInfo.view);
+
+                        const { sendNoteToHost } = await import("../networking/socket/client");
+                        sendNoteToHost(ip, noteName, content);
+                        new Notice(`Pushed '${noteName}' to ${ip}`, 3000);
+                    })
+                )
             new Setting(this.contentEl)
                 .setName('Delete Key & Registry Content') // UPDATED: Name to reflect both actions
                 .setDesc('Delete the key associated with this note AND remove its content from your local sharing registry. It will no longer be shareable via this key.') // UPDATED: Description
