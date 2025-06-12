@@ -86,8 +86,8 @@ export class PluginSettingsTab extends PluginSettingTab {
 
 		this.accessTypeView = createCheckbox('View', false);
 		this.accessTypeEdit = createCheckbox('Edit', true);
-		this.accessTypeViewAndComment = createCheckbox('View and Comment', false);
-		this.accessTypeEditWithApproval = createCheckbox('Edit w/ Approval', false);
+		//this.accessTypeViewAndComment = createCheckbox('View and Comment', false);
+		//this.accessTypeEditWithApproval = createCheckbox('Edit w/ Approval', false);
 
 		// Generate Key Button at bottom of box
 		new Setting(keyGenWrapper)
