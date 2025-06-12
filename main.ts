@@ -10,11 +10,13 @@ import {
     WorkspaceSidedock,
     Editor,
     MarkdownView,
+    MarkdownPostProcessorContext, // For post-processor
+    setIcon, // For icons in post-processor
 } from 'obsidian';
 import { registerAddKeyCommand } from './utils/add_key_command';
 import { registerDeleteKeyCommand } from './utils/delete_key_command';
 import { KeyListModal } from './settings/key_list_page02';
-import { LinkNoteModal } from './settings/link_note_page03';
+import { LinkNoteModal } from './settings/link_note_page03'; // Corrected path/import
 import { generateKey, addKey } from './storage/keyManager';
 import { registerNoteWithPeer, requestNoteFromPeer, sendNoteToHost } from './networking/socket/client';
 import { PluginSettingsTab } from "./settings/plugin_setting_tab";
@@ -22,7 +24,7 @@ import { FileSystemAdapter } from "obsidian";
 const { spawn } = require("child_process");
 import * as path from "path";
 import * as fs from "fs";
-const noteRegistry = require("./networking/socket/dist/noteRegistry.cjs"); // Assuming this is part of your server logic
+const noteRegistry = require("./networking/socket/dist/noteRegistry.cjs");
 import * as http from "http";
 import { tempKeyInputModal } from './settings/tempKeyInputModal';
 import { tempIPInputModal } from './settings/tempIPInputModal';
@@ -35,16 +37,32 @@ import { registerListSharedKeysCommand } from './utils/list_keys_command';
 import { registerShareCurrentNoteCommand } from './utils/share_active_note';
 import { registerSyncFromServerToSettings, syncRegistryFromServer } from './utils/sync_command';
 import { registerUpdateRegistryCommand } from './utils/share_active_note';
+import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs for personal notes
 
 // --- MODIFIED IMPORTS:
 import { COLLABORATION_VIEW_TYPE, KEY_LIST_VIEW_TYPE, LINK_NOTE_VIEW_TYPE } from './constants/viewTypes';
 import { CollaborationPanelView } from './views/CollaborationPanelView';
 import { KeyListView } from './views/KeyListView';
 import { LinkNoteView } from './views/LinkNoteView';
+import { PersonalNoteEditModal } from './settings/PersonalNoteEditModal'; // Import the Edit Modal
 // --- END MODIFIED IMPORTS ---
 
 
 export type NoteRegistry = Record<string, string>; // key => content
+
+// --- MODIFIED: PersonalNote Interface ---
+export interface PersonalNote {
+    id: string;             // Unique ID (UUID) for the note object itself
+    targetFilePath: string; // Full path to the Obsidian note file
+    lineNumber: number;     // The 0-indexed line number in the target file where the marker is inserted
+    title?: string;         // Optional user-defined title for the personal note
+    content: string;        // The actual content of the personal note (STORED ONLY IN PLUGIN SETTINGS)
+    createdAt: number;      // Timestamp of creation (for sorting)
+    updatedAt: number;      // Timestamp of last modification
+    isExpanded?: boolean;   // UI state: for the embedded box (if implemented)
+}
+// --- END MODIFIED ---
+
 
 export interface KeyItem {
     content: any;
@@ -52,17 +70,17 @@ export interface KeyItem {
     note: string; // The parsed note name
     access: string; // The access type (e.g., "Edit", "View", "Pulled")
 }
-interface noteRegistry { // This interface seems redundant with the type alias above, but kept as is for now
+interface noteRegistry {
     key: string;
     content: string;
 }
 interface MyPluginSettings {
     mySetting: string;
     keys: KeyItem[]; // Keys created by this user/plugin instance
-    linkedKeys: KeyItem[]; // Keys received/linked from external sources
+    linkedKeys: KeyItem[]; // NEW: Keys received/linked from external sources
     registry: noteRegistry[];
     autoUpdateRegistry: boolean;
-    // REMOVED: personalNotes: PersonalNote[];
+    personalNotes: PersonalNote[]; // Personal notes metadata + content
 }
 
 const DEFAULT_SETTINGS: MyPluginSettings = {
@@ -71,7 +89,7 @@ const DEFAULT_SETTINGS: MyPluginSettings = {
     linkedKeys: [],
     registry: [],
     autoUpdateRegistry: true,
-    // REMOVED: personalNotes: [],
+    personalNotes: [], // Initialize as empty array for new PersonalNote interface
 };
 
 export function getNoteRegistry(plugin: MyPlugin): noteRegistry[] {
@@ -211,11 +229,171 @@ export default class MyPlugin extends Plugin {
             (leaf) => new LinkNoteView(leaf, this)
         );
 
+
         // Ribbon icon to open your Collaboration Panel
         this.addRibbonIcon('share', 'Open Collaboration Panel', () => {
             console.log("Ribbon icon clicked! Calling activateView for Collaboration Panel")
             this.activateView(COLLABORATION_VIEW_TYPE); // Open the main control panel
         });
+
+        // MODIFIED: Ribbon icon for creating an IN-NOTE private personal note
+        this.addRibbonIcon('sticky-note', 'Create Private Personal Note (In-Note)', async () => {
+            const activeFile = this.app.workspace.getActiveFile();
+            const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+
+            if (!activeFile) {
+                new Notice("Please open a note to create an in-note personal note.", 3000);
+                return;
+            }
+
+            if (!activeView) {
+                new Notice("No active Markdown editor found. Please focus on a note.", 3000);
+                return;
+            }
+
+            const editor = activeView.editor;
+            const cursor = editor.getCursor();
+            const lineNumber = cursor.line;
+            const defaultContent = "Type your private note here...";
+            const noteId = uuidv4(); // Generate a unique ID
+
+            // Define the FENCED CODE BLOCK marker to insert into the Markdown file
+            // This now matches the regex in the MarkdownPostProcessor.
+            const personalNoteMarker =
+                `\`\`\`personal-note-id-${noteId}\n` + // The lang identifier used by post-processor
+                `${defaultContent}\n` +                 // Initial content directly in the block
+                `\`\`\`\n`;
+
+            // Insert the marker into the editor at the cursor position
+            editor.replaceRange(personalNoteMarker, cursor);
+
+            // Add the FULL personal note (including its content) to plugin settings
+            // This is still important for the Edit Modal to pull data from.
+            const newPersonalNote: PersonalNote = {
+                id: noteId,
+                targetFilePath: activeFile.path,
+                lineNumber: lineNumber, // Store the line where the marker was inserted
+                title: `Private Note on ${activeFile.basename} (Line ${lineNumber + 1})`, // Default title
+                content: defaultContent, // Store the actual content here (source for edit modal)
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                isExpanded: true, // This will be used for UI state of the embedded box later
+            };
+        
+            this.settings.personalNotes.push(newPersonalNote);
+            await this.saveSettings();
+            new Notice(`Private personal note box created for "${activeFile.basename}" at line ${lineNumber + 1}.`, 3000);
+            
+            // Optionally, place cursor inside the new block for immediate editing (after the lang identifier line)
+            editor.setCursor(lineNumber + 1, 0); 
+        });
+
+        // NEW: Register Markdown Post Processor for rendering personal notes in Reading View
+        this.registerMarkdownPostProcessor((element: HTMLElement, context: MarkdownPostProcessorContext) => {
+            // Select only direct children 'pre > code' which are raw code blocks in markdown AST
+            const codeblocks = element.querySelectorAll('pre > code');
+            codeblocks.forEach(codeblock => {
+                // The info string of the code block (e.g., 'personal-note-id-UUID')
+                const lang = codeblock.className.replace(/^language-/, ''); // Get the language string
+                const match = lang.match(/^personal-note-id-(.+)$/); // Match our custom ID format
+
+                if (match) {
+                    const noteId = match[1];
+                    const personalNote = this.settings.personalNotes.find(note => note.id === noteId);
+
+                    // Ensure the 'codeblock' itself is the <pre><code> container for replacement
+                    const parentPre = codeblock.parentElement;
+                    if (!parentPre || parentPre.tagName.toLowerCase() !== 'pre') {
+                        // This should ideally not happen if it's a direct 'pre > code'
+                        console.warn("Personal Note Post Processor: Code block parent is not <pre>.", codeblock);
+                        return;
+                    }
+
+                    if (personalNote) {
+                        // Create the custom rendered personal note box
+                        const noteBox = createDiv({ cls: 'personal-note-box' });
+                        noteBox.setAttribute('data-personal-note-id', personalNote.id); // Store ID on the element
+                        // Use the content from settings, not from the raw markdown block (which is just a placeholder now)
+                        const noteContent = personalNote.content; 
+
+                        const header = noteBox.createDiv({ cls: 'personal-note-box-header' });
+                        const titleEl = header.createEl('span', {
+                            text: personalNote.title || 'Untitled Private Note',
+                            cls: 'personal-note-box-title'
+                        });
+
+                        const actions = header.createDiv({ cls: 'personal-note-box-actions' });
+                        
+                        // Edit Button
+                        const editButton = actions.createEl('button', { cls: 'personal-note-box-button' });
+                        setIcon(editButton, 'pencil');
+                        editButton.ariaLabel = 'Edit Note';
+                        editButton.onclick = async () => {
+                            const modal = new PersonalNoteEditModal(this.app, this, personalNote);
+                            const saved = await modal.waitForClose(); // Wait for modal to close
+                            if (saved) {
+                                // Update displayed content without full re-render of the markdown section
+                                contentArea.empty();
+                                contentArea.createEl('p', { text: personalNote.content, cls: 'personal-note-box-content-text' });
+                                titleEl.setText(personalNote.title || 'Untitled Private Note');
+                                // Removed the problematic context.get line as it's not needed and causes an error.
+                                // Direct DOM manipulation is sufficient here.
+                            }
+                        };
+
+                        // Delete Button
+                        const deleteButton = actions.createEl('button', { cls: 'personal-note-box-button mod-warning' });
+                        setIcon(deleteButton, 'trash');
+                        deleteButton.ariaLabel = 'Delete Note';
+                        deleteButton.onclick = async () => {
+                            if (confirm('Are you sure you want to delete this personal note? This will also remove it from the note file.')) {
+                                // Remove from settings
+                                this.settings.personalNotes = this.settings.personalNotes.filter(n => n.id !== personalNote.id);
+                                await this.saveSettings();
+                                new Notice('Personal note deleted!', 2000);
+
+                                // Remove the marker from the Markdown file
+                                // This requires getting the file content and replacing the marker
+                                const currentFile = this.app.vault.getAbstractFileByPath(personalNote.targetFilePath);
+                                if (currentFile instanceof TFile) {
+                                    const fileContent = await this.app.vault.read(currentFile);
+                                    // Regex to match the entire fenced code block
+                                    const markerRegex = new RegExp(`\`\`\`personal-note-id-${personalNote.id}\n[\\s\\S]*?\n\`\`\`\\n?`, 'g');
+                                    const updatedContent = fileContent.replace(markerRegex, '');
+                                    await this.app.vault.modify(currentFile, updatedContent); // This will trigger a full re-render of the note
+                                    new Notice('Note box removed from file.', 1500);
+                                }
+                            }
+                        };
+                        
+                        // Content area
+                        const contentArea = noteBox.createDiv({ cls: 'personal-note-box-content' });
+                        contentArea.style.display = personalNote.isExpanded ? 'block' : 'none'; // Initial state
+
+                        contentArea.createEl('p', { text: noteContent, cls: 'personal-note-box-content-text' });
+
+                        // Toggle expansion on header click
+                        header.onclick = async () => {
+                            personalNote.isExpanded = !personalNote.isExpanded;
+                            contentArea.style.display = personalNote.isExpanded ? 'block' : 'none';
+                            // You might want to update an icon here based on isExpanded, e.g., setIcon(toggleIconElement, personalNote.isExpanded ? 'chevron-down' : 'chevron-right');
+                            await this.saveSettings(); // Save expanded state
+                            // No need to trigger custom event here, as it's just a UI state change for this specific box
+                        };
+
+                        // Replace the original <pre> element with our custom element
+                        parentPre.replaceWith(noteBox);
+
+                        // If the note is not found in settings, display a placeholder or error
+                    } else {
+                        const errorBox = createDiv({ cls: 'personal-note-box-error' });
+                        errorBox.setText(`[Personal Note Error: Note with ID ${noteId} not found. Was it deleted? Please remove this block.]`);
+                        parentPre.replaceWith(errorBox);
+                    }
+                }
+            });
+        });
+
 
         // --- ACTIVE: Original StatusBar Item ---
         //const statusBarItemEl = this.addStatusBarItem();
@@ -291,11 +469,11 @@ export default class MyPlugin extends Plugin {
     }
 
     async saveSettings() {
-        // Save all settings, including linkedKeys
+        // Save all settings, including linkedKeys and personalNotes
         await this.saveData(this.settings);
     }
 
-    // Method to activate/open a specific collaboration panel view
+    // New method to activate/open a specific collaboration panel view
     async activateView(viewType: string) {
         console.log(`[ActivateView] Attempting to activate view: ${viewType}`);
         const { workspace } = this.app;
@@ -338,7 +516,7 @@ export default class MyPlugin extends Plugin {
         }
         
         // 4. If still no leaf, get a new leaf specifically for the right sidebar.
-        //    getRightLeaf(true) will create it if it doesn't exist and ensures it's in the right sidebar.
+        //    getRightLeaf(true) will create it if it's doesn't exist and ensures it's in the right sidebar.
         if (!targetLeaf) {
             console.log(`[ActivateView] No suitable leaf found or reused. Getting a new leaf for the right sidebar for view type: ${viewType}`);
             targetLeaf = workspace.getRightLeaf(false);
