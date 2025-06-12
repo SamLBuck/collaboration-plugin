@@ -4,7 +4,9 @@ export class ReceivedPushConfirmation extends Modal {
 	message: string;
 	currentContent: string;
 	incomingContent: string;
-	callback: (confirmed: boolean) => void;
+    callback: (confirmed: boolean, editedContent?: string) => void;
+    incomingBoxEl: HTMLDivElement | null = null; 
+
 
 	constructor(
 		app: App,
@@ -25,7 +27,7 @@ export class ReceivedPushConfirmation extends Modal {
         contentEl.empty();
     
         // Set wider modal dimensions
-        this.modalEl.style.minWidth = "1200px"; // You can tweak this to 900px or whatever looks good
+        this.modalEl.style.minWidth = "1200px";
     
         contentEl.createEl("h2", { text: "Incoming Push Note" });
         contentEl.createEl("p", { text: this.message });
@@ -40,34 +42,45 @@ export class ReceivedPushConfirmation extends Modal {
         currentBox.style.overflowY = "auto";
         currentBox.style.border = "1px solid var(--background-modifier-border)";
         currentBox.style.padding = "0.5em";
+        
         currentBox.createEl("strong", { text: "Current Content" });
-        currentBox.createEl("pre", { text: this.currentContent });
-    
-        const incomingBox = container.createDiv();
+        const currentTextarea = currentBox.createEl("textarea");
+        currentTextarea.value = this.currentContent;
+        currentTextarea.style.width = "100%";
+        currentTextarea.style.height = "400px";
+        currentTextarea.style.whiteSpace = "pre-wrap";
+        
+        this.incomingBoxEl = container.createDiv();
+        const incomingBox = this.incomingBoxEl;
         incomingBox.style.flex = "1";
         incomingBox.style.maxHeight = "500px";
         incomingBox.style.overflowY = "auto";
         incomingBox.style.border = "1px solid var(--background-modifier-border)";
         incomingBox.style.padding = "0.5em";
+        
         incomingBox.createEl("strong", { text: "Incoming Content" });
-        incomingBox.createEl("pre", { text: this.incomingContent });
-    
-        new Setting(contentEl)
-            .addButton((btn) =>
-                btn.setButtonText("Accept Incoming")
-                    .setCta()
-                    .setClass("mod-cta")
-                    .onClick(() => {
-                        this.close();
-                        this.callback(true);
-                    })
-            )
-            .addButton((btn) =>
-                btn.setButtonText("Keep Current").onClick(() => {
-                    this.close();
-                    this.callback(false);
-                })
-            );
+        const incomingTextarea = incomingBox.createEl("textarea");
+        incomingTextarea.value = this.incomingContent;
+        incomingTextarea.style.width = "100%";
+        incomingTextarea.style.height = "400px";
+        incomingTextarea.style.whiteSpace = "pre-wrap";
+            
+new Setting(contentEl)
+	.addButton((btn) =>
+		btn.setButtonText("Accept Incoming")
+			.setCta()
+			.setClass("mod-cta")
+			.onClick(() => {
+				this.close();
+                this.callback(true, incomingTextarea.value);
+			})
+	)
+	.addButton((btn) =>
+		btn.setButtonText("Keep Current").onClick(() => {
+			this.close();
+			this.callback(false);
+		})
+	)
     }
     
 	onClose() {

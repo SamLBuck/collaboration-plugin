@@ -183,6 +183,12 @@ export class LinkNoteModal extends Modal {
                             new Notice(`Key parsing error: ${error.message}`, 5000);
                             return;
                         }
+                        if (parsedKeyInfo?.view !== "Edit") {
+                            new Notice("This key does not have edit permissions.");
+                            console.warn("Permission check failed:", parsedKeyInfo);
+                            return;
+                         } 
+                         
         
                         const { ip, noteName } = parsedKeyInfo;
                         const file = this.app.vault.getAbstractFileByPath(`${noteName}.md`) as TFile;
@@ -196,6 +202,8 @@ export class LinkNoteModal extends Modal {
 
                         console.log(content)
         
+                        console.log("Pushing with view:", parsedKeyInfo.view);
+
                         const { sendNoteToHost } = await import("../networking/socket/client");
                         sendNoteToHost(ip, noteName, content);
                         new Notice(`Pushed '${noteName}' to ${ip}`, 3000);

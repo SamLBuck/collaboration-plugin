@@ -41,25 +41,32 @@ export class NoteManager {
             currentContent = await this.plugin.app.vault.read(file);
         }
     
-        overwrite = await new Promise(resolve => {
+        let editedContent = content;
+
+        overwrite = await new Promise<boolean>((resolve) => {
             new ReceivedPushConfirmation(
                 this.plugin.app,
                 `Note "${filePath}" already exists. Overwrite it?`,
                 currentContent,
                 content,
-                resolve
+                (confirmed: boolean, edited?: string) => {
+                    if (confirmed && edited !== undefined) {
+                        editedContent = edited;
+                    }
+                    resolve(confirmed);
+                }
             ).open();
         });
-    
+            
         if (!overwrite) {
             new Notice(`Push cancelled for "${filePath}".`, 3000);
             return;
         }
     
         if (file && file instanceof TFile) {
-            await this.plugin.app.vault.modify(file, content);
+            await this.plugin.app.vault.modify(file, editedContent);
         } else {
-            await this.plugin.app.vault.create(filePath, content);
+            await this.plugin.app.vault.create(filePath, editedContent);
         }
     
         // Optionally open the file
