@@ -73,10 +73,8 @@ wss.on("connection", (socket) => {
 
       if (message.type === "push-note") {
         const { key, content } = message.payload;
-        console.log(`[Server] Received push-note for '${key}'`);
         registerNote(key, content);
       
-        // ✅ Broadcast to all connected clients, including Obsidian plugin
         wss.clients.forEach((client) => {
           if (client !== socket && client.readyState === WebSocket.OPEN) {
             client.send(JSON.stringify({
@@ -86,7 +84,6 @@ wss.on("connection", (socket) => {
           }
         });
       
-        // ✅ Acknowledge back to sender
         socket.send(JSON.stringify({
           type: "ack",
           payload: { message: `Registered note '${key}' in registry` }
