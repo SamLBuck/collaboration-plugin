@@ -39,7 +39,7 @@ import { registerUpdateRegistryCommand } from './utils/share_active_note';
 // Removed: registerAddPersonalCommentCommand and showAllPersonalCommentsForKey
 // import { registerAddPersonalCommentCommand } from './utils/addPersonalCommentCommand';
 // import { showAllPersonalCommentsForKey } from './utils/showCommentModal';
-import { v4 as uuidv4 } from 'uuid'; // NEW: For generating unique IDs for personal notes
+ import { v4 as uuidv4 } from 'uuid'; // NEW: For generating unique IDs for personal notes
 
 // --- MODIFIED IMPORTS:
 // Import view type constants from the central constants file
