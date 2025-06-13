@@ -230,6 +230,16 @@ waitForWebSocketConnection("ws://localhost:3010", this);
         );
 
 
+        this.addCommand({
+            id: "manually start websocket",
+            name: "Manually start websocket",
+            callback: async () => {
+                const ip = "localhost";
+                const key = "TestNote"; // Replace with your test note name (without `.md`)
+                waitForWebSocketConnection("ws://localhost:3010", this);
+            }
+        });
+        
         // Ribbon icon to open your Collaboration Panel
         this.addRibbonIcon('share', 'Open Collaboration Panel', () => {
             console.log("Ribbon icon clicked! Calling activateView for Collaboration Panel")

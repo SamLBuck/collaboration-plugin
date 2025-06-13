@@ -4,6 +4,8 @@ import { App, Notice, TFile } from "obsidian";
 import MyPlugin from "../main";
 import { tempIPInputModal } from "../settings/tempIPInputModal";
 import { requestNoteFromPeer } from "../networking/socket/client";
+import { ReceivedPushConfirmation } from "../settings/ReceivedPushConfirmation";
+import { updateNoteRegistry } from "../storage/registryStore";
 
 // This helper is for INTERNAL FILE MATCHING IN OBSIDIAN'S VAULT,
 // acknowledging Obsidian's implicit filename sanitization (e.g., spaces to underscores).
@@ -107,24 +109,65 @@ export async function pullNoteFromPeerNewNote(app: App, ip: string, key: string)
 }
 
 // rewriteExistingNote will try to find and overwrite an existing file
-export async function rewriteExistingNote(app: App, ip: string, key: string) {
-    try {
-        const content = await requestNoteFromPeer(`ws://${ip}:3010`, key);
+// export async function  rewriteExistingNote(app: App, ip: string, key: string) {
+//     try {
+//         const content = await requestNoteFromPeer(`ws://${ip}:3010`, key);
         
-        // Find the existing file in the vault, considering Obsidian's potential renaming
-        const existingFile = await findNoteFileInVault(app, key);
+//         // Find the existing file in the vault, considering Obsidian's potential renaming
+//         const existingFile = await findNoteFileInVault(app, key);
 
-        if (existingFile) {
-            await app.vault.modify(existingFile, content);
-            new Notice(`Note '${key}' pulled and rewritten as '${existingFile.basename}'.`);
-        } else {
-            new Notice(`Note based on '${key}' not found in vault. Cannot rewrite. Consider using 'Pull Note (NEW)' to create it.`);
-        }
-    } catch (err) {
-        console.error("Failed to rewrite note:", err);
-        new Notice(`Failed to rewrite note: ${err}`);
-    }
+//         if (existingFile) {
+//             await app.vault.modify(existingFile, content);
+//             new Notice(`Note '${key}' pulled and rewritten as '${existingFile.basename}'.`);
+//         } else {
+//             new Notice(`Note based on '${key}' not found in vault. Cannot rewrite. Consider using 'Pull Note (NEW)' to create it.`);
+//         }
+//     } catch (err) {
+//         console.error("Failed to rewrite note:", err);
+//         new Notice(`Failed to rewrite note: ${err}`);
+//     }
+// }
+export async function rewriteExistingNote(app: App, ip: string, key: string, plugin?: any) {
+	try {
+		const incoming = await requestNoteFromPeer(`ws://${ip}:3010`, key);
+		const existingFile = await findNoteFileInVault(app, key);
+
+		if (!existingFile) {
+			new Notice(`Note based on '${key}' not found in vault. Cannot rewrite. Consider using 'Pull Note (NEW)' to create it.`);
+			return;
+		}
+
+		const local = await app.vault.read(existingFile);
+
+		const userAccepted = await new Promise<{ confirmed: boolean; content?: string }>((resolve) => {
+			new ReceivedPushConfirmation(
+				app,
+				`Note "${key}.md" already exists. Overwrite it with the pulled content?`,
+				local,
+				incoming,
+                ((confirmed: boolean, editedContent?: string) => {
+                    resolve({ confirmed, content: editedContent });
+                }) as (confirmed: boolean, editedContent?: string) => void
+            ).open();
+		});
+
+		if (!userAccepted.confirmed || !userAccepted.content) {
+			new Notice(`Pull cancelled for '${key}'.`, 3000);
+			return;
+		}
+
+		await app.vault.modify(existingFile, userAccepted.content);
+		new Notice(`Note '${key}' pulled and updated as '${existingFile.basename}'.`, 3000);
+
+		if (plugin) {
+			await updateNoteRegistry(plugin, key, userAccepted.content);
+		}
+	} catch (err) {
+		console.error("Failed to rewrite note:", err);
+		new Notice(`Failed to rewrite note: ${err}`, 5000);
+	}
 }
+
 
 export async function overwriteCurrentNote(app: App, ip: string, key: string) {
     try {
