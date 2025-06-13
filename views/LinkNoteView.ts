@@ -143,7 +143,6 @@ export class LinkNoteView extends ItemView {
                             if (!existingLinkedKey) {
                                 const newLinkedKeyItem: KeyItem = {
                                     ip: input, note: keyBasename, access: 'Pulled',
-                                    content: undefined
                                 };
                                 this.plugin.settings.linkedKeys.push(newLinkedKeyItem);
                                 await this.plugin.saveSettings();
