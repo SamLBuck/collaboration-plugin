@@ -45,9 +45,13 @@ import { CollaborationPanelView } from './views/CollaborationPanelView';
 import { KeyListView } from './views/KeyListView';
 import { LinkNoteView } from './views/LinkNoteView';
 import { PersonalNoteEditModal } from './settings/PersonalNoteEditModal'; // Import the Edit Modal
+
+// --- NEW IMPORT FOR POST-PROCESSOR:
+import { registerPersonalNotePostProcessor } from './utils/pnpp';
+// --- END NEW IMPORT ---
+
 // --- END MODIFIED IMPORTS ---
 import { NoteManager } from "./networking/socket/NoteManager";
-
 
 
 export type NoteRegistry = Record<string, string>; // key => content
@@ -124,48 +128,48 @@ function hasEditAccess(plugin: MyPlugin, note: string): boolean {
     return plugin.settings.keys.some(k => k.note === note && k.access === "Edit") ||
            plugin.settings.linkedKeys.some(k => k.note === note && k.ip.includes("|Edit"));
 }
-  export function waitForWebSocketConnection(url: string, plugin: MyPlugin, retries = 15): void {
-	let attempt = 0;
+ export function waitForWebSocketConnection(url: string, plugin: MyPlugin, retries = 15): void {
+    let attempt = 0;
 
-	const tryConnect = () => {
-		const socket = new WebSocket(url);
+    const tryConnect = () => {
+        const socket = new WebSocket(url);
 
-		socket.onopen = () => {
-			console.log("[Plugin] Connected to WebSocket server");
-		};
+        socket.onopen = () => {
+            console.log("[Plugin] Connected to WebSocket server");
+        };
 
-		socket.onerror = (err: Event) => {
-			console.warn(`[Plugin] Attempt ${attempt + 1} failed to connect to WebSocket server`, err);
+        socket.onerror = (err: Event) => {
+            console.warn(`[Plugin] Attempt ${attempt + 1} failed to connect to WebSocket server`, err);
 
-			if (++attempt < retries) {
-				setTimeout(tryConnect, 300);
-			} else {
-				console.error("[Plugin] Failed to connect to WebSocket server after multiple attempts.");
-			}
-		};
+            if (++attempt < retries) {
+                setTimeout(tryConnect, 300);
+            } else {
+                console.error("[Plugin] Failed to connect to WebSocket server after multiple attempts.");
+            }
+        };
 
-		socket.onmessage = async (event: MessageEvent) => {
-			try {
-				const msg = JSON.parse(event.data.toString());
+        socket.onmessage = async (event: MessageEvent) => {
+            try {
+                const msg = JSON.parse(event.data.toString());
 
-				if (msg.type === "push-note") {
-					const { key, content } = msg.payload;
-					console.log(`[Plugin] Received push-note for '${key}'`);
+                if (msg.type === "push-note") {
+                    const { key, content } = msg.payload;
+                    console.log(`[Plugin] Received push-note for '${key}'`);
 
-					const noteManager = new NoteManager(plugin, "ws://localhost:3010");
-					await noteManager.handleIncomingPush(key, content);
-				}
-			} catch (err) {
-				console.error("[Plugin] Failed to parse incoming WebSocket message:", err);
-			}
-		};
+                    const noteManager = new NoteManager(plugin, "ws://localhost:3010");
+                    await noteManager.handleIncomingPush(key, content);
+                }
+            } catch (err) {
+                console.error("[Plugin] Failed to parse incoming WebSocket message:", err);
+            }
+        };
 
-		socket.onclose = () => {
-			console.log("[Plugin] WebSocket connection closed.");
-		};
-	};
+        socket.onclose = () => {
+            console.log("[Plugin] WebSocket connection closed.");
+        };
+    };
 
-	tryConnect();
+    tryConnect();
 }
 
 export default class MyPlugin extends Plugin {
@@ -214,7 +218,7 @@ waitForWebSocketConnection("ws://localhost:3010", this);
             },
         });
 
-          
+            
         // Register all Collaboration Panel Views
         this.registerView(
             COLLABORATION_VIEW_TYPE,
@@ -271,7 +275,7 @@ waitForWebSocketConnection("ws://localhost:3010", this);
             // This now matches the regex in the MarkdownPostProcessor.
             const personalNoteMarker =
                 `\`\`\`personal-note-id-${noteId}\n` + // The lang identifier used by post-processor
-                `${defaultContent}\n` +                 // Initial content directly in the block
+                `${defaultContent}\n` +              // Initial content directly in the block
                 `\`\`\`\n`;
 
             // Insert the marker into the editor at the cursor position
@@ -298,111 +302,11 @@ waitForWebSocketConnection("ws://localhost:3010", this);
             editor.setCursor(lineNumber + 1, 0); 
         });
 
-        // NEW: Register Markdown Post Processor for rendering personal notes in Reading View
-        this.registerMarkdownPostProcessor((element: HTMLElement, context: MarkdownPostProcessorContext) => {
-            // Select only direct children 'pre > code' which are raw code blocks in markdown AST
-            const codeblocks = element.querySelectorAll('pre > code');
-            codeblocks.forEach(codeblock => {
-                // The info string of the code block (e.g., 'personal-note-id-UUID')
-                const lang = codeblock.className.replace(/^language-/, ''); // Get the language string
-                const match = lang.match(/^personal-note-id-(.+)$/); // Match our custom ID format
-
-                if (match) {
-                    const noteId = match[1];
-                    const personalNote = this.settings.personalNotes.find(note => note.id === noteId);
-
-                    // Ensure the 'codeblock' itself is the <pre><code> container for replacement
-                    const parentPre = codeblock.parentElement;
-                    if (!parentPre || parentPre.tagName.toLowerCase() !== 'pre') {
-                        // This should ideally not happen if it's a direct 'pre > code'
-                        console.warn("Personal Note Post Processor: Code block parent is not <pre>.", codeblock);
-                        return;
-                    }
-
-                    if (personalNote) {
-                        // Create the custom rendered personal note box
-                        const noteBox = createDiv({ cls: 'personal-note-box' });
-                        noteBox.setAttribute('data-personal-note-id', personalNote.id); // Store ID on the element
-                        // Use the content from settings, not from the raw markdown block (which is just a placeholder now)
-                        const noteContent = personalNote.content; 
-
-                        const header = noteBox.createDiv({ cls: 'personal-note-box-header' });
-                        const titleEl = header.createEl('span', {
-                            text: personalNote.title || 'Untitled Private Note',
-                            cls: 'personal-note-box-title'
-                        });
-
-                        const actions = header.createDiv({ cls: 'personal-note-box-actions' });
-                        
-                        // Edit Button
-                        const editButton = actions.createEl('button', { cls: 'personal-note-box-button' });
-                        setIcon(editButton, 'pencil');
-                        editButton.ariaLabel = 'Edit Note';
-                        editButton.onclick = async () => {
-                            const modal = new PersonalNoteEditModal(this.app, this, personalNote);
-                            const saved = await modal.waitForClose(); // Wait for modal to close
-                            if (saved) {
-                                // Update displayed content without full re-render of the markdown section
-                                contentArea.empty();
-                                contentArea.createEl('p', { text: personalNote.content, cls: 'personal-note-box-content-text' });
-                                titleEl.setText(personalNote.title || 'Untitled Private Note');
-                                // Removed the problematic context.get line as it's not needed and causes an error.
-                                // Direct DOM manipulation is sufficient here.
-                            }
-                        };
-
-                        // Delete Button
-                        const deleteButton = actions.createEl('button', { cls: 'personal-note-box-button mod-warning' });
-                        setIcon(deleteButton, 'trash');
-                        deleteButton.ariaLabel = 'Delete Note';
-                        deleteButton.onclick = async () => {
-                            if (confirm('Are you sure you want to delete this personal note? This will also remove it from the note file.')) {
-                                // Remove from settings
-                                this.settings.personalNotes = this.settings.personalNotes.filter(n => n.id !== personalNote.id);
-                                await this.saveSettings();
-                                new Notice('Personal note deleted!', 2000);
-
-                                // Remove the marker from the Markdown file
-                                // This requires getting the file content and replacing the marker
-                                const currentFile = this.app.vault.getAbstractFileByPath(personalNote.targetFilePath);
-                                if (currentFile instanceof TFile) {
-                                    const fileContent = await this.app.vault.read(currentFile);
-                                    // Regex to match the entire fenced code block
-                                    const markerRegex = new RegExp(`\`\`\`personal-note-id-${personalNote.id}\n[\\s\\S]*?\n\`\`\`\\n?`, 'g');
-                                    const updatedContent = fileContent.replace(markerRegex, '');
-                                    await this.app.vault.modify(currentFile, updatedContent); // This will trigger a full re-render of the note
-                                    new Notice('Note box removed from file.', 1500);
-                                }
-                            }
-                        };
-                        
-                        // Content area
-                        const contentArea = noteBox.createDiv({ cls: 'personal-note-box-content' });
-                        contentArea.style.display = personalNote.isExpanded ? 'block' : 'none'; // Initial state
-
-                        contentArea.createEl('p', { text: noteContent, cls: 'personal-note-box-content-text' });
-
-                        // Toggle expansion on header click
-                        header.onclick = async () => {
-                            personalNote.isExpanded = !personalNote.isExpanded;
-                            contentArea.style.display = personalNote.isExpanded ? 'block' : 'none';
-                            // You might want to update an icon here based on isExpanded, e.g., setIcon(toggleIconElement, personalNote.isExpanded ? 'chevron-down' : 'chevron-right');
-                            await this.saveSettings(); // Save expanded state
-                            // No need to trigger custom event here, as it's just a UI state change for this specific box
-                        };
-
-                        // Replace the original <pre> element with our custom element
-                        parentPre.replaceWith(noteBox);
-
-                        // If the note is not found in settings, display a placeholder or error
-                    } else {
-                        const errorBox = createDiv({ cls: 'personal-note-box-error' });
-                        errorBox.setText(`[Personal Note Error: Note with ID ${noteId} not found. Was it deleted? Please remove this block.]`);
-                        parentPre.replaceWith(errorBox);
-                    }
-                }
-            });
-        });
+        // --- NEW: Register Markdown Post Processor for rendering personal notes in Reading View
+        // The previous post-processor code you had was inline. I'm moving it to a separate file
+        // and calling the registration function here for better organization.
+        registerPersonalNotePostProcessor(this);
+        // --- END NEW ---
 
 
         // --- ACTIVE: Original StatusBar Item ---
@@ -475,12 +379,30 @@ waitForWebSocketConnection("ws://localhost:3010", this);
     async loadSettings() {
         const raw = await this.loadData();
         this.settings = Object.assign({}, DEFAULT_SETTINGS, raw ?? {});
+        // --- NEW: Initialize isExpanded for existing personal notes ---
+        if (!this.settings.personalNotes) {
+            this.settings.personalNotes = [];
+        } else {
+            this.settings.personalNotes.forEach(note => {
+                if (typeof note.isExpanded === 'undefined') {
+                    note.isExpanded = false; // Default to collapsed for existing notes
+                }
+            });
+        }
+        // --- END NEW ---
         this.registry = this.settings.registry;
     }
 
     async saveSettings() {
         // Save all settings, including linkedKeys and personalNotes
         await this.saveData(this.settings);
+        // --- NEW: Trigger a general update event after saving settings ---
+        // This can be useful for any views that need a full refresh (like your PersonalNotesView)
+        // or for any inline notes to re-render if their content or state changed externally.
+        // However, for inline notes, the specific event with noteId is more efficient.
+        // You can keep this general trigger if other parts of your plugin rely on it.
+        (this.app as any).trigger('plugin:personal-notes-updated');
+        // --- END NEW ---
     }
 
     // New method to activate/open a specific collaboration panel view

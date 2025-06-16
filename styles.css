@@ -1,18 +1,24 @@
-/* src/styles.css - REVISED FOR IMPROVED AESTHETICS AND KEY READABILITY */
+/* src/styles.css - CONSOLIDATED AND REVISED FOR IMPROVED AESTHETICS AND KEY READABILITY */
 
 /* --- General Plugin-wide Elements --- */
 .obsidian-collaboration-plugin-wrapper {
     /* Optional: A subtle wrapper for all plugin elements if needed */
 }
 
-/* --- Common Section Styling (for Key List and Registry) --- */
+/* --- Common Section Styling (for Key List and Registry containers) --- */
+/* Consolidated: .key-list-container, .note-registry-container, .generated-keys-container, .registry-list-container */
 .key-list-container,
-.note-registry-container {
-    background-color: var(--background-secondary-alt);
+.note-registry-container,
+.generated-keys-container,
+.registry-list-container {
+    /* Using values from the first block for consistency if not overridden,
+       but using the second block's specific background-color and padding for .registry-list-container
+       as it was explicitly lighter. */
+    background-color: var(--background-primary); /* Chosen from the later, more specific block for lighter background */
     border: 1px solid var(--background-modifier-border);
     border-radius: var(--radius-l);
-    padding: 20px;
-    margin-bottom: 25px;
+    padding: 20px; /* Kept from the first block for general containers */
+    margin-bottom: 25px; /* Kept from the first block for general containers */
     box-shadow: var(--shadow-s);
 }
 
@@ -36,62 +42,81 @@ h3 {
 }
 
 /* --- List Headers (Key List, Registry List) --- */
+/* Consolidated: .key-list-header, .registry-list-header, .shared-keys-header */
 .key-list-header,
-.registry-list-header {
+.registry-list-header,
+.shared-keys-header {
     display: grid;
-    font-weight: 600;
-    border-bottom: 2px solid var(--background-modifier-border);
-    padding-bottom: 10px;
-    margin-bottom: 10px;
+    font-weight: 600; /* From first block */
+    border-bottom: 2px solid var(--background-modifier-border); /* From first block, thicker */
+    padding-bottom: 10px; /* From first block */
+    margin-bottom: 10px; /* From first block */
     align-items: center;
     gap: 10px;
-    color: var(--text-faint);
+    color: var(--text-faint); /* From first block */
     text-transform: uppercase;
     font-size: 0.8em;
     letter-spacing: 0.05em;
-    /* Adjusted column widths for content boxes */
-    grid-template-columns: 2.8fr 1.5fr 1fr 0.7fr; /* Adjusted for better balance with boxes */
+    /* Adjusted column widths for content boxes - This is crucial for the layout */
+    grid-template-columns: 2.8fr 1.5fr 1fr 0.7fr; /* Consistent grid from first block */
+}
+
+/* Specific span styling for header (from second block, more specific) */
+.shared-keys-header > span,
+.registry-list-header > span {
+    padding: 0 5px;
+    text-align: left;
+    color: var(--text-accent); /* Accent color for header text within spans */
+    font-weight: bold; /* Added this to ensure bold text for spans in header */
 }
 
 /* --- List Rows (Key List, Registry List) --- */
+/* Consolidated: .key-list-row, .registry-list-row, .shared-keys-row */
 .key-list-row,
-.registry-list-row {
+.registry-list-row,
+.shared-keys-row {
     display: grid;
     align-items: center;
-    padding: 8px 0; /* Reduced vertical padding slightly to make boxes fit better */
-    border-bottom: 1px solid var(--background-modifier-border);
+    padding: 8px 0; /* From first block */
+    border-bottom: 1px solid var(--background-modifier-border); /* From first block */
     transition: background-color 0.2s ease-in-out;
-    /* Adjusted column widths for content boxes */
-    grid-template-columns: 2.8fr 1.5fr 1fr 0.7fr; /* Adjusted for better balance with boxes */
+    /* Adjusted column widths for content boxes - Must match header */
+    grid-template-columns: 2.8fr 1.5fr 1fr 0.7fr; /* Consistent grid from first block */
 }
 
 .key-list-row:hover,
-.registry-list-row:hover {
+.registry-list-row:hover,
+.shared-keys-row:hover {
     background-color: var(--background-modifier-hover);
 }
 
 .key-list-row:last-child,
-.registry-list-row:last-child {
+.registry-list-row:last-child,
+.shared-keys-row:last-child {
     border-bottom: none;
 }
 
-/* --- NEW: Styling for individual content boxes --- */
+/* --- NEW & CONSOLIDATED: Styling for individual content boxes --- */
+/* Consolidated: .field-content-box from both blocks */
 .field-content-box {
-    background-color: var(--background-primary); /* Lighter background for the box */
-    border: 1px solid var(--background-modifier-border-hover); /* Subtle border */
-    border-radius: var(--radius-s); /* Small rounded corners */
-    padding: 6px 10px; /* Internal padding */
-    margin: 2px 0; /* Small vertical margin to separate from grid lines */
+    /* Prioritizing the second block's background-color and margin, as it seemed
+       more refined for these 'neat boxes'. */
+    background-color: var(--background-secondary); /* From second block - slightly darker than container */
+    border: 1px solid var(--background-modifier-border); /* From second block */
+    border-radius: var(--radius-s); /* From second block */
+    padding: 6px 10px; /* Consistent padding */
+    margin: 2px 5px; /* From second block - margin between boxes */
     
-    /* Truncation properties */
+    /* Truncation properties (consistent in both original blocks) */
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
     cursor: help; /* Indicate hover functionality */
 
-    /* Transition for smooth reveal on hover */
+    /* Transition for smooth reveal on hover (consistent) */
     transition: all 0.2s ease-in-out;
     max-width: 100%; /* Ensure it respects grid column width */
+    color: var(--text-normal); /* Explicitly set text color */
 }
 
 .field-content-box:hover {
@@ -106,7 +131,9 @@ h3 {
 }
 
 /* --- Individual Cell Styling (apply .field-content-box to these in JS) --- */
-.key-id-display.field-content-box {
+/* Consolidated: .key-id-display, .registry-key-display */
+.key-id-display.field-content-box,
+.registry-key-display.field-content-box {
     font-family: var(--font-monospace);
     color: var(--text-accent);
     font-weight: 500;
@@ -114,7 +141,9 @@ h3 {
     line-height: 1.3;
 }
 
-.note-name-display.field-content-box {
+/* Consolidated: .note-name-display, .registry-content-display */
+.note-name-display.field-content-box,
+.registry-content-display.field-content-box {
     color: var(--text-normal);
     font-size: 0.9em;
     line-height: 1.3;
@@ -126,29 +155,18 @@ h3 {
     font-size: 0.8em;
 }
 
-.registry-key-display.field-content-box {
-    font-family: var(--font-monospace);
-    color: var(--text-accent);
-    font-weight: 500;
-    font-size: 0.85em;
-    line-height: 1.3;
-}
-
-.registry-content-display.field-content-box {
-    color: var(--text-normal);
-    font-size: 0.9em;
-    line-height: 1.3;
-}
-
 
 /* --- Actions Column Buttons --- */
+/* Consolidated: .key-actions, .registry-actions, .shared-key-actions */
 .key-actions,
-.registry-actions {
+.registry-actions,
+.shared-key-actions {
     display: flex;
     justify-content: flex-end;
-    gap: 8px;
+    gap: 8px; /* From first block, slightly larger gap for better separation */
 }
 
+/* Common warning button styles */
 .key-actions button.mod-warning,
 .registry-actions button.mod-warning {
     --button-background-hover: var(--background-modifier-error-hover);
@@ -167,11 +185,22 @@ h3 {
     opacity: 1;
 }
 
+/* Adjust button sizes for all action buttons (from second block, general to .button) */
+.shared-key-actions .button,
+.registry-actions .button,
+.key-actions .button { /* Added .key-actions .button for consistency */
+    min-width: unset; /* Remove default min-width */
+    padding: 5px; /* Smaller padding for icons */
+    margin: 0 2px; /* From second block for spacing between buttons */
+}
+
+
 /* --- No keys/registry message --- */
+/* Consolidated: .empty-list-message */
 .empty-list-message {
     text-align: center;
     color: var(--text-faint);
-    padding: 30px;
+    padding: 30px; /* From first block, larger padding */
     font-style: italic;
     font-size: 0.95em;
 }
@@ -275,16 +304,14 @@ h3 {
     /* box-shadow: 0 0 5px rgba(0, 0, 0, 0.2); */
 }
 
-/* styles.css */
-
-/* --- General Styling for Key List View --- */
+/* --- General Styling for Key List View (this block was separate before, now integrated) --- */
 .key-list-panel {
     padding: 20px;
     font-family: var(--font-text); /* Use Obsidian's default font */
     color: var(--text-normal); /* Default text color */
 }
 
-/* Headings */
+/* Headings for key list panel (specific) */
 .key-list-panel h2 {
     color: var(--text-title-h2);
     border-bottom: 1px solid var(--background-modifier-border);
@@ -296,84 +323,4 @@ h3 {
 .key-list-panel p {
     color: var(--text-muted);
     margin-bottom: 15px;
-}
-
-/* --- Container Styling for Keys and Registry --- */
-.generated-keys-container,
-.registry-list-container {
-    border: 1px solid var(--background-modifier-border);
-    border-radius: var(--radius-l); /* Rounded corners */
-    padding: 15px;
-    background-color: var(--background-primary); /* Lighter background for the container */
-    margin-bottom: 20px;
-}
-
-/* --- Grid Headers (Keys and Registry) --- */
-.shared-keys-header,
-.registry-list-header {
-    font-weight: bold;
-    border-bottom: 1px solid var(--background-modifier-border);
-    padding-bottom: 8px;
-    margin-bottom: 8px;
-    color: var(--text-accent); /* Header text color */
-}
-
-.shared-keys-header > span,
-.registry-list-header > span {
-    padding: 0 5px;
-    text-align: left;
-}
-
-/* --- Row Styling (Keys and Registry) --- */
-.shared-keys-row,
-.registry-list-row {
-    align-items: center;
-    padding: 8px 0;
-    border-bottom: 1px dashed var(--background-modifier-border-hover); /* Light separator */
-}
-
-.shared-keys-row:last-child,
-.registry-list-row:last-child {
-    border-bottom: none; /* No border for the last row */
-}
-
-/* --- "Neat Boxes" for content fields --- */
-.field-content-box {
-    background-color: var(--background-secondary); /* Slightly darker background than container */
-    border: 1px solid var(--background-modifier-border);
-    border-radius: var(--radius-s); /* Smaller rounded corners for fields */
-    padding: 6px 10px;
-    margin: 2px 5px; /* Small margin between boxes */
-    white-space: nowrap; /* Prevent text from wrapping inside the box */
-    overflow: hidden; /* Hide overflow content */
-    text-overflow: ellipsis; /* Add ellipsis for hidden content */
-    color: var(--text-normal);
-}
-
-/* Specific styling for copy/trash buttons */
-.shared-key-actions button.mod-cta,
-.registry-actions button.mod-warning {
-    margin: 0 2px;
-}
-
-.shared-key-actions,
-.registry-actions {
-    display: flex;
-    justify-content: flex-end; /* Align actions to the right */
-    gap: 5px; /* Space between buttons */
-}
-
-/* Empty list message */
-.empty-list-message {
-    font-style: italic;
-    color: var(--text-muted);
-    text-align: center;
-    padding: 15px;
-}
-
-/* Adjust button sizes if needed */
-.shared-key-actions .button,
-.registry-actions .button {
-    min-width: unset; /* Remove default min-width */
-    padding: 5px; /* Smaller padding */
 }

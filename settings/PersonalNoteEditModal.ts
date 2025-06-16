@@ -1,4 +1,4 @@
-// src/modals/PersonalNoteEditModal.ts
+// srettings/PersonalNoteEditModal.ts
 
 import { App, Modal, Setting, Notice } from 'obsidian';
 import MyPlugin, { PersonalNote } from '../main';
