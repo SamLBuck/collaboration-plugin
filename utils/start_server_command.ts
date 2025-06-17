@@ -61,7 +61,7 @@ export function startWebSocketServerProcess(app: App, plugin: MyPlugin): void {
         return;
     }
 
-    // 🔪 Kill any old PID first for a clean restart
+    // Kill any old PID first for a clean restart
     if (fs.existsSync(pidPath)) {
         const pid = parseInt(fs.readFileSync(pidPath, "utf8"));
         if (!isNaN(pid)) {
@@ -77,13 +77,19 @@ export function startWebSocketServerProcess(app: App, plugin: MyPlugin): void {
 
     const PORT = 3010;
     isPortAvailable(PORT).then((available) => {
+        if (!available) {
+            new Notice(`Port ${PORT} is already in use. Server will not start.`);
+            return;
+        }
+
         console.log(`[Plugin] Attempting to launch WebSocket server from: ${serverPath}`);
         const subprocess = spawn("node", [serverPath], {
             shell: false, // Prevents shell interpolation issues
             detached: true, // Allows the child process to run independently
             stdio: 'inherit' 
         });
-
+        subprocess.unref();
+        
         // Save the new PID
         fs.writeFileSync(pidPath, String(subprocess.pid));
 

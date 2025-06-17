@@ -83,6 +83,14 @@ wss.on("connection", (socket) => {
             }));
           }
         });
+        if (message.type === "ping") {
+          socket.send(JSON.stringify({
+            type: "pong",
+            payload: { message: "pong" }
+          }));
+          return;
+        }
+        
       
         socket.send(JSON.stringify({
           type: "ack",

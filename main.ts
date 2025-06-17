@@ -129,17 +129,28 @@ function hasEditAccess(plugin: MyPlugin, note: string): boolean {
     return plugin.settings.keys.some(k => k.note === note && k.access === "Edit") ||
            plugin.settings.linkedKeys.some(k => k.note === note && k.ip.includes("|Edit"));
 }
- export function waitForWebSocketConnection(url: string, plugin: MyPlugin, retries = 15): void {
+export function waitForWebSocketConnection(url: string, plugin: MyPlugin, retries = 15): void {
     let attempt = 0;
-
+    let pingInterval: NodeJS.Timeout;
     const tryConnect = () => {
+        if (plugin.relaySocket) {
+            console.log("[Plugin] Closing previous socket before new connect");
+            plugin.relaySocket.close();
+        }
+
         const socket = new WebSocket(url);
 
         socket.onopen = () => {
             console.log("[Plugin] Connected to WebSocket server");
+            plugin.relaySocket = socket;
+        
+            pingInterval = setInterval(() => {
+                if (socket.readyState === WebSocket.OPEN) {
+                    socket.send(JSON.stringify({ type: "ping" }));
+                }
+            }, 30000); // every 30 seconds
         };
-
-        socket.onerror = (err: Event) => {
+                socket.onerror = (err: Event) => {
             console.warn(`[Plugin] Attempt ${attempt + 1} failed to connect to WebSocket server`, err);
 
             if (++attempt < retries) {
@@ -166,12 +177,16 @@ function hasEditAccess(plugin: MyPlugin, note: string): boolean {
         };
 
         socket.onclose = () => {
-            console.log("[Plugin] WebSocket connection closed.");
+            console.warn("[Plugin] WebSocket closed. Reconnecting...");
+            plugin.relaySocket = null;
+            clearInterval(pingInterval);
+            setTimeout(tryConnect, 1000);
         };
-    };
+            };
 
     tryConnect();
 }
+
 
 
 export default class MyPlugin extends Plugin {
@@ -180,6 +195,8 @@ export default class MyPlugin extends Plugin {
 
     autoRegistryUpdate: boolean = true; // Auto-update registry setting
     personalNotes: PersonalNote[] = []; // Store personal notes metadata + content
+    relaySocket: WebSocket | null = null;
+
 
     async onload() {
         console.log("Loading collaboration plugin...");
