@@ -251,56 +251,60 @@ waitForWebSocketConnection("ws://localhost:3010", this);
         });
 
         // MODIFIED: Ribbon icon for creating an IN-NOTE private personal note
-        this.addRibbonIcon('sticky-note', 'Create Private Personal Note (In-Note)', async () => {
-            const activeFile = this.app.workspace.getActiveFile();
-            const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+        // MODIFIED: Ribbon icon for creating an IN-NOTE private personal note
+this.addRibbonIcon('sticky-note', 'Create Private Personal Note (In-Note)', async () => {
+    const activeFile = this.app.workspace.getActiveFile();
+    const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
 
-            if (!activeFile) {
-                new Notice("Please open a note to create an in-note personal note.", 3000);
-                return;
-            }
+    if (!activeFile) {
+        new Notice("Please open a note to create an in-note personal note.", 3000);
+        return;
+    }
 
-            if (!activeView) {
-                new Notice("No active Markdown editor found. Please focus on a note.", 3000);
-                return;
-            }
+    if (!activeView) {
+        new Notice("No active Markdown editor found. Please focus on a note.", 3000);
+        return;
+    }
 
-            const editor = activeView.editor;
-            const cursor = editor.getCursor();
-            const lineNumber = cursor.line;
-            const defaultContent = "Type your private note here...";
-            const noteId = uuidv4(); // Generate a unique ID
+    const editor = activeView.editor;
+    const cursor = editor.getCursor();
+    const lineNumber = cursor.line;
+    const defaultContent = "Type your private note here...";
+    const noteId = uuidv4(); // Generate a unique ID
 
-            // Define the FENCED CODE BLOCK marker to insert into the Markdown file
-            // This now matches the regex in the MarkdownPostProcessor.
-            const personalNoteMarker =
-                `\`\`\`personal-note-id-${noteId}\n` + // The lang identifier used by post-processor
-                `${defaultContent}\n` +              // Initial content directly in the block
-                `\`\`\`\n`;
+    // --- CRITICAL CHANGE HERE ---
+    // The language identifier is now fixed to 'personal-note'.
+    // The UUID is placed on the first line *inside* the code block.
+    const personalNoteMarker =
+        `\`\`\`personal-note\n` +           // Fixed language identifier
+        `id:${noteId}\n` +                   // UUID on its own line inside the block
+        `${defaultContent}\n` +              // Actual content below the ID
+        `\`\`\`\n`;
 
-            // Insert the marker into the editor at the cursor position
-            editor.replaceRange(personalNoteMarker, cursor);
+    // Insert the marker into the editor at the cursor position
+    editor.replaceRange(personalNoteMarker, cursor);
 
-            // Add the FULL personal note (including its content) to plugin settings
-            // This is still important for the Edit Modal to pull data from.
-            const newPersonalNote: PersonalNote = {
-                id: noteId,
-                targetFilePath: activeFile.path,
-                lineNumber: lineNumber, // Store the line where the marker was inserted
-                title: `Private Note on ${activeFile.basename} (Line ${lineNumber + 1})`, // Default title
-                content: defaultContent, // Store the actual content here (source for edit modal)
-                createdAt: Date.now(),
-                updatedAt: Date.now(),
-                isExpanded: true, // This will be used for UI state of the embedded box later
-            };
-        
-            this.settings.personalNotes.push(newPersonalNote);
-            await this.saveSettings();
-            new Notice(`Private personal note box created for "${activeFile.basename}" at line ${lineNumber + 1}.`, 3000);
-            
-            // Optionally, place cursor inside the new block for immediate editing (after the lang identifier line)
-            editor.setCursor(lineNumber + 1, 0); 
-        });
+    // Add the FULL personal note (including its content) to plugin settings
+    const newPersonalNote: PersonalNote = {
+        id: noteId,
+        targetFilePath: activeFile.path,
+        lineNumber: lineNumber,
+        title: `Private Note on ${activeFile.basename} (Line ${lineNumber + 1})`,
+        content: defaultContent,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        isExpanded: true,
+    };
+
+    this.settings.personalNotes.push(newPersonalNote);
+    await this.saveSettings();
+    new Notice(`Private personal note box created for "${activeFile.basename}" at line ${lineNumber + 1}.`, 3000);
+
+    // Optionally, place cursor inside the new block for immediate editing (after the lang identifier and ID line)
+    editor.setCursor(lineNumber + 2, 0); // +2 for lang identifier and ID line
+
+    
+});
 
         // --- NEW: Register Markdown Post Processor for rendering personal notes in Reading View
         // The previous post-processor code you had was inline. I'm moving it to a separate file
@@ -401,7 +405,7 @@ waitForWebSocketConnection("ws://localhost:3010", this);
         // or for any inline notes to re-render if their content or state changed externally.
         // However, for inline notes, the specific event with noteId is more efficient.
         // You can keep this general trigger if other parts of your plugin rely on it.
-        (this.app as any).trigger('plugin:personal-notes-updated');
+        (this.app.workspace as any).trigger('plugin:personal-notes-updated');
         // --- END NEW ---
     }
 
