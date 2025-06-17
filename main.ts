@@ -52,6 +52,7 @@ import { registerPersonalNotePostProcessor } from './utils/pnpp';
 
 // --- END MODIFIED IMPORTS ---
 import { NoteManager } from "./networking/socket/NoteManager";
+import { stripPersonalNoteBlocks } from './utils/stripPersonalNotes';
 
 
 export type NoteRegistry = Record<string, string>; // key => content
@@ -172,11 +173,13 @@ function hasEditAccess(plugin: MyPlugin, note: string): boolean {
     tryConnect();
 }
 
+
 export default class MyPlugin extends Plugin {
     settings: MyPluginSettings;
     registry: noteRegistry[] = []; // This will be deprecated in favor of settings.registry
 
     autoRegistryUpdate: boolean = true; // Auto-update registry setting
+    personalNotes: PersonalNote[] = []; // Store personal notes metadata + content
 
     async onload() {
         console.log("Loading collaboration plugin...");
@@ -217,7 +220,30 @@ waitForWebSocketConnection("ws://localhost:3010", this);
                 modal.open();
             },
         });
-
+        this.addCommand({
+            id: "test-strip-personal-notes",
+            name: "Test: Strip Personal Notes (Log Output)",
+            callback: async () => {
+                const file = this.app.workspace.getActiveFile();
+                if (!file) {
+                    new Notice("No active file selected.");
+                    return;
+                }
+                const raw = await this.app.vault.read(file);
+                const cleaned = stripPersonalNoteBlocks(raw);
+                console.log("=== Stripped Content ===\n", cleaned);
+                new Notice("Stripped content logged to console.");
+            },
+        });
+        this.addCommand({
+            id: "restore-personal-notes-to-files",
+            name: "Restore Personal Notes to Files",
+            callback: async () => {
+                await this.restorePersonalNotesIntoFiles();
+            },
+        });
+        
+        
             
         // Register all Collaboration Panel Views
         this.registerView(
@@ -250,8 +276,6 @@ waitForWebSocketConnection("ws://localhost:3010", this);
             this.activateView(COLLABORATION_VIEW_TYPE); // Open the main control panel
         });
 
-        // MODIFIED: Ribbon icon for creating an IN-NOTE private personal note
-        // MODIFIED: Ribbon icon for creating an IN-NOTE private personal note
 this.addRibbonIcon('sticky-note', 'Create Private Personal Note (In-Note)', async () => {
     const activeFile = this.app.workspace.getActiveFile();
     const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
@@ -272,9 +296,6 @@ this.addRibbonIcon('sticky-note', 'Create Private Personal Note (In-Note)', asyn
     const defaultContent = "Type your private note here...";
     const noteId = uuidv4(); // Generate a unique ID
 
-    // --- CRITICAL CHANGE HERE ---
-    // The language identifier is now fixed to 'personal-note'.
-    // The UUID is placed on the first line *inside* the code block.
     const personalNoteMarker =
         `\`\`\`personal-note\n` +           // Fixed language identifier
         `id:${noteId}\n` +                   // UUID on its own line inside the block
@@ -472,4 +493,47 @@ this.addRibbonIcon('sticky-note', 'Create Private Personal Note (In-Note)', asyn
             new Notice(`Failed to open ${viewType} panel. Could not find or create a suitable pane.`, 6000);
         }
     }
+    async restorePersonalNotesIntoFiles() {
+        const notesByFile: Record<string, PersonalNote[]> = {};
+    
+        // Group personal notes by file path
+        for (const pn of this.settings.personalNotes) {
+            if (!notesByFile[pn.targetFilePath]) {
+                notesByFile[pn.targetFilePath] = [];
+            }
+            notesByFile[pn.targetFilePath].push(pn);
+        }
+    
+        for (const filePath of Object.keys(notesByFile)) {
+            const file = this.app.vault.getAbstractFileByPath(filePath);
+            if (!(file instanceof TFile)) {
+                new Notice(`File "${filePath}" not found in vault.`);
+                continue;
+            }
+    
+            let content = await this.app.vault.read(file);
+            const lines = content.split('\n');
+            const personalNotes = notesByFile[filePath];
+    
+            // Sort notes in reverse order by line number so line insertions don't shift subsequent positions
+            personalNotes.sort((a, b) => b.lineNumber - a.lineNumber);
+    
+            for (const note of personalNotes) {
+                const markerBlock = [
+                    '```personal-note',
+                    `id:${note.id}`,
+                    note.content,
+                    '```'
+                ].join('\n');
+    
+                // Insert the marker at the correct line
+                lines.splice(note.lineNumber, 0, markerBlock);
+            }
+    
+            const updatedContent = lines.join('\n');
+            await this.app.vault.modify(file, updatedContent);
+            new Notice(`Restored ${personalNotes.length} personal notes to "${filePath}".`);
+        }
+    }
+    
 }
