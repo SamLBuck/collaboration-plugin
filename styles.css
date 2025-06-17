@@ -1,8 +1,290 @@
-/*
+/* src/styles.css */
 
-This CSS file will be included with your plugin, and
-available in the app when your plugin is enabled.
+/* Overall container for the personal note */
+.personal-note-wrapper {
+    border: 1px solid black; /* This is your black border! */
+    border-radius: 6px;
+    padding: 10px;
+    margin: 15px 0; /* Add some vertical spacing around the note */
+    background-color: var(--background-secondary); /* Use Obsidian variable for consistent look */
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    font-size: var(--font-ui-smaller); /* Match Obsidian UI font size */
+}
 
-If your plugin does not need CSS, delete this file.
+/* Header section with title and controls */
+.personal-note-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid var(--background-modifier-border); /* Subtle separator */
+}
 
-*/
+/* --- Style for the editable title input --- */
+.personal-note-title-input {
+    flex-grow: 1; /* Allow input to take available space */
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--input-radius);
+    padding: 4px 8px;
+    background-color: var(--background-primary-alt); /* Slightly different background for input */
+    color: var(--text-normal);
+    font-weight: bold;
+    font-size: var(--font-ui-normal);
+    margin-right: 8px; /* Space between title input and controls */
+    box-sizing: border-box; /* Include padding and border in the element's total width */
+}
+
+.personal-note-title-input:focus {
+    outline: none;
+    border-color: var(--interactive-accent); /* Highlight on focus */
+    box-shadow: 0 0 0 1px var(--interactive-accent);
+}
+
+
+/* Controls (buttons, status) container */
+.personal-note-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px; /* Space between buttons and status */
+}
+
+/* Style for the buttons within the note block */
+.personal-note-minimize,
+.personal-note-save-close,
+.personal-note-delete {
+    display: flex; /* To center icon if it's an SVG */
+    align-items: center;
+    justify-content: center;
+    width: 24px; /* Fixed width for consistent button size */
+    height: 24px; /* Fixed height for consistent button size */
+    border: none;
+    background-color: transparent;
+    color: var(--text-muted); /* Obsidian's muted text color for icons */
+    cursor: pointer;
+    border-radius: var(--button-radius); /* Rounded corners */
+    transition: color 0.2s ease-in-out, background-color 0.2s ease-in-out;
+}
+
+.personal-note-minimize:hover,
+.personal-note-save-close:hover,
+.personal-note-delete:hover {
+    background-color: var(--background-modifier-hover); /* Obsidian hover color */
+    color: var(--text-normal);
+}
+
+.personal-note-delete:hover {
+    color: var(--text-error); /* Red on hover for delete */
+}
+
+/* Style for the new Save & Close button */
+.personal-note-save-close {
+    color: var(--color-green); /* A green color for save action */
+}
+.personal-note-save-close:hover {
+    color: var(--color-green-dark); /* Darker green on hover */
+}
+
+
+/* Status text (e.g., "Saved", "Typing...") */
+.personal-note-status {
+    font-size: var(--font-ui-smallest);
+    color: var(--text-faint);
+}
+
+/* Content area (where the textarea resides) */
+.personal-note-content {
+    /* No specific styles needed here yet, controlled by expanded/collapsed */
+}
+
+/* Textarea for note content */
+.personal-note-textarea {
+    width: 100%;
+    min-height: 50px; /* Minimum height even if content is small */
+    padding: 8px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--input-radius);
+    background-color: var(--background-primary); /* Obsidian's primary background */
+    color: var(--text-normal);
+    font-family: var(--font-text); /* Use Obsidian's text font */
+    line-height: var(--line-height-tight);
+    resize: vertical; /* Allow vertical resizing by user */
+    box-sizing: border-box; /* Include padding and border in the element's total width and height */
+    margin-bottom: 8px; /* Space above location info */
+}
+
+.personal-note-textarea:focus {
+    outline: none;
+    border-color: var(--interactive-accent); /* Highlight on focus */
+}
+
+/* Style for location info */
+.personal-note-location {
+    display: block; /* Make it take its own line */
+    font-size: var(--font-ui-smallest);
+    color: var(--text-faint);
+    text-align: right; /* Align to the right as in sketch */
+    padding-top: 5px;
+    border-top: 1px dashed var(--background-modifier-border); /* Separator as in sketch */
+}
+
+
+/* Styles for collapsed state (controlled by JS) */
+.personal-note-collapsed .personal-note-content {
+    display: none;
+}
+.personal-note-collapsed .personal-note-location {
+    display: none; /* Hide location when collapsed */
+}
+
+
+/* Styles for expanded state (controlled by JS) */
+.personal-note-expanded .personal-note-content {
+    display: block;
+}
+/* Show location when expanded (default if not hidden by collapsed) */
+.personal-note-expanded .personal-note-location {
+    display: block;
+}
+
+
+/* Error state (if note not found in settings) */
+.personal-note-error {
+    border: 1px solid var(--text-error);
+    background-color: var(--background-modifier-error);
+    padding: 10px;
+    border-radius: 6px;
+    color: var(--text-error);
+}
+
+/* --- NEW: Styles for the Personal Note Registry Modal/View --- */
+
+/* Overall modal container for the registry list */
+.personal-note-registry-modal .modal-content {
+    padding: 20px;
+    max-width: 800px; /* Limit modal width */
+    width: 90%;
+    background-color: var(--background-primary);
+    border-radius: var(--radius-l);
+    box-shadow: var(--shadow-l);
+    max-height: 80vh; /* Limit height for scrolling */
+    overflow-y: auto; /* Enable scrolling for long lists */
+}
+
+/* Title within the modal */
+.personal-note-registry-modal .modal-title {
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--background-modifier-border);
+    padding-bottom: 10px;
+}
+
+
+/* Main container for the list within the modal */
+.personal-note-registry-list {
+    margin-top: 15px;
+}
+
+/* Header for the registry list (e.g., "ID", "Title", "Location", "Actions") */
+.personal-note-registry-list .registry-list-header {
+    display: grid;
+    /* Define columns for ID, Title, Location, and Actions */
+    grid-template-columns: 1fr 2.5fr 2fr 1.5fr; /* Adjusted for better spacing */
+    font-weight: 600;
+    border-bottom: 2px solid var(--background-modifier-border);
+    padding-bottom: 10px;
+    margin-bottom: 10px;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-faint);
+    text-transform: uppercase;
+    font-size: 0.8em;
+    letter-spacing: 0.05em;
+}
+
+/* Individual row in the registry list */
+.personal-note-registry-list .registry-list-row {
+    display: grid;
+    grid-template-columns: 1fr 2.5fr 2fr 1.5fr; /* Must match header columns */
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--background-modifier-border);
+    transition: background-color 0.2s ease-in-out;
+}
+
+.personal-note-registry-list .registry-list-row:hover {
+    background-color: var(--background-modifier-hover);
+}
+
+.personal-note-registry-list .registry-list-row:last-child {
+    border-bottom: none; /* No border for the last item */
+}
+
+/* Styling for the content within each cell of a registry row */
+.personal-note-registry-list .registry-list-row span {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    padding: 0 5px;
+    color: var(--text-normal);
+}
+
+.personal-note-registry-list .registry-id-display {
+    font-family: var(--font-monospace);
+    color: var(--text-accent);
+    font-size: 0.85em;
+}
+
+.personal-note-registry-list .registry-title-display {
+    font-weight: 500;
+}
+
+.personal-note-registry-list .registry-location-display {
+    font-size: 0.9em;
+    color: var(--text-muted);
+}
+
+/* Actions column for buttons within the registry row */
+.personal-note-registry-list .registry-actions {
+    display: flex;
+    justify-content: flex-end; /* Align buttons to the right */
+    gap: 5px;
+    padding-right: 5px; /* Small padding on the right side */
+}
+
+/* Buttons within the registry actions column */
+.personal-note-registry-list .registry-actions button {
+    min-width: unset; /* Remove default min-width */
+    padding: 4px; /* Compact padding for icons */
+    font-size: 0.8em;
+    border-radius: var(--button-radius);
+    background-color: var(--background-primary-alt);
+    color: var(--text-normal);
+    transition: background-color 0.2s ease-in-out;
+    display: flex; /* To center icon */
+    align-items: center;
+    justify-content: center;
+}
+
+.personal-note-registry-list .registry-actions button:hover {
+    background-color: var(--background-modifier-hover);
+}
+
+.personal-note-registry-list .registry-actions button.mod-warning {
+    color: var(--text-error);
+}
+
+.personal-note-registry-list .registry-actions button.mod-warning:hover {
+    background-color: var(--background-modifier-error-hover);
+}
+
+
+/* Message when the registry list is empty */
+.personal-note-registry-container .empty-list-message {
+    text-align: center;
+    color: var(--text-faint);
+    padding: 30px;
+    font-style: italic;
+    font-size: 0.95em;
+}
+
+/* --- END NEW: Styles for the Personal Note Registry Modal/View --- */
