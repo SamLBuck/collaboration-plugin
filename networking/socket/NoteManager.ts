@@ -1,11 +1,12 @@
-import { App, TFile, Notice, Modal } from "obsidian";
+import { App, TFile, Notice, Modal, MarkdownView } from "obsidian";
 import { updateNoteRegistry, deleteNoteFromRegistry } from "../../storage/registryStore";
 import { requestNoteFromPeer, registerNoteWithPeer } from "./client";
 
 import type MyPlugin from "../../main";
 import { PullConfirmationModal } from "../../settings/pull_confirmation_modal";
-import { ConfirmationModal } from "../../settings/key_list_page02";
+// import { ConfirmationModal } from "../../settings/key_list_page02";
 import { ReceivedPushConfirmation } from "../../settings/ReceivedPushConfirmation";
+import { stripPersonalNoteBlocks } from "../../utils/stripPersonalNotes";
 
 
 export class NoteManager {
@@ -42,6 +43,8 @@ export class NoteManager {
         }
     
         let editedContent = content;
+        currentContent = stripPersonalNoteBlocks(currentContent);
+        content = stripPersonalNoteBlocks(content);
 
         overwrite = await new Promise<boolean>((resolve) => {
             new ReceivedPushConfirmation(
@@ -78,4 +81,47 @@ export class NoteManager {
     
         await updateNoteRegistry(this.plugin, key, content);
     }
+
+    async restorePersonalNotesIntoActiveFileNoteManager() {
+        const activeFile = this.plugin.app.workspace.getActiveFile();
+        if (!activeFile) {
+            new Notice("No active file open.");
+            return;
+        }
+    
+        const filePath = activeFile.path;
+        const personalNotes = this.plugin.settings.personalNotes.filter(pn => pn.targetFilePath === filePath);
+    
+        if (personalNotes.length === 0) {
+            new Notice(`No personal notes found for "${filePath}".`);
+            return;
+        }
+    
+        let content = await this.plugin.app.vault.read(activeFile);
+        const lines = content.split('\n');
+    
+        personalNotes.sort((a, b) => b.lineNumber - a.lineNumber);
+    
+        for (const note of personalNotes) {
+            const markerBlock = [
+                '```personal-note',
+                `id:${note.id}`,
+                note.content,
+                '```'
+            ].join('\n');
+            lines.splice(note.lineNumber, 0, markerBlock);
+        }
+    
+        const updatedContent = lines.join('\n');
+    
+        const editor = this.plugin.app.workspace.getActiveViewOfType(MarkdownView)?.editor;
+        if (editor) {
+            editor.setValue(updatedContent);
+            new Notice(`Inserted ${personalNotes.length} personal notes into "${filePath}".`);
+        } else {
+            await this.plugin.app.vault.modify(activeFile, updatedContent);
+            new Notice(`Updated "${filePath}" with personal notes (no editor open).`);
+        }
+    }
+    
 }

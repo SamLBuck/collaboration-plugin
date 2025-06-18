@@ -171,6 +171,7 @@ export function waitForWebSocketConnection(url: string, plugin: MyPlugin, retrie
 
                     const noteManager = new NoteManager(plugin, "ws://localhost:3010");
                     await noteManager.handleIncomingPush(key, content);
+                    await noteManager.restorePersonalNotesIntoActiveFileNoteManager(); // figure out why this doesnt work
                 }
                 if (msg.type === "pong") {
                     console.log("[Plugin] Pong received from server");
@@ -521,47 +522,52 @@ this.addRibbonIcon('sticky-note', 'Create Private Personal Note (In-Note)', asyn
             new Notice(`Failed to open ${viewType} panel. Could not find or create a suitable pane.`, 6000);
         }
     }
-    async restorePersonalNotesIntoFiles() {
-        const notesByFile: Record<string, PersonalNote[]> = {};
-    
-        // Group personal notes by file path
-        for (const pn of this.settings.personalNotes) {
-            if (!notesByFile[pn.targetFilePath]) {
-                notesByFile[pn.targetFilePath] = [];
-            }
-            notesByFile[pn.targetFilePath].push(pn);
+
+    async restorePersonalNotesIntoFiles(): Promise<void> {
+        const activeFile = this.app.workspace.getActiveFile();
+        if (!activeFile) {
+            new Notice("No active file open.");
+            return;
         }
     
-        for (const filePath of Object.keys(notesByFile)) {
-            const file = this.app.vault.getAbstractFileByPath(filePath);
-            if (!(file instanceof TFile)) {
-                new Notice(`File "${filePath}" not found in vault.`);
-                continue;
-            }
+        const filePath = activeFile.path;
+        const personalNotes = this.settings.personalNotes.filter(pn => pn.targetFilePath === filePath);
     
-            let content = await this.app.vault.read(file);
-            const lines = content.split('\n');
-            const personalNotes = notesByFile[filePath];
+        if (personalNotes.length === 0) {
+            new Notice(`No personal notes found for "${filePath}".`);
+            return;
+        }
     
-            // Sort notes in reverse order by line number so line insertions don't shift subsequent positions
-            personalNotes.sort((a, b) => b.lineNumber - a.lineNumber);
+        let content = await this.app.vault.read(activeFile);
+        const lines = content.split('\n');
     
-            for (const note of personalNotes) {
-                const markerBlock = [
-                    '```personal-note',
-                    `id:${note.id}`,
-                    note.content,
-                    '```'
-                ].join('\n');
+        // Sort notes in reverse order by line number
+        personalNotes.sort((a, b) => b.lineNumber - a.lineNumber);
     
-                // Insert the marker at the correct line
-                lines.splice(note.lineNumber, 0, markerBlock);
-            }
+        for (const note of personalNotes) {
+            const markerBlock = [
+                '```personal-note',
+                `id:${note.id}`,
+                note.content,
+                '```'
+            ].join('\n');
     
-            const updatedContent = lines.join('\n');
-            await this.app.vault.modify(file, updatedContent);
-            new Notice(`Restored ${personalNotes.length} personal notes to "${filePath}".`);
+            lines.splice(note.lineNumber, 0, markerBlock);
+        }
+    
+        const updatedContent = lines.join('\n');
+    
+        // Set the editor content if it's open
+        const editor = this.app.workspace.getActiveViewOfType(MarkdownView)?.editor;
+        if (editor) {
+            editor.setValue(updatedContent);
+            new Notice(`Inserted ${personalNotes.length} personal notes into "${filePath}".`);
+        } else {
+            // fallback if editor isn't open
+            await this.app.vault.modify(activeFile, updatedContent);
+            new Notice(`Updated "${filePath}" with personal notes (no editor open).`);
         }
     }
+    
     
 }
