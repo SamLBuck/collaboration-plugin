@@ -147,6 +147,7 @@ export function waitForWebSocketConnection(url: string, plugin: MyPlugin, retrie
             pingInterval = setInterval(() => {
                 if (socket.readyState === WebSocket.OPEN) {
                     socket.send(JSON.stringify({ type: "ping" }));
+                    console.log("[Plugin] Ping sent to WebSocket server");
                 }
             }, 30000); // every 30 seconds
         };
@@ -171,6 +172,10 @@ export function waitForWebSocketConnection(url: string, plugin: MyPlugin, retrie
                     const noteManager = new NoteManager(plugin, "ws://localhost:3010");
                     await noteManager.handleIncomingPush(key, content);
                 }
+                if (msg.type === "pong") {
+                    console.log("[Plugin] Pong received from server");
+                }
+                
             } catch (err) {
                 console.error("[Plugin] Failed to parse incoming WebSocket message:", err);
             }
@@ -202,8 +207,8 @@ export default class MyPlugin extends Plugin {
         console.log("Loading collaboration plugin...");
         await this.loadSettings();
         // Sart WebSocket server
-startWebSocketServerProcess(this.app, this);
-waitForWebSocketConnection("ws://localhost:3010", this);
+//startWebSocketServerProcess(this.app, this);
+//waitForWebSocketConnection("ws://172.20.32.1:3010", this);
 
 
         // Register custom commands (Command Palette commands)

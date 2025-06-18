@@ -83,13 +83,6 @@ wss.on("connection", (socket) => {
             }));
           }
         });
-        if (message.type === "ping") {
-          socket.send(JSON.stringify({
-            type: "pong",
-            payload: { message: "pong" }
-          }));
-          return;
-        }
         
       
         socket.send(JSON.stringify({
@@ -99,6 +92,14 @@ wss.on("connection", (socket) => {
       
         return;
       }
+      if (message.type === "ping") {
+        socket.send(JSON.stringify({
+          type: "pong",
+          payload: { message: "pong" }
+        }));
+        return;
+      }
+
                   
       if (message.type === "note") {
         const key = message.payload.key;
