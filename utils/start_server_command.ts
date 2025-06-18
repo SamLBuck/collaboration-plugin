@@ -40,7 +40,7 @@ export function startWebSocketServerProcess(app: App, plugin: MyPlugin): void {
         vaultPath,
         ".obsidian",
         "plugins",
-        "collaboration-plugin",
+        "obsidian-collaboration-plugin",
         "networking",
         "socket",
         "dist",
@@ -51,7 +51,7 @@ export function startWebSocketServerProcess(app: App, plugin: MyPlugin): void {
         vaultPath,
         ".obsidian",
         "plugins",
-        "collaboration-plugin",
+        "obsidian-collaboration-plugin",
         "ws-server.pid"
     );
 
