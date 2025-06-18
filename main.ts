@@ -198,7 +198,7 @@ export default class MyPlugin extends Plugin {
     settings: MyPluginSettings;
     registry: noteRegistry[] = []; // This will be deprecated in favor of settings.registry
 
-    autoRegistryUpdate: boolean = true; // Auto-update registry setting
+    autoRegistryUpdate: boolean = false; // Auto-update registry setting
     personalNotes: PersonalNote[] = []; // Store personal notes metadata + content
     relaySocket: WebSocket | null = null;
 
@@ -207,8 +207,8 @@ export default class MyPlugin extends Plugin {
         console.log("Loading collaboration plugin...");
         await this.loadSettings();
         // Sart WebSocket server
-//startWebSocketServerProcess(this.app, this);
-//waitForWebSocketConnection("ws://172.20.32.1:3010", this);
+startWebSocketServerProcess(this.app, this);
+waitForWebSocketConnection("ws://localhost:3010", this);
 
 
         // Register custom commands (Command Palette commands)

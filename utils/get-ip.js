@@ -1,18 +1,18 @@
-const os = require("os");
+import * as os from "os";
 
 export function getLocalIP() {
-  const interfaces = os.networkInterfaces();
+	const interfaces = os.networkInterfaces();
+	const ignored = ["Loopback", "vEthernet", "VirtualBox", "VMware", "Bluetooth"];
 
-  for (const name of Object.keys(interfaces)) {
-    for (const iface of interfaces[name]) {
-      // Skip over non-IPv4 and internal (i.e. 127.0.0.1) addresses
-      if (iface.family === "IPv4" && !iface.internal) {
-        return iface.address;
-      }
-    }
-  }
+	for (const name of Object.keys(interfaces)) {
+		if (ignored.some(prefix => name.startsWith(prefix))) continue;
 
-  return "127.0.0.1"; // Fallback
+		for (const iface of interfaces[name] || []) {
+			if (iface.family === "IPv4" && !iface.internal) {
+				return iface.address;
+			}
+		}
+	}
+
+	return "127.0.0.1"; // fallback
 }
-
-console.log("Your local IP address is:", getLocalIP());
