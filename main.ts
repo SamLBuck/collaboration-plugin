@@ -133,11 +133,11 @@ export function waitForWebSocketConnection(url: string, plugin: MyPlugin, retrie
     let attempt = 0;
     let pingInterval: NodeJS.Timeout;
     const tryConnect = () => {
-        if (plugin.relaySocket) {
-            console.log("[Plugin] Closing previous socket before new connect");
+        if (plugin.relaySocket && plugin.relaySocket.readyState === WebSocket.OPEN) {
+            console.log("[Plugin] Closing active socket before reconnecting");
             plugin.relaySocket.close();
         }
-
+        
         const socket = new WebSocket(url);
 
         socket.onopen = () => {
@@ -182,12 +182,18 @@ export function waitForWebSocketConnection(url: string, plugin: MyPlugin, retrie
         };
 
         socket.onclose = () => {
-            console.warn("[Plugin] WebSocket closed. Reconnecting...");
+            console.warn("[Plugin] WebSocket closed.");
             plugin.relaySocket = null;
             clearInterval(pingInterval);
-            setTimeout(tryConnect, 1000);
+        
+            if (++attempt < retries) {
+                console.log(`[Plugin] Reconnecting... Attempt ${attempt + 1}/${retries}`);
+                setTimeout(tryConnect, 1000);
+            } else {
+                console.error("[Plugin] Gave up after too many reconnect attempts.");
+            }
         };
-            };
+                    };
 
     tryConnect();
 }
