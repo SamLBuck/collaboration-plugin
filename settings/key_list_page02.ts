@@ -89,7 +89,7 @@ export class KeyListModal extends Modal {
         } else {
             const listHeader = containerToRenderInto.createDiv({ cls: 'key-list-header' });
             listHeader.style.gridTemplateColumns = '2.8fr 1.5fr 1fr 0.7fr';
-            listHeader.createSpan({ text: 'Key (Full)' });
+            listHeader.createSpan({ text: 'Key' });
             listHeader.createSpan({ text: 'Note Name' });
             listHeader.createSpan({ text: 'Access Type' });
             listHeader.createSpan({ text: 'Actions' });
@@ -156,7 +156,7 @@ export class KeyListModal extends Modal {
             const registryHeader = containerEl.createDiv({ cls: 'registry-list-header' });
             registryHeader.style.gridTemplateColumns = '1.5fr 3fr 1fr';
             registryHeader.createSpan({ text: 'Note Key' });
-            registryHeader.createSpan({ text: 'Content (Partial)' });
+            registryHeader.createSpan({ text: 'Content' });
             registryHeader.createSpan({ text: 'Actions' });
 
             registry.forEach(item => {

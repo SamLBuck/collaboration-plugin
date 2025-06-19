@@ -297,7 +297,7 @@ export class CollaborationPanelView extends ItemView {
                         .onClick(async () => {
                             if (keyItem) {
                                 const confirmDelete = await new Promise<boolean>(resolve => {
-                                    new ConfirmationModal(this.app, `Are you sure you want to delete the key for "${noteName}" AND remove its content from your local sharing registry? This action cannot be undone.`, resolve).open(); 
+                                    new ConfirmationModal(this.app, `Are you sure you want to delete the key for "${noteName}" AND remove its content from your local sharing registry?`, resolve).open(); 
                                 });
 
                                 if (confirmDelete) {

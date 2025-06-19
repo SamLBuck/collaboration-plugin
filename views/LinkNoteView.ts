@@ -85,7 +85,7 @@ export class LinkNoteView extends ItemView {
         // Input for the Share Key / Password (consistent with modal)
         new Setting(this.contentEl)
             .setName('Share Key / Password')
-            .setDesc('Enter the key/password for the shared note you want to pull (e.g., IP-NoteName).')
+            .setDesc('Enter the key/password for the shared note you want to pull.')
             .addText(text => {
                 this.linkNoteKeyInput = text;
                 text.setPlaceholder('e.g., 192.168.1.100-MySharedNote');

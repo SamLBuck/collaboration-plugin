@@ -131,7 +131,7 @@ export class LinkNoteModal extends Modal {
                                 // Default access type for linked keys could be 'Pulled' or 'View'
                                 const newLinkedKeyItem: KeyItem = {
                                     ip: input, note: keyBasename, access: 'Pulled',
-                                    content: undefined
+                                    //content: undefined
                                 };
                                 this.plugin.settings.linkedKeys.push(newLinkedKeyItem);
                                 await this.plugin.saveSettings();
