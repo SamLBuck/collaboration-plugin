@@ -326,16 +326,16 @@ export class CollaborationPanelView extends ItemView {
         const noteName = this.activeNoteFile?.basename || '';
         const keyItem = this.plugin.settings.linkedKeys.find(k => k.note === noteName);
 
-        this.contentEl.createEl('h2', { text: 'Collaborator Note Tools' }); // CHANGED: 'Pulled Note Tools' to 'Collaborator Note Tools'
-        this.contentEl.createEl('p', { text: `This note ("${noteName}") has been pulled from a peer. You can pull the latest changes.` });
+        this.contentEl.createEl('h2', { text: 'Tools' }); // CHANGED: 'Pulled Note Tools' to 'Collaborator Note Tools'
+        this.contentEl.createEl('p', { text: `"${noteName}"has been pulled. You can pull the latest changes.` });
 
         if (keyItem) {
-            this.contentEl.createEl('p', { text: `Source Key: ${keyItem.ip} (Access: ${keyItem.access})` });
+            this.contentEl.createEl('p', { text: `${keyItem.ip}` });
 
             // --- START MOVED: Push Changes Button ---
             new Setting(this.contentEl)
-                .setName('Share Changes with Original Source')
-                .setDesc('Push the current changes of this pulled note back to its original host. Requires "Edit" access on the source key.')
+                .setName('Share Changes ')
+                //.setDesc('')
                 .addButton(button =>
                     button
                         .setButtonText('Push Changes')
@@ -385,7 +385,7 @@ export class CollaborationPanelView extends ItemView {
             // --- START MOVED: Pull Changes Button ---
             new Setting(this.contentEl)
                 .setName('Pull Latest Changes')
-                .setDesc('Retrieve the latest version of this note from the original source.')
+                //.setDesc('Retrieve the latest version of this note from the original source.')
                 .addButton(button =>
                     button
                         .setButtonText('Pull Changes')
@@ -410,7 +410,7 @@ export class CollaborationPanelView extends ItemView {
             // Keep the Delete Key & Registry Content here, as it's relevant for pulled notes if you want to unlink them
             new Setting(this.contentEl)
                 .setName('Unlink Note') 
-                .setDesc('Remove this note from your linked notes registry. It will no longer automatically pull updates.') 
+                // /.setDesc('Remove this note from your linked notes registry. It will no longer automatically pull updates.') 
                 .addButton(button =>
                     button
                         .setButtonText('Unlink Note') 
@@ -471,16 +471,16 @@ export class CollaborationPanelView extends ItemView {
         navButtonContainer.appendChild(leftButtons);
         navButtonContainer.appendChild(rightButtons);
 
-        this.contentEl.createEl('p', {
-            text: 'Use the buttons above to manage existing keys or use the key you have with Link Note.'
-        });
+        // this.contentEl.createEl('p', {
+        //     text: 'Use the buttons above to manage existing keys or use the key you have with Link Note.'
+        // });
     }
 
     private renderAutomaticUpdatesSection(): void {
         this.contentEl.createEl('h2', { text: 'Automatic Updates' });
         new Setting(this.contentEl)
             .setName("Automatic Note Registry Updates")
-            .setDesc("Automatically update the registry when a note is modified. We suggest that this is on, but you can disable it if you prefer manual updates.")
+            .setDesc("Automatically update the registry when a note is modified.")
             .addToggle((toggle) =>
                 toggle
                     .setValue(this.plugin.settings.autoUpdateRegistry)
