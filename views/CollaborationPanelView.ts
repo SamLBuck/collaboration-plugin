@@ -126,7 +126,7 @@ export class CollaborationPanelView extends ItemView {
     private renderPanelContent(): void {
         this.contentEl.empty();
 
-        this.contentEl.createEl('h1', { text: `Control Panel for: ${this.activeNoteFile?.basename || 'No Note Open'}` });
+        this.contentEl.createEl('h1', { text: `Control Panel` });
         
         let displayNoteTypeName: string;
         switch (this.noteType) {
@@ -142,7 +142,7 @@ export class CollaborationPanelView extends ItemView {
             default:
                 displayNoteTypeName = 'Unknown';
         }
-        this.contentEl.createEl('p', { text: `Note Type: ${displayNoteTypeName}` });
+        //this.contentEl.createEl('p', { text: `Note Type: ${displayNoteTypeName}` });
 
         this.contentEl.createEl('hr');
 
@@ -169,7 +169,7 @@ export class CollaborationPanelView extends ItemView {
         
         new Setting(this.contentEl)
             .setName('Generate New Key')
-            .setDesc('Generate a new key (IP-NoteName format) for the specified note and access type. The generated key will be copied to your clipboard and saved.')
+            .setDesc('Generate a new key for the specified note and access type. The generated key will be copied to your clipboard and saved.')
             .addButton(button =>
                 button
                     .setButtonText('Generate & Save')
@@ -219,7 +219,7 @@ export class CollaborationPanelView extends ItemView {
 
         new Setting(this.contentEl)
             .setName('Note')
-            .setDesc('The note this key will be associated with. Make sure that your note title does not have spaces')
+            .setDesc('The note this key will be associated with.')
             .addText(text => {
                 this.noteInput = text;
                 text.setPlaceholder('Suggest Current Note...')

@@ -29,7 +29,7 @@ export class PluginSettingsTab extends PluginSettingTab {
 		containerEl.createEl('h2', { text: 'Collaboration Settings' });
 
 		containerEl.createEl('p', {
-			text: 'Allows you to generate, manage, and link keys to specific notes for collaborative access control. You can generate new keys for selected notes with a specified access type, currently limited to View, and those keys are copied to your clipboard and saved locally. You can also view a list of all collaboration keys you have created, as well as notes that can be pullable with those keys. Link Note allows you to enter a shared key and access the note, it maintains a list of keys you have linked. If there are connectivity issues, manually run the START WEBSOCKET SERVER command. We suggest sharing your links over Email!'
+			text: 'Allows you to generate, manage, and link keys to specific notes for collaborative access control. You can generate new keys for selected notes with a specified access type, . You can also view a list of all collaboration keys you have created, as well as notes that can be pullaSble with those keys. Link Note allows you to enter a shared key and access the note, it maintains a list of keys you have linked. '
 		});
 
 		const keyGenWrapper = containerEl.createDiv({ cls: 'key-gen-box' });
@@ -43,7 +43,7 @@ export class PluginSettingsTab extends PluginSettingTab {
 		// Note Input
 		new Setting(keyGenWrapper)
 			.setName('Note')
-			.setDesc('The note this key will be associated with. Make sure that your note title does not have spaces')
+			//.setDesc('The note this key will be associated with. ')
 			.addText(text => {
 				this.noteInput = text;
 				text.setPlaceholder('Suggest Current Note...')
@@ -53,7 +53,7 @@ export class PluginSettingsTab extends PluginSettingTab {
 		// Access Type
 		const accessTypeSetting = new Setting(keyGenWrapper)
 			.setName('Access Type')
-			.setDesc('Select the type of access this key grants for the note. Only View can be selected at this time');
+			.setDesc('Select the type of access this key grants for the note.');
 
 		const checkboxContainer = accessTypeSetting.controlEl.createDiv({ cls: 'access-type-checkboxes' });
 		checkboxContainer.style.display = 'flex';
@@ -92,7 +92,7 @@ export class PluginSettingsTab extends PluginSettingTab {
 		// Generate Key Button at bottom of box
 		new Setting(keyGenWrapper)
 			.setName('Generate New Key')
-			.setDesc('Generate a new key for the specified note and access type. The generated key will be copied to your clipboard and saved. Click on the Key List button to view and delete keys.')
+			//.setDesc('Generate a new key for the specified note and access type. The generated key will be copied to your clipboard and saved. Click on the Key List button to view and delete keys.')
 			.addButton(button =>
 				button
 					.setButtonText('Generate & Save')

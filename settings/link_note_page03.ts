@@ -73,7 +73,7 @@ export class LinkNoteModal extends Modal {
 
         new Setting(contentEl)
             .setName('Share Key / Password')
-            .setDesc('Enter the key/password for the shared note you want to pull (e.g., IP-NoteName).')
+            .setDesc('Enter the key/password for the shared note you want to .')
             .addText(text => {
                 this.linkNoteKeyInput = text;
                 text.setPlaceholder('e.g., 192.168.1.100-MySharedNote');
@@ -213,7 +213,7 @@ export class LinkNoteModal extends Modal {
                     });
             });
         
-        contentEl.createEl("h3", { text: "My Linked Keys (from others)" });
+        contentEl.createEl("h3", { text: "My Linked Key" });
         this.linkedKeysContainer = contentEl.createDiv({ cls: 'linked-keys-container' });
         await this.renderLinkedKeysContent(this.linkedKeysContainer);
     }
