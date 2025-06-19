@@ -7,6 +7,7 @@ import MyPlugin from "../main";
 import { syncAllNotesToServer } from "../utils/sync"; // Keep if used in setTimeout
 
 import * as net from "net";
+import { start } from "repl";
 
 // Function to check if a port is available
 function isPortAvailable(port: number): Promise<boolean> {
@@ -79,6 +80,7 @@ export function startWebSocketServerProcess(app: App, plugin: MyPlugin): void {
     isPortAvailable(PORT).then((available) => {
         if (!available) {
             new Notice(`Port ${PORT} is already in use. Server will not start.`);
+            startServerAgain(app, plugin);
             return;
         }
 
@@ -138,4 +140,11 @@ export function registerStartServerCommand(app: App, plugin: MyPlugin): void {
             startWebSocketServerProcess(app, plugin);
         }
     });
+}
+let attempts = 0
+async function startServerAgain(app: App, plugin: MyPlugin): Promise<void> {
+    attempts++;
+    if(attempts < 10){
+    await startWebSocketServerProcess(app, plugin);
+    }
 }
