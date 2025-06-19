@@ -282,14 +282,14 @@ export class CollaborationPanelView extends ItemView {
         const keyItem = this.plugin.settings.keys.find(k => k.note === noteName);
 
         this.contentEl.createEl('h2', { text: 'Owner Note Tools' }); // CHANGED: 'Push Note Tools' to 'Owner Note Tools'
-        this.contentEl.createEl('p', { text: `This note ("${noteName}") has a key associated with it. You are the host.` });
+        this.contentEl.createEl('p', { text: `${noteName} has a key associated with it. You are the host.` });
         
         if (keyItem) {
-            this.contentEl.createEl('p', { text: `Your Key: ${keyItem.ip} (Access: ${keyItem.access})` });
+            this.contentEl.createEl('p', { text: `${keyItem.ip}` });
             
             new Setting(this.contentEl)
                 .setName('Delete Key & Registry Content') 
-                .setDesc('Delete the key associated with this note AND remove its content from your local sharing registry. It will no longer be shareable via this key.') 
+                //.setDesc('Delete the key associated with this note AND remove its content from your local sharing registry. It will no longer be shareable via this key.') 
                 .addButton(button =>
                     button
                         .setButtonText('Delete Key & Content') 
@@ -480,7 +480,7 @@ export class CollaborationPanelView extends ItemView {
         this.contentEl.createEl('h2', { text: 'Automatic Updates' });
         new Setting(this.contentEl)
             .setName("Automatic Note Registry Updates")
-            .setDesc("Automatically update the registry when a note is modified.")
+            .setDesc("Automatically updates when a note is modified.")
             .addToggle((toggle) =>
                 toggle
                     .setValue(this.plugin.settings.autoUpdateRegistry)

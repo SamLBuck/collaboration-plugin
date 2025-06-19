@@ -29,7 +29,7 @@ export class PluginSettingsTab extends PluginSettingTab {
 		containerEl.createEl('h2', { text: 'Collaboration Settings' });
 
 		containerEl.createEl('p', {
-			text: 'Allows you to generate, manage, and link keys to specific notes for collaborative access control. You can generate new keys for selected notes with a specified access type, . You can also view a list of all collaboration keys you have created, as well as notes that can be pullaSble with those keys. Link Note allows you to enter a shared key and access the note, it maintains a list of keys you have linked. '
+			text: 'Allows you to generate, manage, and link keys to specific notes for collaborative access control. You can generate new keys for selected notes with a specified access type, . You can also view a list of all collaboration keys you have created, as well as notes that can be pullable with those keys. Link Note allows you to enter a shared key and access the note, it maintains a list of keys you have linked. '
 		});
 
 		const keyGenWrapper = containerEl.createDiv({ cls: 'key-gen-box' });
