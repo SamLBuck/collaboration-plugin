@@ -1,4 +1,4 @@
-// src/commands/pullCommands.ts - REVISED for consistency with original names in keys/server
+// src/commands/pullCommands.ts
 
 import { App, Notice, TFile } from "obsidian";
 import MyPlugin from "../main";
@@ -7,6 +7,7 @@ import { requestNoteFromPeer } from "../networking/socket/client";
 import { ReceivedPushConfirmation } from "../settings/ReceivedPushConfirmation";
 import { updateNoteRegistry } from "../storage/registryStore";
 import { stripPersonalNoteBlocks } from "./stripPersonalNotes";
+import { NoteManager } from "../networking/socket/NoteManager";
 
 // This helper is for INTERNAL FILE MATCHING IN OBSIDIAN'S VAULT,
 // acknowledging Obsidian's implicit filename sanitization (e.g., spaces to underscores).
@@ -63,7 +64,7 @@ export function registerPullNoteCommand(app: App, plugin: MyPlugin) {
         callback: async () => {
             new tempIPInputModal(app, async (ip: string, key: string) => {
                 // Pass the raw user-provided key.
-                await rewriteExistingNote(app, ip, key);
+                await rewriteExistingNote(app, ip, key, plugin);
             }).open();
         },
     });
@@ -128,7 +129,7 @@ export async function pullNoteFromPeerNewNote(app: App, ip: string, key: string)
 //         new Notice(`Failed to rewrite note: ${err}`);
 //     }
 // }
-export async function rewriteExistingNote(app: App, ip: string, key: string, plugin?: any) {
+export async function rewriteExistingNote(app: App, ip: string, key: string, plugin: MyPlugin) {
 	try {
 		let incoming = await requestNoteFromPeer(`ws://${ip}:3010`, key);
 		let existingFile = await findNoteFileInVault(app, key);
@@ -166,9 +167,12 @@ export async function rewriteExistingNote(app: App, ip: string, key: string, plu
 		new Notice(`Note '${key}' pulled and updated as '${existingFile.basename}'.`, 3000);
 
 		if (plugin) {
-            await plugin.restorePersonalNotesIntoFiles();
+             if (plugin.noteManager) {
+                await plugin.noteManager.restorePersonalNotesIntoActiveFileNoteManager();
+             }
 			await updateNoteRegistry(plugin, key, userAccepted.content);
 		}
+
 	} catch (err) {
 		console.error("Failed to rewrite note:", err);
 		new Notice(`Failed to rewrite note: ${err}`, 5000);
@@ -179,7 +183,7 @@ export async function rewriteExistingNote(app: App, ip: string, key: string, plu
 export async function overwriteCurrentNote(app: App, ip: string, key: string) {
     try {
         // 'key' here is the raw user input (e.g., "Jon's Note"). Send it directly to server.
-        const content = await requestNoteFromPeer(`ws://${ip}:3010`, key);
+        let content = await requestNoteFromPeer(`ws://${ip}:3010`, key);
         const activeFile = app.workspace.getActiveFile();
 
         if (activeFile) {

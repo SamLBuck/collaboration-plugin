@@ -409,7 +409,7 @@ export class CollaborationPanelView extends ItemView {
                                     return;
                                 }
                                 // The rewriteExistingNote function already takes the IP and NoteName
-                                rewriteExistingNote(this.app, parsedKeyInfo.ip, keyItem.note); 
+                                rewriteExistingNote(this.app, parsedKeyInfo.ip, keyItem.note, this.plugin); 
                                 new Notice(`Requested latest changes for "${noteName}".`);
                             } else {
                                 new Notice("Could not find key for this pullable note.", 4000);
