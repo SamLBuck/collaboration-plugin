@@ -1,6 +1,6 @@
 // views/CollaborationPanelView.ts
 import { App, ItemView, WorkspaceLeaf, ButtonComponent, Notice, Setting, TextComponent, setIcon, TFile, Modal } from 'obsidian';
-import MyPlugin from '../main';
+import MyPlugin, { KeyItem } from '../main';
 import { generateKey, addKey, deleteKeyAndContent } from '../storage/keyManager';
 import { shareCurrentNoteWithFileName } from '../utils/share_active_note';
 import { requestNoteFromPeer } from '../networking/socket/client';
@@ -8,7 +8,7 @@ import { requestNoteFromPeer } from '../networking/socket/client';
 import { KEY_LIST_VIEW_TYPE } from './KeyListView';
 import { LINK_NOTE_VIEW_TYPE } from './LinkNoteView';
 import { parseKey } from '../utils/parse_key';
-import { rewriteExistingNote } from '../utils/pull_note_command';
+import { pullNoteFromPeerNewNote, rewriteExistingNote } from '../utils/pull_note_command';
 
 // --- INLINED: ConfirmationModal class definition (consistent with other views) ---
 class ConfirmationModal extends Modal {
@@ -62,6 +62,7 @@ export class CollaborationPanelView extends ItemView {
     accessTypeEdit: HTMLInputElement;
     accessTypeViewAndComment: HTMLInputElement;
     accessTypeEditWithApproval: HTMLInputElement;
+    linkNoteKeyInput: TextComponent; // Added missing property
 
     constructor(leaf: WorkspaceLeaf, plugin: MyPlugin) {
         super(leaf);
@@ -172,7 +173,7 @@ export class CollaborationPanelView extends ItemView {
             .setDesc('Generate a new key for the specified note and access type. The generated key will be copied to your clipboard and saved.')
             .addButton(button =>
                 button
-                    .setButtonText('Generate & Save')
+                    .setButtonText('Generate')
                     .setCta()
                     .onClick(async () => {
                         const noteName = this.noteInput.getValue().trim();
@@ -252,7 +253,7 @@ export class CollaborationPanelView extends ItemView {
             
         const accessTypeSetting = new Setting(this.contentEl)
             .setName('Access Type')
-            .setDesc('Select the type of access this key grants for the note. Only View can be selected at this time');
+            .setDesc('Select the type of access this key grants for the note.');
 
         const checkboxContainer = accessTypeSetting.controlEl.createDiv({ cls: 'access-type-checkboxes' });
         checkboxContainer.style.display = 'flex';
@@ -288,6 +289,92 @@ export class CollaborationPanelView extends ItemView {
 
         this.accessTypeView = createCheckbox('View', true);
         this.accessTypeEdit = createCheckbox('Edit', false);
+
+                this.contentEl.createEl('p', { text: 'pull a shared note from a peer using a key.' });
+        
+                // Input for the Share Key / Password (consistent with modal)
+                new Setting(this.contentEl)
+                    .setName('Share Key')
+                    .setDesc('Enter the key for the shared note you want to pull.')
+                    .addText(text => {
+                        this.linkNoteKeyInput = text;
+                        text.setPlaceholder('e.g., 192.168.1.100-MySharedNote');
+                    });
+        
+                // Pull Button (consistent with modal)
+                new Setting(this.contentEl)
+                    .addButton(button => {
+                        button.setButtonText('Pull Note')
+                            .setCta()
+                            .onClick(async () => {
+                                const input = this.linkNoteKeyInput.getValue().trim();
+                                if (!input) {
+                                    new Notice('Please enter a Share Key / Password to pull a note.', 3000);
+                                    return;
+                                }
+        
+                                let parsedKeyInfo;
+                                try {
+                                    parsedKeyInfo = parseKey(input);
+                                    if (!parsedKeyInfo || !parsedKeyInfo.ip || !parsedKeyInfo.noteName) {
+                                        throw new Error('Invalid key format. Expected "IP-NoteName".');
+                                    }
+                                } catch (error: any) {
+                                    new Notice(`Key parsing error: ${error.message}`, 5000);
+                                    return;
+                                }
+        
+                                const { ip, noteName: keyBasename } = parsedKeyInfo;
+                                const filePath = `${keyBasename}.md`; // Assuming all notes are in the root for now
+        
+                                let file: TFile | null = this.app.vault.getAbstractFileByPath(filePath) as TFile;
+                                let overwrite = false;
+        
+                                if (file) {
+                                    overwrite = await new Promise(resolve => {
+                                        new ConfirmationModal(this.app, `Note "${filePath}" already exists. Overwrite it with the pulled content?`, resolve).open();
+                                    });
+        
+                                    if (!overwrite) {
+                                        new Notice(`Pull cancelled for "${filePath}". Note not overwritten.`, 3000);
+                                        return;
+                                    }
+                                }
+        
+                                try {
+                                    if (file && overwrite) {
+                                        await rewriteExistingNote(this.app, ip, keyBasename, this.plugin);
+                                    } else {
+                                        await pullNoteFromPeerNewNote(this.app, ip, keyBasename);
+                                    }
+        
+                                    // Add the successfully used key to linkedKeys if it's not already there
+                                    const existingLinkedKey = this.plugin.settings.linkedKeys.find(item => item.ip === input);
+                                    if (!existingLinkedKey) {
+                                        const newLinkedKeyItem: KeyItem = {
+                                            ip: input, note: keyBasename, access: 'Pulled',
+                                        };
+                                        this.plugin.settings.linkedKeys.push(newLinkedKeyItem);
+                                        await this.plugin.saveSettings();
+                                        //new Notice(`Key "${input}" added to your linked keys list.`, 3000);
+                                    }
+        
+                                    // Open the created/updated note
+                                    file = this.app.vault.getAbstractFileByPath(filePath) as TFile; // Re-fetch in case it was newly created
+                                    if (file) {
+                                        await this.app.workspace.getLeaf(true).openFile(file); // Open in a new leaf
+                                        new Notice(`Pulled and opened "${file.basename}" successfully.`, 4000);
+                                    } else {
+                                        new Notice(`Pulled "${keyBasename}" successfully, but could not open the file.`, 4000);
+                                    }
+        
+        
+                                } catch (error: any) {
+                                    new Notice(`An error occurred while pulling the note: ${error.message}`, 5000);
+                                }
+                            });
+                    });
+        
     }
     
     // CHANGED: Renamed from renderPushNotePanel to renderOwnerNotePanel
@@ -340,7 +427,7 @@ export class CollaborationPanelView extends ItemView {
         const keyItem = this.plugin.settings.linkedKeys.find(k => k.note === noteName);
 
         this.contentEl.createEl('h2', { text: 'Tools' }); // CHANGED: 'Pulled Note Tools' to 'Collaborator Note Tools'
-        this.contentEl.createEl('p', { text: `"${noteName}"has been pulled. You can pull the latest changes.` });
+        this.contentEl.createEl('p', { text: `${noteName} has been pulled. You can pull the latest changes.` });
 
         if (keyItem) {
             this.contentEl.createEl('p', { text: `${keyItem.ip}` });
@@ -452,36 +539,36 @@ export class CollaborationPanelView extends ItemView {
     }
 
     private renderNavigationButtons(): void {
-        this.contentEl.createEl('h2', { text: 'Navigation' });
+        // this.contentEl.createEl('h2', { text: 'Navigation' });
         const navButtonContainer = this.contentEl.createDiv({ cls: 'settings-nav-buttons' });
         navButtonContainer.style.display = 'flex';
         navButtonContainer.style.justifyContent = 'space-between';
         navButtonContainer.style.marginTop = '20px';
 
-        const leftButtons = navButtonContainer.createDiv();
-        new Setting(leftButtons)
-            .addButton(button => {
-                button.setButtonText('List of keys')
-                    .onClick(() => {
-                        this.plugin.activateView(KEY_LIST_VIEW_TYPE);
-                    });
-            });
+        // const leftButtons = navButtonContainer.createDiv();  hid the left buttons for 
+        // new Setting(leftButtons)
+        //     .addButton(button => {
+        //         button.setButtonText('List of keys')
+        //             .onClick(() => {
+        //                 this.plugin.activateView(KEY_LIST_VIEW_TYPE);
+        //             });
+        //     });
 
-        const rightButtons = navButtonContainer.createDiv();
-        new Setting(rightButtons)
-            .addButton(button => {
-                button.setButtonText('Link Note')
-                    .onClick(() => {
-                        this.plugin.activateView(LINK_NOTE_VIEW_TYPE);
-                    });
-            });
+        // const rightButtons = navButtonContainer.createDiv();
+        // new Setting(rightButtons)
+        //     .addButton(button => {
+        //         button.setButtonText('Link Note')
+        //             .onClick(() => {
+        //                 this.plugin.activateView(LINK_NOTE_VIEW_TYPE);
+        //             });
+        //     });
 
-        navButtonContainer.appendChild(leftButtons);
-        navButtonContainer.appendChild(rightButtons);
+        //navButtonContainer.appendChild(leftButtons);
+        //navButtonContainer.appendChild(rightButtons);
     }
 
     private renderAutomaticUpdatesSection(): void {
-        this.contentEl.createEl('h2', { text: 'Automatic Updates' });
+
         new Setting(this.contentEl)
             .setName("Automatic Note Registry Updates")
             .setDesc("Automatically updates when a note is modified.")

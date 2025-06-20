@@ -120,7 +120,7 @@ export class LinkNoteModal extends Modal {
 
                         try {
                             if (file && overwrite) {
-                                await rewriteExistingNote(this.app, ip, keyBasename);
+                                await rewriteExistingNote(this.app, ip, keyBasename, this.plugin);
                             } else {
                                 await pullNoteFromPeerNewNote(this.app, ip, keyBasename);
                             }
@@ -131,7 +131,7 @@ export class LinkNoteModal extends Modal {
                                 // Default access type for linked keys could be 'Pulled' or 'View'
                                 const newLinkedKeyItem: KeyItem = {
                                     ip: input, note: keyBasename, access: 'Pulled',
-                                    content: undefined
+                                    //content: undefined
                                 };
                                 this.plugin.settings.linkedKeys.push(newLinkedKeyItem);
                                 await this.plugin.saveSettings();
