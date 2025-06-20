@@ -6,6 +6,7 @@ import { tempIPInputModal } from "../settings/tempIPInputModal";
 import { requestNoteFromPeer } from "../networking/socket/client";
 import { ReceivedPushConfirmation } from "../settings/ReceivedPushConfirmation";
 import { updateNoteRegistry } from "../storage/registryStore";
+import { stripPersonalNoteBlocks } from "./stripPersonalNotes";
 
 // This helper is for INTERNAL FILE MATCHING IN OBSIDIAN'S VAULT,
 // acknowledging Obsidian's implicit filename sanitization (e.g., spaces to underscores).
@@ -129,16 +130,21 @@ export async function pullNoteFromPeerNewNote(app: App, ip: string, key: string)
 // }
 export async function rewriteExistingNote(app: App, ip: string, key: string, plugin?: any) {
 	try {
-		const incoming = await requestNoteFromPeer(`ws://${ip}:3010`, key);
-		const existingFile = await findNoteFileInVault(app, key);
+		let incoming = await requestNoteFromPeer(`ws://${ip}:3010`, key);
+		let existingFile = await findNoteFileInVault(app, key);
 
 		if (!existingFile) {
 			new Notice(`Note based on '${key}' not found in vault. Cannot rewrite. Consider using 'Pull Note (NEW)' to create it.`);
 			return;
 		}
 
-		const local = await app.vault.read(existingFile);
 
+		let local = await app.vault.read(existingFile);
+
+        incoming = stripPersonalNoteBlocks(incoming)
+        local = stripPersonalNoteBlocks(local)
+
+        
 		const userAccepted = await new Promise<{ confirmed: boolean; content?: string }>((resolve) => {
 			new ReceivedPushConfirmation(
 				app,
@@ -160,6 +166,7 @@ export async function rewriteExistingNote(app: App, ip: string, key: string, plu
 		new Notice(`Note '${key}' pulled and updated as '${existingFile.basename}'.`, 3000);
 
 		if (plugin) {
+            await plugin.restorePersonalNotesIntoFiles();
 			await updateNoteRegistry(plugin, key, userAccepted.content);
 		}
 	} catch (err) {

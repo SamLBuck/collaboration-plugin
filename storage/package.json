@@ -1,5 +1,5 @@
 {
-  "name": "storage",
+  "name": "collaboration-plugin",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {

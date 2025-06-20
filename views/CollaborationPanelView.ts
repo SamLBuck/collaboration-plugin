@@ -57,6 +57,7 @@ export class CollaborationPanelView extends ItemView {
     noteType: NoteType = 'none';
 
     noteInput: TextComponent;
+    noteTitleInput: TextComponent;
     accessTypeView: HTMLInputElement;
     accessTypeEdit: HTMLInputElement;
     accessTypeViewAndComment: HTMLInputElement;
@@ -142,7 +143,6 @@ export class CollaborationPanelView extends ItemView {
             default:
                 displayNoteTypeName = 'Unknown';
         }
-        //this.contentEl.createEl('p', { text: `Note Type: ${displayNoteTypeName}` });
 
         this.contentEl.createEl('hr');
 
@@ -177,6 +177,7 @@ export class CollaborationPanelView extends ItemView {
                     .onClick(async () => {
                         const noteName = this.noteInput.getValue().trim();
                         const accessType = this.getSelectedAccessType();
+                        const customTitle = this.noteTitleInput.getValue().trim() || "personal-note";
 
                         if (!noteName) {
                             new Notice('Please provide a Note Name to generate a key.', 4000);
@@ -185,7 +186,7 @@ export class CollaborationPanelView extends ItemView {
                         if (!accessType) {
                             new Notice('Please select an Access Type to generate a key.', 4000);
                             return;
-                            }
+                        }
 
                         const existingKey = this.plugin.settings.keys.find(
                             key => key.note === noteName && key.access === accessType
@@ -203,6 +204,13 @@ export class CollaborationPanelView extends ItemView {
                             if (success) {
                                 new Notice(`Generated & Saved:\n${newKeyItem.ip}\nFor Note: "${newKeyItem.note}" (Access: ${newKeyItem.access})`, 8000);
                                 await navigator.clipboard.writeText(newKeyItem.ip);
+
+                                this.plugin.settings.personalNotes[noteName] = {
+                                    lineCount: 0,
+                                    title: customTitle
+                                };
+                                await this.plugin.saveSettings();
+
                                 shareCurrentNoteWithFileName(this.plugin, this.app, newKeyItem.note);
                                 this.activeNoteFile = this.app.workspace.getActiveFile();
                                 this.noteType = await this.determineNoteType(this.activeNoteFile);
@@ -234,6 +242,14 @@ export class CollaborationPanelView extends ItemView {
                     });
             });
 
+        new Setting(this.contentEl)
+            .setName('Title')
+            .setDesc('Optional friendly title for this personal note.')
+            .addText(text => {
+                this.noteTitleInput = text;
+                text.setPlaceholder('e.g. Meeting Notes, Ideas...');
+            });
+            
         const accessTypeSetting = new Setting(this.contentEl)
             .setName('Access Type')
             .setDesc('Select the type of access this key grants for the note. Only View can be selected at this time');
@@ -272,10 +288,8 @@ export class CollaborationPanelView extends ItemView {
 
         this.accessTypeView = createCheckbox('View', true);
         this.accessTypeEdit = createCheckbox('Edit', false);
-        //this.accessTypeViewAndComment = createCheckbox('View and Comment', false);
-        //this.accessTypeEditWithApproval = createCheckbox('Edit w/ Approval', false);
     }
-
+    
     // CHANGED: Renamed from renderPushNotePanel to renderOwnerNotePanel
     private renderOwnerNotePanel(): void {
         const noteName = this.activeNoteFile?.basename || '';
@@ -289,7 +303,6 @@ export class CollaborationPanelView extends ItemView {
             
             new Setting(this.contentEl)
                 .setName('Delete Key & Registry Content') 
-                //.setDesc('Delete the key associated with this note AND remove its content from your local sharing registry. It will no longer be shareable via this key.') 
                 .addButton(button =>
                     button
                         .setButtonText('Delete Key & Content') 
@@ -335,7 +348,6 @@ export class CollaborationPanelView extends ItemView {
             // --- START MOVED: Push Changes Button ---
             new Setting(this.contentEl)
                 .setName('Share Changes ')
-                //.setDesc('')
                 .addButton(button =>
                     button
                         .setButtonText('Push Changes')
@@ -385,7 +397,6 @@ export class CollaborationPanelView extends ItemView {
             // --- START MOVED: Pull Changes Button ---
             new Setting(this.contentEl)
                 .setName('Pull Latest Changes')
-                //.setDesc('Retrieve the latest version of this note from the original source.')
                 .addButton(button =>
                     button
                         .setButtonText('Pull Changes')
@@ -410,7 +421,6 @@ export class CollaborationPanelView extends ItemView {
             // Keep the Delete Key & Registry Content here, as it's relevant for pulled notes if you want to unlink them
             new Setting(this.contentEl)
                 .setName('Unlink Note') 
-                // /.setDesc('Remove this note from your linked notes registry. It will no longer automatically pull updates.') 
                 .addButton(button =>
                     button
                         .setButtonText('Unlink Note') 
@@ -422,11 +432,9 @@ export class CollaborationPanelView extends ItemView {
                                 });
 
                                 if (confirmDelete) {
-                                    // For pulled notes, you remove them from `linkedKeys`
                                     this.plugin.settings.linkedKeys = this.plugin.settings.linkedKeys.filter(item => item.note !== noteName);
                                     await this.plugin.saveSettings();
                                     new Notice(`Note "${noteName}" unlinked.`, 5000);
-                                    // After unlinking, re-render to potentially switch to 'none' panel
                                     this.activeNoteFile = this.app.workspace.getActiveFile();
                                     this.noteType = await this.determineNoteType(this.activeNoteFile);
                                     this.renderPanelContent();
@@ -470,10 +478,6 @@ export class CollaborationPanelView extends ItemView {
 
         navButtonContainer.appendChild(leftButtons);
         navButtonContainer.appendChild(rightButtons);
-
-        // this.contentEl.createEl('p', {
-        //     text: 'Use the buttons above to manage existing keys or use the key you have with Link Note.'
-        // });
     }
 
     private renderAutomaticUpdatesSection(): void {
@@ -500,4 +504,4 @@ export class CollaborationPanelView extends ItemView {
         if (this.accessTypeEditWithApproval.checked) return 'Edit w/ Approval';
         return null;
     }
-}
+} 
