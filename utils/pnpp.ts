@@ -179,7 +179,7 @@ Expected format: \`\`\`personal-note\\nid:YOUR-UUID\\nYour Content\`\`\`
 
             // Location Span: Displays the file name and line number
             const locationSpan = wrapper.createEl('span', { cls: 'personal-note-location' });
-            locationSpan.setText(`Location: ${personalNote.targetFilePath.split('/').pop()?.replace(/\.md$/, '') || 'Unknown File'} (Line ${personalNote.lineNumber + 1})`);
+            // locationSpan.setText(`Location: ${personalNote.targetFilePath.split('/').pop()?.replace(/\.md$/, '') || 'Unknown File'} (Line ${personalNote.lineNumber + 1})`);
 
             // Set initial expanded/collapsed state based on the 'isExpanded' property in settings
             if (personalNote.isExpanded) {

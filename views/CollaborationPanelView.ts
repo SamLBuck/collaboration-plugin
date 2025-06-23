@@ -57,7 +57,7 @@ export class CollaborationPanelView extends ItemView {
     noteType: NoteType = 'none';
 
     noteInput: TextComponent;
-    noteTitleInput: TextComponent;
+    // noteTitleInput: TextComponent;
     accessTypeView: HTMLInputElement;
     accessTypeEdit: HTMLInputElement;
     accessTypeViewAndComment: HTMLInputElement;
@@ -178,7 +178,7 @@ export class CollaborationPanelView extends ItemView {
                     .onClick(async () => {
                         const noteName = this.noteInput.getValue().trim();
                         const accessType = this.getSelectedAccessType();
-                        const customTitle = this.noteTitleInput.getValue().trim() || "personal-note";
+                        // const customTitle = this.noteTitleInput.getValue().trim() || "personal-note";
 
                         if (!noteName) {
                             new Notice('Please provide a Note Name to generate a key.', 4000);
@@ -208,7 +208,7 @@ export class CollaborationPanelView extends ItemView {
 
                                 this.plugin.settings.personalNotes[noteName] = {
                                     lineCount: 0,
-                                    title: customTitle
+                                    // title: customTitle
                                 };
                                 await this.plugin.saveSettings();
 
@@ -243,13 +243,13 @@ export class CollaborationPanelView extends ItemView {
                     });
             });
 
-        new Setting(this.contentEl)
-            .setName('Title')
-            .setDesc('Optional friendly title for this personal note.')
-            .addText(text => {
-                this.noteTitleInput = text;
-                text.setPlaceholder('e.g. Meeting Notes, Ideas...');
-            });
+        // new Setting(this.contentEl)
+        //     .setName('Title')
+        //     .setDesc('Optional friendly title for this personal note.')
+        //     .addText(text => {
+        //         this.noteTitleInput = text;
+        //         text.setPlaceholder('e.g. Meeting Notes, Ideas...');
+        //     });
             
         const accessTypeSetting = new Setting(this.contentEl)
             .setName('Access Type')
@@ -364,6 +364,10 @@ export class CollaborationPanelView extends ItemView {
                                     if (file) {
                                         await this.app.workspace.getLeaf(true).openFile(file); // Open in a new leaf
                                         new Notice(`Pulled and opened "${file.basename}" successfully.`, 4000);
+                                        this.activeNoteFile = file;
+                                        this.noteType = await this.determineNoteType(file);
+                                        this.renderPanelContent();
+                                    
                                     } else {
                                         new Notice(`Pulled "${keyBasename}" successfully, but could not open the file.`, 4000);
                                     }
@@ -380,47 +384,131 @@ export class CollaborationPanelView extends ItemView {
     // CHANGED: Renamed from renderPushNotePanel to renderOwnerNotePanel
     private renderOwnerNotePanel(): void {
         const noteName = this.activeNoteFile?.basename || '';
-        const keyItem = this.plugin.settings.keys.find(k => k.note === noteName);
-
-        this.contentEl.createEl('h2', { text: 'Owner Note Tools' }); // CHANGED: 'Push Note Tools' to 'Owner Note Tools'
-        this.contentEl.createEl('p', { text: `${noteName} has a key associated with it. You are the host.` });
-        
-        if (keyItem) {
-            this.contentEl.createEl('p', { text: `${keyItem.ip}` });
-            
+        const viewKey = this.plugin.settings.keys.find(k => k.note === noteName && k.access === 'View');
+        const editKey = this.plugin.settings.keys.find(k => k.note === noteName && k.access === 'Edit');
+    
+        this.contentEl.createEl('h2', { text: 'Owner Note Tools' });
+        this.contentEl.createEl('p', { text: `${noteName} has been shared. You are the host.` });
+    
+        if (viewKey) {
             new Setting(this.contentEl)
-                .setName('Delete Key & Registry Content') 
+                .setName('View Key')
+                .setDesc(viewKey.ip)
+                .addButton(btn =>
+                    btn
+                        .setIcon('copy')
+                        .setTooltip('Copy View Key to Clipboard')
+                        .onClick(async () => {
+                            await navigator.clipboard.writeText(viewKey.ip);
+                            new Notice('View Key copied to clipboard');
+                        })
+                );
+        }
+        
+        if (editKey) {
+            new Setting(this.contentEl)
+                .setName('Edit Key')
+                .setDesc(editKey.ip)
+                .addButton(btn =>
+                    btn
+                        .setIcon('copy')
+                        .setTooltip('Copy Edit Key to Clipboard')
+                        .onClick(async () => {
+                            await navigator.clipboard.writeText(editKey.ip);
+                            new Notice('Edit Key copied to clipboard');
+                        })
+                );
+        }
+            
+        if (!viewKey || !editKey) {
+            const missingAccess = !viewKey ? 'View' : 'Edit';
+    
+            new Setting(this.contentEl)
+                .setName(`Generate ${missingAccess} Key`)
+                .setDesc(`Create a ${missingAccess.toLowerCase()} access key for this note.`)
                 .addButton(button =>
                     button
-                        .setButtonText('Delete Key & Content') 
-                        .setWarning()
+                        .setButtonText(`Add ${missingAccess} Key`)
+                        .setCta()
                         .onClick(async () => {
-                            if (keyItem) {
-                                const confirmDelete = await new Promise<boolean>(resolve => {
-                                    new ConfirmationModal(this.app, `Are you sure you want to delete the key for "${noteName}" AND remove its content from your local sharing registry? This action cannot be undone.`, resolve).open(); 
-                                });
-
-                                if (confirmDelete) {
-                                    const deleted = await deleteKeyAndContent(this.plugin, keyItem.note);
-                                    if (deleted) {
-                                        new Notice(`Key for "${noteName}" and its content deleted from registry.`, 5000);
-                                        this.activeNoteFile = this.app.workspace.getActiveFile();
-                                        this.noteType = await this.determineNoteType(this.activeNoteFile);
-                                        this.renderPanelContent();
-                                    } else {
-                                        new Notice(`Failed to delete key for "${noteName}". It might not exist.`, 4000);
-                                    }
+                            try {
+                                const newKeyItem = await generateKey(this.plugin, noteName, missingAccess);
+                                const success = await addKey(this.plugin, newKeyItem);
+    
+                                if (success) {
+                                    await navigator.clipboard.writeText(newKeyItem.ip);
+                                    new Notice(`${missingAccess} key generated and copied:\n${newKeyItem.ip}`);
+                                    this.renderPanelContent(); // Refresh panel to show both keys
                                 } else {
-                                    new Notice("Deletion cancelled.", 2000);
+                                    new Notice("Failed to add key (possible collision).");
                                 }
+                            } catch (err: any) {
+                                new Notice(`Error creating key: ${err.message}`);
                             }
                         })
                 );
-        } else {
-            this.contentEl.createEl('p', { text: 'Error: Key not found for this owned note.' }); // CHANGED: pushable to owned
         }
+    
+        // Delete section
+        new Setting(this.contentEl)
+            .setName('Delete Key & Registry Content')
+            .addButton(button =>
+                button
+                    .setButtonText('Delete Key & Content')
+                    .setWarning()
+                    .onClick(async () => {
+                        const confirmDelete = await new Promise<boolean>(resolve => {
+                            new ConfirmationModal(
+                                this.app,
+                                `Are you sure you want to delete all keys for "${noteName}" and remove it from the registry?`,
+                                resolve
+                            ).open();
+                        });
+    
+                        if (confirmDelete) {
+                            const deleted = await deleteKeyAndContent(this.plugin, noteName);
+                            if (deleted) {
+                                new Notice(`Deleted registry + keys for "${noteName}".`);
+                                this.activeNoteFile = this.app.workspace.getActiveFile();
+                                this.noteType = await this.determineNoteType(this.activeNoteFile);
+                                this.renderPanelContent();
+                            } else {
+                                new Notice(`Delete failed — registry/key not found.`);
+                            }
+                        } else {
+                            new Notice("Deletion cancelled.");
+                        }
+                    })
+            );
+    
+        // Manual save
+        new Setting(this.contentEl)
+            .setName('Manual Save to Registry')
+            .addButton(button =>
+                button
+                    .setButtonText('Save')
+                    .setCta()
+                    .onClick(async () => {
+                        const file = this.activeNoteFile;
+                        if (!file) {
+                            new Notice("No active note selected.");
+                            return;
+                        }
+    
+                        const content = await this.app.vault.read(file);
+                        const lineCount = content.split("\n").length;
+    
+                        this.plugin.settings.personalNotes[noteName] = {
+                            title: this.plugin.settings.personalNotes[noteName]?.title || noteName,
+                            lineCount
+                        };
+    
+                        await this.plugin.saveSettings();
+                        new Notice(`Saved "${noteName}" with ${lineCount} lines to registry.`);
+                    })
+            );
     }
-
+    
     // CHANGED: Renamed from renderPulledNotePanel to renderCollaboratorNotePanel
     private renderCollaboratorNotePanel(): void {
         const noteName = this.activeNoteFile?.basename || '';
@@ -515,7 +603,34 @@ export class CollaborationPanelView extends ItemView {
                         })
                 );
             // --- END MOVED: Pull Changes Button ---
-
+            new Setting(this.contentEl)
+            .setName('Manual Save to Registry')
+            .addButton(button =>
+                button
+                    .setButtonText('Save')
+                    .setCta()
+                    .onClick(async () => {
+                        const file = this.activeNoteFile;
+                        if (!file) {
+                            new Notice("No active note selected.");
+                            return;
+                        }
+        
+                        const content = await this.app.vault.read(file);
+                        const lineCount = content.split("\n").length;
+                        const noteName = file.basename;
+        
+                        // Update or create registry entry
+                        this.plugin.settings.personalNotes[noteName] = {
+                            title: this.plugin.settings.personalNotes[noteName]?.title || noteName,
+                            lineCount
+                        };
+        
+                        await this.plugin.saveSettings();
+                        new Notice(`Saved "${noteName}" with ${lineCount} lines to registry.`, 3000);
+                    })
+            );
+                
             // Keep the Delete Key & Registry Content here, as it's relevant for pulled notes if you want to unlink them
             new Setting(this.contentEl)
                 .setName('Unlink Note') 
@@ -544,10 +659,15 @@ export class CollaborationPanelView extends ItemView {
                             }
                         })
                 );
-        } else {
+                
+        } 
+        
+        else {
             this.contentEl.createEl('p', { text: 'Error: Linked key not found for this pulled note.' });
         }
     }
+    
+
 
     private renderNavigationButtons(): void {
         // this.contentEl.createEl('h2', { text: 'Navigation' });
