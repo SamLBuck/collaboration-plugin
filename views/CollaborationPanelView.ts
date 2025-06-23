@@ -483,31 +483,37 @@ export class CollaborationPanelView extends ItemView {
     
         // Manual save
         new Setting(this.contentEl)
-            .setName('Manual Save to Registry')
-            .addButton(button =>
-                button
-                    .setButtonText('Save')
-                    .setCta()
-                    .onClick(async () => {
-                        const file = this.activeNoteFile;
-                        if (!file) {
-                            new Notice("No active note selected.");
-                            return;
-                        }
-    
-                        const content = await this.app.vault.read(file);
-                        const lineCount = content.split("\n").length;
-    
-                        this.plugin.settings.personalNotes[noteName] = {
-                            title: this.plugin.settings.personalNotes[noteName]?.title || noteName,
-                            lineCount
-                        };
-    
-                        await this.plugin.saveSettings();
-                        new Notice(`Saved "${noteName}" with ${lineCount} lines to registry.`);
-                    })
-            );
-    }
+        .setName('Manual Save to Registry')
+        .addButton(button =>
+          button
+            .setButtonText('Save')
+            .setCta()
+            .onClick(async () => {
+              const file = this.activeNoteFile;
+              if (!file) {
+                new Notice("No active note selected.");
+                return;
+              }
+      
+              const content = await this.app.vault.read(file);
+              const noteName = file.basename;
+      
+              // Construct or update the registry entry
+              const index = this.plugin.settings.registry.findIndex(entry => entry.key === noteName);
+              if (index !== -1) {
+                this.plugin.settings.registry[index].content = content;
+              } else {
+                this.plugin.settings.registry.push({
+                  key: noteName,
+                  content
+                });
+              }
+      
+              await this.plugin.saveSettings();
+              new Notice(`Saved "${noteName}" content to registry.`, 3000);
+            })
+        );
+          }
     
     // CHANGED: Renamed from renderPulledNotePanel to renderCollaboratorNotePanel
     private renderCollaboratorNotePanel(): void {
@@ -606,31 +612,35 @@ export class CollaborationPanelView extends ItemView {
             new Setting(this.contentEl)
             .setName('Manual Save to Registry')
             .addButton(button =>
-                button
-                    .setButtonText('Save')
-                    .setCta()
-                    .onClick(async () => {
-                        const file = this.activeNoteFile;
-                        if (!file) {
-                            new Notice("No active note selected.");
-                            return;
-                        }
-        
-                        const content = await this.app.vault.read(file);
-                        const lineCount = content.split("\n").length;
-                        const noteName = file.basename;
-        
-                        // Update or create registry entry
-                        this.plugin.settings.personalNotes[noteName] = {
-                            title: this.plugin.settings.personalNotes[noteName]?.title || noteName,
-                            lineCount
-                        };
-        
-                        await this.plugin.saveSettings();
-                        new Notice(`Saved "${noteName}" with ${lineCount} lines to registry.`, 3000);
-                    })
+              button
+                .setButtonText('Save')
+                .setCta()
+                .onClick(async () => {
+                  const file = this.activeNoteFile;
+                  if (!file) {
+                    new Notice("No active note selected.");
+                    return;
+                  }
+          
+                  const content = await this.app.vault.read(file);
+                  const noteName = file.basename;
+          
+                  // Construct or update the registry entry
+                  const index = this.plugin.settings.registry.findIndex(entry => entry.key === noteName);
+                  if (index !== -1) {
+                    this.plugin.settings.registry[index].content = content;
+                  } else {
+                    this.plugin.settings.registry.push({
+                      key: noteName,
+                      content
+                    });
+                  }
+          
+                  await this.plugin.saveSettings();
+                  new Notice(`Saved "${noteName}" content to registry.`, 3000);
+                })
             );
-                
+                          
             // Keep the Delete Key & Registry Content here, as it's relevant for pulled notes if you want to unlink them
             new Setting(this.contentEl)
                 .setName('Unlink Note') 
