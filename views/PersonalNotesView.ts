@@ -62,7 +62,7 @@ export class PersonalNotesView extends ItemView {
 
         if (personalNotes.length === 0) {
             this.notesListContainer.createEl('p', {
-                text: 'No personal notes yet. Click the "Sticky Note" ribbon icon to create one!',
+                text: 'No personal notes yet. Click the "add-note" ribbon icon to create one!',
                 cls: 'empty-personal-notes-message'
             });
             return;

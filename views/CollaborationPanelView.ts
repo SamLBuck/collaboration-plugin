@@ -78,7 +78,7 @@ export class CollaborationPanelView extends ItemView {
     }
 
     getIcon(): string {
-        return 'share';
+        return 'columns-3';
     }
 
     async onOpen(): Promise<void> {
@@ -497,6 +497,17 @@ export class CollaborationPanelView extends ItemView {
                                 }
                                 // The rewriteExistingNote function already takes the IP and NoteName
                                 rewriteExistingNote(this.app, parsedKeyInfo.ip, keyItem.note, this.plugin); 
+                                const existing = this.plugin.keys.find(key => key.note === parsedKeyInfo.noteName);
+                                if (!existing) {
+                                    this.plugin.keys.push({
+                                        ip: parsedKeyInfo.ip,
+                                        note: parsedKeyInfo.noteName,
+                                        view: parsedKeyInfo.view
+                                    });
+                                    await this.plugin.saveData({ keys: this.plugin.keys });
+                                    console.log('[Plugin] Added pulled key:', parsedKeyInfo);
+                                    console.log('[Plugin] Keys after adding pulled key:', this.plugin.keys);
+                                }
                                 new Notice(`Requested latest changes for "${noteName}".`);
                             } else {
                                 new Notice("Could not find key for this pullable note.", 4000);

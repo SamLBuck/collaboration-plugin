@@ -12,6 +12,7 @@ import {
     MarkdownView,
     MarkdownPostProcessorContext, // For post-processor
     setIcon, // For icons in post-processor
+    Menu, // For editor menu and file menu
 } from 'obsidian';
 import { registerAddKeyCommand } from './utils/add_key_command';
 import { registerDeleteKeyCommand } from './utils/delete_key_command';
@@ -30,7 +31,7 @@ import { tempKeyInputModal } from './settings/tempKeyInputModal';
 import { tempIPInputModal } from './settings/tempIPInputModal';
 import { getLocalIP } from './utils/get-ip';
 import { registerGenerateKeyCommand } from './utils/generate_key_command';
-import { registerPullNoteCommand } from './utils/pull_note_command';
+import { registerPullNoteCommand, rewriteExistingNote } from './utils/pull_note_command';
 import { registerStartServerCommand, startWebSocketServerProcess } from './utils/start_server_command';
 import { registerShowIPCommand } from './utils/show_ip_command';
 import { registerListSharedKeysCommand } from './utils/list_keys_command';
@@ -54,6 +55,7 @@ import { updatePersonalNoteLocations } from './utils/updatePersonalNoteLocations
 // --- END NEW IMPORTS ---
 
 import { NoteManager } from "./networking/socket/NoteManager";
+import { parseKey } from './utils/parse_key';
 
 
 export type NoteRegistry = Record<string, string>; // key => content
@@ -218,6 +220,7 @@ export default class MyPlugin extends Plugin {
     // and to avoid creating new instances on every message.
     noteManager: NoteManager;
     // --- END NEW ---
+    keys: { note: string; ip: string; view?: string }[] = [];
 
     private _debounceUpdateLocationsTimeout: NodeJS.Timeout | null = null; // For debouncing personal note location updates
 
@@ -464,6 +467,50 @@ export default class MyPlugin extends Plugin {
             // this.activateView(COLLABORATION_VIEW_TYPE); // Uncomment if you want to activate on layout ready
         });
         // --- END MODIFIED ---
+        
+        this.keys = (await this.loadData())?.keys || [];
+        console.log('[Plugin] Loaded keys:', this.keys);
+
+        this.registerEvent(
+            this.app.workspace.on('file-menu', (menu, file) => {
+                console.log('[Plugin] Right-clicked:', file.path); 
+
+                if (!(file instanceof TFile)) return;
+
+            const keyItem = this.keys.find(key => key.note === file.basename);
+            if (!keyItem) return; // Only show if you have a matching key
+
+            menu.addItem(item =>
+                item.setTitle('Pull Changes')
+                    .setIcon('book-down')
+                    .onClick(() => {
+                        const parsedKeyInfo = parseKey(keyItem.ip);
+                        if (parsedKeyInfo?.ip && parsedKeyInfo?.noteName) {
+                            rewriteExistingNote(this.app, parsedKeyInfo.ip, parsedKeyInfo.noteName, this);
+                            new Notice(`Requested latest changes for "${parsedKeyInfo.noteName}".`);
+                        } else {
+                            new Notice("Invalid key format.", 4000);
+                        }
+                    })
+            );
+
+            menu.addItem(item =>
+                item.setTitle('Push Changes')
+                    .setIcon('book-up')
+                    .onClick(async () => {
+                        const parsedKeyInfo = parseKey(keyItem.ip);
+                        if (parsedKeyInfo?.ip && parsedKeyInfo?.noteName) {
+                            const fileContent = await this.app.vault.read(file as TFile);
+                            const { sendNoteToHost } = await import("./networking/socket/client");
+                            sendNoteToHost(parsedKeyInfo.ip, parsedKeyInfo.noteName, fileContent);
+                            new Notice(`Pushed changes for '${parsedKeyInfo.noteName}' to ${parsedKeyInfo.ip}`, 3000);
+                        } else {
+                            new Notice("Invalid key format.", 4000);
+                        }
+                    })
+            );
+        })
+    );
     }
 
     onunload() {
