@@ -133,7 +133,7 @@ export class LinkNoteView extends ItemView {
 
                         try {
                             if (file && overwrite) {
-                                await rewriteExistingNote(this.app, ip, keyBasename);
+                                await rewriteExistingNote(this.app, ip, keyBasename, this.plugin);
                             } else {
                                 await pullNoteFromPeerNewNote(this.app, ip, keyBasename);
                             }
