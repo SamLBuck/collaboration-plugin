@@ -166,6 +166,17 @@ export async function rewriteExistingNote(app: App, ip: string, key: string, plu
 		await app.vault.modify(existingFile, userAccepted.content);
 		new Notice(`Note '${key}' pulled and updated as '${existingFile.basename}'.`, 3000);
 
+        const existing = plugin.keys.find(k => k.note === key);
+        if (!existing) {
+            plugin.keys.push({
+                ip: ip,
+                note: key,
+                view: "Edit" // or whatever permission you want
+            });
+            await plugin.saveData({ keys: plugin.keys });
+            console.log('[rewriteExistingNote] Added pulled key:', { ip, note: key });
+        }
+
 		if (plugin) {
              if (plugin.noteManager) {
                 await plugin.noteManager.restorePersonalNotesIntoActiveFileNoteManager();
