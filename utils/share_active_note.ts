@@ -1,6 +1,5 @@
 import { Plugin, Notice, TFile } from "obsidian";
 import { App } from "obsidian";
-import { registerNoteWithPeer } from "../networking/socket/client";
 
 export async function shareCurrentNote(app: App): Promise<void> {
 	const file = app.workspace.getActiveFile();
@@ -12,7 +11,7 @@ export async function shareCurrentNote(app: App): Promise<void> {
 	const content = await app.vault.read(file);
 	const key = file.basename;
 
-	registerNoteWithPeer("ws://localhost:3010", key, content);
+	//registerNoteWithPeer("ws://localhost:3010", key, content);
 	new Notice(`Note '${key}' added to peer accessible registry.`);
 }
 
@@ -64,12 +63,12 @@ export async function updateRegistry(app: App, key: string): Promise<void> {
 	}
 
 	const content = await app.vault.read(file);
-	registerNoteWithPeer("ws://localhost:3010", key, content);
+	//registerNoteWithPeer("ws://localhost:3010", key, content);
 	new Notice(`Registry updated for note '${key}'.`);
 }
 
 import { Modal, Setting } from "obsidian";
-import MyPlugin, { updateNoteRegistry } from "../main";
+//import MyPlugin, { updateNoteRegistry } from "../main";
 
 class PromptModal extends Modal {
 	private resolve: (value: string | null) => void;

@@ -1,7 +1,7 @@
 import { App, Modal, Setting, TextComponent, ButtonComponent, Notice, TFile } from "obsidian";
 import MyPlugin, { KeyItem } from "../main";
-import { requestNoteFromPeer } from "../networking/socket/client";
-import { pullNoteFromPeerNewNote, rewriteExistingNote } from "../utils/pull_note_command";
+//import { requestNoteFromPeer } from "../networking/socket/client";
+//import { pullNoteFromPeerNewNote, rewriteExistingNote } from "../utils/pull_note_command";
 import { parseKey } from "../utils/parse_key"; // Assuming parseKey is updated to handle full key string
 
 // Define a generic ConfirmationModal for reuse
@@ -207,8 +207,7 @@ export class LinkNoteModal extends Modal {
         
                         console.log("Pushing with view:", parsedKeyInfo.view);
 
-                        const { sendNoteToHost } = await import("../networking/socket/client");
-                        sendNoteToHost(ip, noteName, content);
+                        //sendNoteToHost(ip, noteName, content);
                         new Notice(`Pushed '${noteName}' to ${ip}`, 3000);
                     });
             });

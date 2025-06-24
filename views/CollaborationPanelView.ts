@@ -1,14 +1,13 @@
 // views/CollaborationPanelView.ts
 import { App, ItemView, WorkspaceLeaf, ButtonComponent, Notice, Setting, TextComponent, setIcon, TFile, Modal } from 'obsidian';
 import MyPlugin, { KeyItem } from '../main';
-import { generateKey, addKey, deleteKeyAndContent } from '../storage/keyManager';
+import { generateKey } from '../storage/keyManager';
 import { shareCurrentNoteWithFileName } from '../utils/share_active_note';
-import { requestNoteFromPeer } from '../networking/socket/client';
+//import { requestNoteFromPeer } from '../networking/socket/client';
 
 import { KEY_LIST_VIEW_TYPE } from './KeyListView';
 import { LINK_NOTE_VIEW_TYPE } from './LinkNoteView';
 import { parseKey } from '../utils/parse_key';
-import { pullNoteFromPeerNewNote, rewriteExistingNote } from '../utils/pull_note_command';
 
 // --- INLINED: ConfirmationModal class definition (consistent with other views) ---
 class ConfirmationModal extends Modal {
@@ -474,8 +473,8 @@ export class CollaborationPanelView extends ItemView {
         
                             console.log("Pushing content from pulled note to source:", ip, noteName);
         
-                            const { sendNoteToHost } = await import("../networking/socket/client");
-                            sendNoteToHost(ip, noteName, content);
+                            //const { sendNoteToHost } = await import("../networking/socket/client");
+                            //sendNoteToHost(ip, noteName, content);
                             new Notice(`Pushed changes for '${noteName}' to original host: ${ip}`, 3000);
                         })
                 );

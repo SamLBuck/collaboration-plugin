@@ -83,4 +83,21 @@ export async function fetchMaster(
       throw new Error(`Failed to resolve master: ${response.status} ${response.statusText}`);
     }
   }
+
+  /**
+ * Create a new collaboration note and receive its access credentials. 
+ */
+export async function createNote(
+  apiBaseUrl: string,
+  collabId: string
+): Promise<{noteKey: string, apiKey: string}> {
+  const resp = await fetch(`${apiBaseUrl.replace(/\/+$/,'')}/notes`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ resolverId: collabId })
+  });
+  if (!resp.ok) throw new Error(`CreateNote failed: ${resp.statusText}`);
+  return resp.json();
+}
+
   

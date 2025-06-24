@@ -1,6 +1,6 @@
 import { App, PluginSettingTab, Setting, ButtonComponent, TextComponent, Notice } from 'obsidian';
 import MyPlugin, { KeyItem } from '../main';
-import { generateKey, addKey } from '../storage/keyManager';
+import { generateKey } from '../storage/keyManager';
 import { KeyListModal } from './key_list_page02';
 import { LinkNoteModal } from './link_note_page03'; // Update the path to the correct module
 import { shareCurrentNoteWithFileName } from '../utils/share_active_note';
