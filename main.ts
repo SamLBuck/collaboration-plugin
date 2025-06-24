@@ -459,6 +459,19 @@ export default class MyPlugin extends Plugin {
         }));
         // --- END NEW ---
 
+        this.app.vault.on("modify", async (file) => {
+            if (this.settings.autoUpdateRegistry) {
+                if (file instanceof TFile) {
+                    const key = file.basename; // Uses basename as key for auto-update
+                    const content = await this.app.vault.read(file);
+                    await updateNoteRegistry(this, key, content);
+                    console.log(`[Auto-Update] Registry updated for note '${key}'.`);
+                } else {
+                    console.warn(`[Auto-Update] Skipped updating registry for non-TFile instance.`);
+                }
+            }
+        });
+
 
         this.addSettingTab(new PluginSettingsTab(this.app, this));
 

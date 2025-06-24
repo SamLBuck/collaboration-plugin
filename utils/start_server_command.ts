@@ -58,6 +58,8 @@ export function startWebSocketServerProcess(app: App, plugin: MyPlugin): void {
         "ws-server.pid"
     );
 
+    console.log(serverPath)
+
     if (!fs.existsSync(serverPath)) {
         console.error("[Plugin] server.cjs file not found at:", serverPath);
         new Notice("WebSocket server file not found. Please ensure 'server.cjs' is in the 'dist' folder.");
