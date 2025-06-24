@@ -1,8 +1,7 @@
 // srettings/PersonalNoteEditModal.ts
 
 import { App, Modal, Setting, Notice } from 'obsidian';
-import MyPlugin from '../main';
-import PersonalNote from '../main';
+import MyPlugin, { PersonalNote } from '../main';
 
 export class PersonalNoteEditModal extends Modal {
     plugin: MyPlugin;
