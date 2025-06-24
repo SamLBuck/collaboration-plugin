@@ -228,8 +228,13 @@ export default class MyPlugin extends Plugin {
 
     async onload() {
         console.log("Loading collaboration plugin...");
+        new Notice("click the icon to open the Collaboration Panel");
+
+
         await this.loadSettings();
         
+
+
         // --- NEW: Initialize NoteManager here ---
         // This ensures a single instance is available throughout the plugin's lifecycle.
         this.noteManager = new NoteManager(this, "ws://localhost:3010");
@@ -237,6 +242,8 @@ export default class MyPlugin extends Plugin {
         // Sart WebSocket server
         startWebSocketServerProcess(this.app, this);
         waitForWebSocketConnection("ws://localhost:3010", this);
+
+
 
         // --- NEW: Update personal note locations on plugin load ---
         await updatePersonalNoteLocations(this);
@@ -253,6 +260,20 @@ export default class MyPlugin extends Plugin {
         registerShareCurrentNoteCommand(this);
         registerUpdateRegistryCommand(this);
         registerSyncFromServerToSettings(this); // Added back sync command if missing
+
+
+        this.addCommand({
+          id: 'open-collab-panel',      // <- this ID you can call programmatically
+          name: 'Open Collaboration Panel',
+          callback: () => this.activateView(COLLABORATION_VIEW_TYPE)
+        });
+    
+        // 2) Hook your ribbon icon to that command:
+        this.addRibbonIcon('columns-3', 'Open Collaboration Panel', () => {
+          // Note: use this.app.commands, not this.commands
+          ;(this.app as any).commands.executeCommandById('open-collab-panel');
+        });
+        
 
         this.addCommand({
             id: 'delete-note-from-registry',
