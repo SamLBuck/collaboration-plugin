@@ -1,6 +1,6 @@
 // views/CollaborationPanelView.ts
 import { App, ItemView, WorkspaceLeaf, ButtonComponent, Notice, Setting, TextComponent, setIcon, TFile, Modal } from 'obsidian';
-import MyPlugin, { KeyItem } from '../main';
+import MyPlugin, { KeyItem, updateNoteRegistry } from '../main';
 import { generateKey, addKey, deleteKeyAndContent } from '../storage/keyManager';
 import { shareCurrentNoteWithFileName } from '../utils/share_active_note';
 import { requestNoteFromPeer } from '../networking/socket/client';
@@ -621,20 +621,15 @@ export class CollaborationPanelView extends ItemView {
                     new Notice("No active note selected.");
                     return;
                   }
-          
-                  const content = await this.app.vault.read(file);
-                  const noteName = file.basename;
-          
-                  // Construct or update the registry entry
-                  const index = this.plugin.settings.registry.findIndex(entry => entry.key === noteName);
-                  if (index !== -1) {
-                    this.plugin.settings.registry[index].content = content;
-                  } else {
-                    this.plugin.settings.registry.push({
-                      key: noteName,
-                      content
-                    });
-                  }
+                  if (file instanceof TFile) {
+                    const key = file.basename; // Uses basename as key for auto-update
+                    const content = await this.app.vault.read(file);
+                    await updateNoteRegistry(this.plugin, key, content);
+                    console.log(`[Auto-Update] Registry updated for note '${key}'.`);
+                } else {
+                    console.warn(`[Auto-Update] Skipped updating registry for non-TFile instance.`);
+                }
+
           
                   await this.plugin.saveSettings();
                   new Notice(`Saved "${noteName}" content to registry.`, 3000);
