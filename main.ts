@@ -486,40 +486,46 @@ export default class MyPlugin extends Plugin {
 
         this.registerEvent(
             this.app.workspace.on('file-menu', (menu, file) => {
-                console.log('[Plugin] Right-clicked:', file.path); 
-
                 if (!(file instanceof TFile)) return;
 
-            const keyItem = this.keys.find(key => key.note === file.basename);
-            if (!keyItem) return; // Only show if you have a matching key
+                const pulledKey = this.settings.linkedKeys.find(k => k.note === file.basename);
 
-            menu.addItem(item =>
+                if (!pulledKey) return; // Not pulled → skip
+
+                menu.addItem(item =>
                 item.setTitle('Pull Changes')
                     .setIcon('book-down')
                     .onClick(() => {
-                        const parsedKeyInfo = parseKey(keyItem.ip);
-                        if (parsedKeyInfo?.ip && parsedKeyInfo?.noteName) {
-                            rewriteExistingNote(this.app, parsedKeyInfo.ip, parsedKeyInfo.noteName, this);
-                            new Notice(`Requested latest changes for "${parsedKeyInfo.noteName}".`);
-                        } else {
-                            new Notice("Invalid key format.", 4000);
-                        }
-                    })
-            );
+                    const parseInput = `${pulledKey.ip}-${pulledKey.note}|${pulledKey.access}`;
+                    const parsedKeyInfo = parseKey(parseInput);
 
-            menu.addItem(item =>
+                    if (!parsedKeyInfo?.ip || !parsedKeyInfo?.noteName) {
+                        new Notice("Invalid key format.", 4000);
+                        return;
+                    }
+
+                    rewriteExistingNote(this.app, parsedKeyInfo.ip, parsedKeyInfo.noteName, this);
+                    new Notice(`Requested latest changes for "${parsedKeyInfo.noteName}".`);
+                    })
+                );
+
+                menu.addItem(item =>
                 item.setTitle('Push Changes')
                     .setIcon('book-up')
                     .onClick(async () => {
-                        const parsedKeyInfo = parseKey(keyItem.ip);
-                        if (parsedKeyInfo?.ip && parsedKeyInfo?.noteName) {
-                            const fileContent = await this.app.vault.read(file as TFile);
-                            const { sendNoteToHost } = await import("./networking/socket/client");
-                            sendNoteToHost(parsedKeyInfo.ip, parsedKeyInfo.noteName, fileContent);
-                            new Notice(`Pushed changes for '${parsedKeyInfo.noteName}' to ${parsedKeyInfo.ip}`, 3000);
-                        } else {
-                            new Notice("Invalid key format.", 4000);
-                        }
+                    const parseInput = `${pulledKey.ip}-${pulledKey.note}|${pulledKey.access}`;
+                    const parsedKeyInfo = parseKey(parseInput);
+
+                    if (!parsedKeyInfo?.ip || !parsedKeyInfo?.noteName) {
+                        new Notice("Invalid key format.", 4000);
+                        return;
+                    }
+
+                    const content = await this.app.vault.read(file);
+                    const { sendNoteToHost } = await import("./networking/socket/client");
+                    sendNoteToHost(parsedKeyInfo.ip, parsedKeyInfo.noteName, content);
+
+                    new Notice(`Pushed changes for '${parsedKeyInfo.noteName}' to ${parsedKeyInfo.ip}`, 3000);
                     })
             );
         })
