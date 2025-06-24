@@ -29,6 +29,8 @@ function isPortAvailable(port: number): Promise<boolean> {
     });
 }
 
+import { exec } from "child_process"; // Ensure this is imported
+
 export function startWebSocketServerProcess(app: App, plugin: MyPlugin): void {
     const adapter = app.vault.adapter;
     if (!(adapter instanceof FileSystemAdapter)) {
@@ -41,7 +43,7 @@ export function startWebSocketServerProcess(app: App, plugin: MyPlugin): void {
         vaultPath,
         ".obsidian",
         "plugins",
-        "obsidian-collaboration-plugin",
+        "collaboration-plugin",
         "networking",
         "socket",
         "dist",
@@ -52,7 +54,7 @@ export function startWebSocketServerProcess(app: App, plugin: MyPlugin): void {
         vaultPath,
         ".obsidian",
         "plugins",
-        "obsidian-collaboration-plugin",
+        "collaboration-plugin",
         "ws-server.pid"
     );
 
@@ -62,74 +64,79 @@ export function startWebSocketServerProcess(app: App, plugin: MyPlugin): void {
         return;
     }
 
-    // Kill any old PID first for a clean restart
-    if (fs.existsSync(pidPath)) {
-        const pid = parseInt(fs.readFileSync(pidPath, "utf8"));
-        if (!isNaN(pid)) {
-            try {
-                process.kill(pid);
-                console.log(`[Plugin] Killed stale WebSocket server with PID ${pid}`);
-            } catch (err) {
-                console.warn(`[Plugin] Could not kill PID ${pid} (it may have already stopped or permissions issue).`);
-            }
-        }
-        fs.unlinkSync(pidPath); // Always remove the PID file if it exists
-    }
-
     const PORT = 3010;
-    isPortAvailable(PORT).then((available) => {
-        if (!available) {
-            new Notice(`Port ${PORT} is already in use. Server will not start.`);
-            startServerAgain(app, plugin);
-            return;
+
+    const killPort = (port: number): Promise<void> => {
+        return new Promise((resolve) => {
+            if (process.platform === "win32") {
+                // Windows: use netstat + taskkill
+                exec(`for /f "tokens=5" %a in ('netstat -aon ^| find ":${port} "') do taskkill /F /PID %a`, (err) => {
+                    if (err) console.warn(`[Plugin] Could not kill process on port ${port} (likely already free).`);
+                    resolve();
+                });
+            } else {
+                // Unix/macOS: use lsof + kill
+                exec(`lsof -t -i:${port} | xargs kill -9`, (err) => {
+                    if (err) console.warn(`[Plugin] Could not kill process on port ${port} (likely already free).`);
+                    resolve();
+                });
+            }
+        });
+    };
+
+    const start = async () => {
+        // Try to kill previous PID
+        if (fs.existsSync(pidPath)) {
+            const pid = parseInt(fs.readFileSync(pidPath, "utf8"));
+            if (!isNaN(pid)) {
+                try {
+                    process.kill(pid);
+                    console.log(`[Plugin] Killed stale WebSocket server with PID ${pid}`);
+                } catch (err) {
+                    console.warn(`[Plugin] Could not kill PID ${pid} (may already be stopped or inaccessible).`);
+                }
+            }
+            fs.unlinkSync(pidPath);
         }
+
+        // Free the port regardless of PID
+        await killPort(PORT);
 
         console.log(`[Plugin] Attempting to launch WebSocket server from: ${serverPath}`);
         const subprocess = spawn("node", [serverPath], {
-            shell: false, // Prevents shell interpolation issues
-            detached: true, // Allows the child process to run independently
-            stdio: 'inherit' 
+            shell: false,
+            detached: true,
+            stdio: 'inherit'
         });
         subprocess.unref();
-        
-        // Save the new PID
         fs.writeFileSync(pidPath, String(subprocess.pid));
-
-        // // Optional: These listeners are generally not needed when stdio: 'inherit' is used
-        // subprocess.stdout.on("data", (data) => {
-        //     console.log("[WS Server stdout]:", data.toString());
-        // });
-        // subprocess.stderr.on("data", (err) => {
-        //     console.error("[WS Server stderr]:", err.toString());
-        // });
 
         subprocess.on("exit", (code, signal) => {
             console.log(`[Plugin] WebSocket server process exited with code ${code} and signal ${signal}`);
-            // Clean up PID file on exit
             if (fs.existsSync(pidPath)) {
                 fs.unlinkSync(pidPath);
             }
             if (code !== 0) {
-                new Notice(`WebSocket server exited unexpectedly with code ${code}. Check console for details.`);
+                new Notice(`WebSocket server exited unexpectedly with code ${code}.`);
             }
         });
 
         subprocess.on('error', (err) => {
-            console.error(`[Plugin] Failed to launch WebSocket server process (spawn error): ${err.message}`);
-            new Notice(`Failed to launch WebSocket server: ${err.message}. Check console for details.`);
+            console.error(`[Plugin] Failed to launch WebSocket server process: ${err.message}`);
+            new Notice(`Failed to launch WebSocket server: ${err.message}`);
         });
 
-        console.log(`[Plugin] WebSocket server process launched with PID ${subprocess.pid}. Checking for server's own logs.`);
+        console.log(`[Plugin] WebSocket server launched with PID ${subprocess.pid} at ws://localhost:${PORT}`);
         new Notice(`WebSocket server launched (PID: ${subprocess.pid}) at ws://localhost:${PORT}`);
 
-        // Sync after a short delay (ensure syncAllNotesToServer exists and is imported)
-        // Only run if you intend for automatic sync on server start
         setTimeout(() => {
             syncAllNotesToServer(plugin, `ws://localhost:${PORT}`)
                 .then(() => console.log("[Plugin] Synced all notes to WebSocket server"))
                 .catch(err => console.error("[Plugin] Sync failed:", err));
         }, 1000);
-    });
+    };
+
+    start();
 }
 
 export function registerStartServerCommand(app: App, plugin: MyPlugin): void {

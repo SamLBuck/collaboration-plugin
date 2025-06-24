@@ -233,17 +233,7 @@ export default class MyPlugin extends Plugin {
         // --- NEW: Initialize NoteManager here ---
         // This ensures a single instance is available throughout the plugin's lifecycle.
         this.noteManager = new NoteManager(this, "ws://localhost:3010");
-        // --- END NEW ---
-
-        // exec('taskkill /F /IM node.exe', (err, stdout, stderr) => {
-        //     if (err) {
-        //       console.warn('[Plugin] taskkill error:', err);
-        //     } else {
-        //       console.log('[Plugin] killed all node.exe processes:', stdout);
-        //     }
-        //   });
-      
-
+        // --- END NEW ---        
         // Sart WebSocket server
         startWebSocketServerProcess(this.app, this);
         waitForWebSocketConnection("ws://localhost:3010", this);
