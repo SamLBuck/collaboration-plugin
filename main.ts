@@ -14,6 +14,7 @@ import {
     setIcon, // For icons in post-processor
     Menu, // For editor menu and file menu
 } from 'obsidian';
+
 import { registerAddKeyCommand } from './utils/add_key_command';
 import { registerDeleteKeyCommand } from './utils/delete_key_command';
 import { KeyListModal } from './settings/key_list_page02';
