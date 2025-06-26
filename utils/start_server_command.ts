@@ -39,90 +39,81 @@ export function startWebSocketServerProcess(app: App, plugin: MyPlugin): void {
     }
 
     const vaultPath = adapter.getBasePath();
-    const serverPath = path.join(
-        vaultPath,
-        ".obsidian",
-        "plugins",
-        "collaboration-plugin",
-        "networking",
-        "socket",
-        "dist",
-        "server.cjs"
-    );
-
-    const pidPath = path.join(
-        vaultPath,
-        ".obsidian",
-        "plugins",
-        "collaboration-plugin",
-        "ws-server.pid"
-    );
-
-    console.log(serverPath)
-
-    if (!fs.existsSync(serverPath)) {
-        console.error("[Plugin] server.cjs file not found at:", serverPath);
-        new Notice("WebSocket server file not found. Please ensure 'server.cjs' is in the 'dist' folder.");
-        return;
+    const pluginDir = path.join(vaultPath, ".obsidian", "plugins", "collaboration-plugin");
+    const distDir   = path.join(pluginDir, "networking", "socket", "dist");
+    const bundlePath = path.join(distDir, "server.bundle.cjs");
+    const pidPath    = path.join(pluginDir, "ws-server.pid");
+    const PORT       = 3010;
+    
+    // sanity check
+    if (!fs.existsSync(bundlePath)) {
+      console.error("[Plugin] server.bundle.cjs not found at:", bundlePath);
+      new Notice(
+        "WebSocket server bundle not found.\n" +
+        "Run `npm run build` then `npm run sync:vault` in your dev repo before reloading."
+      );
+      return;
     }
-
-    const PORT = 3010;
-
-    const killPort = (port: number): Promise<void> => {
-        return new Promise((resolve) => {
-            if (process.platform === "win32") {
-                // Windows: use netstat + taskkill
-                exec(`for /f "tokens=5" %a in ('netstat -aon ^| find ":${port} "') do taskkill /F /PID %a`, (err) => {
-                    if (err) console.warn(`[Plugin] Could not kill process on port ${port} (likely already free).`);
-                    resolve();
-                });
-            } else {
-                // Unix/macOS: use lsof + kill
-                exec(`lsof -t -i:${port} | xargs kill -9`, (err) => {
-                    if (err) console.warn(`[Plugin] Could not kill process on port ${port} (likely already free).`);
-                    resolve();
-                });
-            }
+    
+    const killPort = (port: number): Promise<void> =>
+      new Promise((resolve) => {
+        const cmd = process.platform === "win32"
+          ? `for /f "tokens=5" %a in ('netstat -aon ^| find ":${port} "') do taskkill /F /PID %a`
+          : `lsof -t -i:${port} | xargs kill -9`;
+        exec(cmd, (err) => {
+          if (err) console.warn(`[Plugin] Could not kill process on port ${port}.`);
+          resolve();
         });
-    };
-
+      });
+    
     const start = async () => {
-        // Try to kill previous PID
-        if (fs.existsSync(pidPath)) {
-            const pid = parseInt(fs.readFileSync(pidPath, "utf8"));
-            if (!isNaN(pid)) {
-                try {
-                    process.kill(pid);
-                    console.log(`[Plugin] Killed stale WebSocket server with PID ${pid}`);
-                } catch (err) {
-                    console.warn(`[Plugin] Could not kill PID ${pid} (may already be stopped or inaccessible).`);
-                }
-            }
-            fs.unlinkSync(pidPath);
-        }
+      // kill previous process by PID file
+      if (fs.existsSync(pidPath)) {
+        const pid = Number(fs.readFileSync(pidPath, "utf8"));
+        try {
+          process.kill(pid);
+          console.log(`[Plugin] Killed stale WebSocket server PID ${pid}`);
+        } catch {}
+        fs.unlinkSync(pidPath);
+      }
+    
+      // free port
+      await killPort(PORT);
+    
+      console.log(`[Plugin] Launching WebSocket server from: ${bundlePath}`);
+// 👍 explicitly invoke the 'node' CLI so your .cjs bundle runs under Node
+// inside startWebSocketServerProcess, in your `start` function:
 
-        // Free the port regardless of PID
-        await killPort(PORT);
+console.log(`[Plugin] Launching WebSocket server from: ${bundlePath}`);
 
-        console.log(`[Plugin] Attempting to launch WebSocket server from: ${serverPath}`);
-        const subprocess = spawn("node", [serverPath], {
-            shell: false,
-            detached: true,
-            stdio: 'inherit'
-        });
-        subprocess.unref();
-        fs.writeFileSync(pidPath, String(subprocess.pid));
+// spawn but pipe stdio so we can see what the server prints or errors
+const subprocess = spawn("node", [bundlePath], {
+  cwd: distDir,
+  detached: false,
+  stdio: ["ignore", "pipe", "pipe"],
+});
 
-        subprocess.on("exit", (code, signal) => {
-            console.log(`[Plugin] WebSocket server process exited with code ${code} and signal ${signal}`);
-            if (fs.existsSync(pidPath)) {
-                fs.unlinkSync(pidPath);
-            }
-            if (code !== 0) {
-                new Notice(`WebSocket server exited unexpectedly with code ${code}.`);
-            }
-        });
+// forward server stdout → Obsidian console
+subprocess.stdout.on("data", (chunk) => {
+  console.log(`[WS ⟶] ${chunk.toString().trim()}`);
+});
 
+// forward server stderr → Obsidian console
+subprocess.stderr.on("data", (chunk) => {
+  console.error(`[WS ERR] ${chunk.toString().trim()}`);
+});
+
+subprocess.on("exit", (code, signal) => {
+  console.log(`[Plugin] WebSocket server exited code=${code} signal=${signal}`);
+  if (fs.existsSync(pidPath)) fs.unlinkSync(pidPath);
+  if (code !== 0) new Notice(`Server exited unexpectedly: code ${code}`);
+});
+
+// unref so it doesn’t block Obsidian’s shutdown
+subprocess.unref();
+fs.writeFileSync(pidPath, String(subprocess.pid));
+console.log(`[Plugin] Spawned server PID ${subprocess.pid}`);
+    
         subprocess.on('error', (err) => {
             console.error(`[Plugin] Failed to launch WebSocket server process: ${err.message}`);
             new Notice(`Failed to launch WebSocket server: ${err.message}`);
