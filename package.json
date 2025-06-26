@@ -2,11 +2,20 @@
 	"name": "obsidian-sample-plugin",
 	"version": "1.0.0",
 	"description": "This is a sample plugin for Obsidian (https://obsidian.md)",
-	"main": "main.js","scripts": {
-  "dev": "node esbuild.config.mjs",
-  "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production && node copy-server.js",
-  "version": "node version-bump.mjs && git add manifest.json versions.json"
-},
+	"main": "main.js",
+	"scripts": {
+		"dev": "node esbuild.config.mjs",
+"build": "node esbuild.config.mjs production && npm run bundle:server",
+		"version": "node version-bump.mjs && git add manifest.json versions.json",
+
+  "bundle:server": "node build-server.js",
+  "sync:vault":  "node copy-to-vault.js"
+
+
+	},
+
+
+
 
 	"keywords": [],
 	"author": "",
@@ -149,7 +158,7 @@
   "main.js",
   "manifest.json",
   "styles.css",
-  "networking/socket/dist/server.cjs"
+  "networking/socket/dist/server.bundle.cjs"
 ],
 	
 	"homepage": "https://github.com/SamLBuck/obsidian-collaboration-plugin#readme"
