@@ -13,6 +13,7 @@ import { CollaborationPanelView } from './views/CollaborationPanelView';
 import { PersonalNotesView } from './views/PersonalNotesView';
 import { COLLABORATION_VIEW_TYPE, PERSONAL_NOTES_VIEW_TYPE } from './constants/viewTypes';
 import { registerCreateNoteCommand } from './commands/createNoteCommand';
+import { registerTestWriteCommand } from './commands/testWriteCommand';
 
 
 // Settings interface
@@ -53,15 +54,14 @@ export interface MyPluginSettings {
 }
 
 const DEFAULT_SETTINGS: MyPluginSettings = {
-  apiBaseUrl: 'https://px2zhqk65h.execute-api.us-east-1.amazonaws.com',
-  noteKey: '',
-  collabId: 'sam',
-  personalNotes: [],
+    apiBaseUrl: 'https://px2zhqk65h.execute-api.us-east-1.amazonaws.com',
+    noteKey: 'test-note',        // any existing or dummy key
+    apiKey:  'your-real-apiKey',  // paste the API key you got from a prior run
+    collabId:'alice',
+    keys: [],
+    personalNotes: []
+  };
   
-  keys: [],
-  apiKey: '',
-};
-
 
 export default class MyPlugin extends Plugin {
   settings: MyPluginSettings;
@@ -70,6 +70,8 @@ export default class MyPlugin extends Plugin {
   async onload() {
 
     registerCreateNoteCommand(this);
+    registerTestWriteCommand(this);
+
 
     console.log('[Plugin] Loading collaboration plugin...');
     await this.loadSettings();
