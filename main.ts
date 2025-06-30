@@ -45,7 +45,7 @@ export interface MyPluginSettings {
 
 const DEFAULT_SETTINGS: MyPluginSettings = {
   apiBaseUrl:    'https://px2zhqk65h.execute-api.us-east-1.amazonaws.com',
-  collabId:      'alice',
+  collabId:      '',
   keys:          [],
   activeKey:     undefined,
   personalNotes: []
