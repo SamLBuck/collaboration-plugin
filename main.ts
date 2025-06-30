@@ -10,8 +10,11 @@ import { PluginSettingsTab } from './settings/plugin_setting_tab';
 import { CollaborationPanelView } from './views/CollaborationPanelView';
 import { PersonalNotesView } from './views/PersonalNotesView';
 import { COLLABORATION_VIEW_TYPE, PERSONAL_NOTES_VIEW_TYPE } from './constants/viewTypes';
-import { createNote, fetchMaster, pushOffer, resolveMaster, testWrite } from './utils/api';
+import { createNote, fetchMaster, getOffers, pushOffer, resolveMaster, testWrite } from './utils/api';
 import { ReceivedPushConfirmation } from './settings/ReceivedPushConfirmation';
+import { ResolveConfirmation } from './settings/ResolveConfirmation';
+import { ImportNoteModal } from './views/ImportNoteModal';
+import { NoteKeyPickerModal } from './views/NoteKeyPickerModal';
 
 
 
@@ -28,31 +31,23 @@ interface PersonalNote {
 }
 
 export interface KeyItem {
-  /** The unique identifier for the shared note */
   noteKey: string;
-  /** The API key (x-api-key) that grants access to that note */
   apiKey: string;
-  /** Human-friendly “access level” if you still need one (e.g. "Edit" | "View") */
-  accessType: string;
-  /** When this key was minted, for display/sorting */
-  createdAt: number;
 }
 
 export interface MyPluginSettings {
-  apiBaseUrl: string;
-  noteKey: string;
-    collabId: string;
-  keys?: KeyItem[];
+  apiBaseUrl:   string;
+  collabId:     string;
+  keys:         KeyItem[];      // ← now required
+  activeKey?:   string;         // ← noteKey of the “current” one
   personalNotes: PersonalNote[];
-  apiKey?: string;
 }
 
 const DEFAULT_SETTINGS: MyPluginSettings = {
-  apiBaseUrl: 'https://px2zhqk65h.execute-api.us-east-1.amazonaws.com',
-  noteKey:    '',  // from curl POST /notes
-  apiKey:     '',  // from curl POST /notes
-  collabId:   'alice',
-  keys:       [],
+  apiBaseUrl:    'https://…',
+  collabId:      'alice',
+  keys:          [],
+  activeKey:     undefined,
   personalNotes: []
 };
   
@@ -92,8 +87,13 @@ export default class MyPlugin extends Plugin {
       id: 'pull-master-note',
       name: 'Pull master note from server',
       callback: async () => {
-        const { apiBaseUrl, noteKey, apiKey } = this.settings;
-        console.log(apiBaseUrl, noteKey, apiKey);
+        const active = this.settings.keys.find(k => k.noteKey === this.settings.activeKey);
+        if (!active) {
+          return new Notice('No active collaboration note! Please import or select one.');
+        }
+        const { noteKey, apiKey } = active;
+        const { apiBaseUrl } = this.settings;
+                console.log(noteKey, apiKey);
         if (!noteKey || !apiKey) {
           return new Notice('No noteKey/apiKey—please restart to bootstrap.');
         }
@@ -148,17 +148,28 @@ export default class MyPlugin extends Plugin {
       id: 'create-collab-note',
       name: 'Create Collaboration Note',
       callback: async () => {
-        const { apiBaseUrl, collabId } = this.settings;
+        const { apiBaseUrl, collabId, keys } = this.settings;
+    
         if (!apiBaseUrl || !collabId) {
-          new Notice('Please configure API Base URL and your Collaborator ID in settings first.', 4000);
+          new Notice(
+            'Please configure API Base URL and your Collaborator ID in settings first.',
+            4000
+          );
           return;
         }
+    
         try {
           const { noteKey, apiKey } = await createNote(apiBaseUrl, collabId);
-          // Store in settings for future pulls/pushes
-          this.settings.noteKey = noteKey;
-          this.settings.apiKey  = apiKey;
+    
+          const keyItem: KeyItem = {
+            noteKey,
+            apiKey,
+          };
+    
+          keys.push(keyItem);
+          this.settings.activeKey = noteKey;
           await this.saveSettings();
+    
           new Notice(`New collaboration note created! Key: ${noteKey}`, 5000);
         } catch (err: any) {
           console.error('[CreateNote] Error:', err);
@@ -166,95 +177,276 @@ export default class MyPlugin extends Plugin {
         }
       }
     });
-
-      this.addCommand({
-        id: 'push-offer',
-        name: 'Push Offer to Server',
-        callback: async () => {
-          const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-          if (!view) {
-            new Notice('Open a Markdown file to push your offer.', 3000);
-            return;
-          }
-          if (!view.file) {
-            new Notice('No file is currently open.', 3000);
-            return;
-          }
-          const content = await this.app.vault.read(view.file);
-          const { apiBaseUrl, noteKey, apiKey, collabId } = this.settings;
-          try {
-            if (!apiBaseUrl || !noteKey || !apiKey || !collabId) {
-              new Notice('Missing required settings (apiBaseUrl, noteKey, apiKey, collabId). Please check your configuration.', 4000);
-              return;
-            }
-            await pushOffer(apiBaseUrl, noteKey, apiKey, collabId, content);
-            new Notice('Offer pushed successfully.', 3000);
-          } catch (err) {
-            console.error('[Push] Error pushing offer:', err);
-            new Notice(`Failed to push offer: ${err.message}`, 4000);
-          }
+    
+    this.addCommand({
+      id: 'push-offer',
+      name: 'Push Offer to Server',
+      callback: async () => {
+        const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+        if (!view?.file) {
+          new Notice('Open a Markdown file to push your offer.', 3000);
+          return;
         }
-      });
-
-      this.addCommand({
-        id: 'test-write-to-dynamo',
-        name: 'Test Write to DynamoDB',
-        callback: async () => {
-          const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-          if (!view) {
-            return new Notice('Open a Markdown file to test-write its text.', 3000);
-          }
-          if (!view.file) {
-            new Notice('No file is currently open.', 3000);
-            return;
-          }
-          const content = await this.app.vault.read(view.file);
-          try {
-            const { apiBaseUrl, noteKey, apiKey } = this.settings;
-            if (!apiKey) {
-              new Notice('API Key is not configured. Please set it in the plugin settings.', 4000);
-              return;
-            }
-            await testWrite(
-              apiBaseUrl,
-              noteKey,
-              apiKey,
-              content.slice(0, 1000) // limit size
-            );
-            new Notice('Wrote test record to DynamoDB!', 3000);
-          } catch (e:any) {
-            new Notice('testWrite error: ' + e.message, 5000);
-          }
+        const content = await this.app.vault.read(view.file);
+        const { apiBaseUrl, keys, collabId, activeKey } = this.settings;
+    
+        if (!apiBaseUrl || !keys.length || !activeKey || !collabId) {
+          new Notice('Missing required settings. Please check your configuration.', 4000);
+          return;
         }
-      });
+    
+        const activeItem = keys.find(k => k.noteKey === activeKey);
+        if (!activeItem) {
+          new Notice(`Couldn’t find imported key “${activeKey}” in your settings.`, 4000);
+          return;
+        }
+    
+        try {
+          await pushOffer(
+            apiBaseUrl,
+            activeItem.noteKey,
+            activeItem.apiKey,
+            collabId,
+            content
+          );
+          new Notice('Offer pushed successfully.', 3000);
+        } catch (e: any) {
+          console.error('[Push] Error pushing offer:', e);
+          new Notice(`Failed to push offer: ${e.message}`, 4000);
+        }
+      }
+    });
       this.addCommand({
         id: 'make-current-master',
         name: 'Promote current note as master',
         callback: async () => {
           const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-          if (!view || !view.file) {
+          if (!view?.file) {
             return new Notice('Open a Markdown file to promote as master.', 3000);
           }
+      
           const content = await this.app.vault.read(view.file);
-          const { apiBaseUrl, collabId } = this.settings;
-          // pick active key
-          const { noteKey, apiKey } = this.settings;
-          if (!apiBaseUrl || !noteKey || !apiKey || !collabId) {
-            return new Notice('Missing settings; cannot resolve master.', 4000);
+          const { apiBaseUrl, collabId, keys, activeKey } = this.settings;
+      
+          if (!apiBaseUrl || !collabId || !keys.length || !activeKey) {
+            return new Notice('Missing settings; cannot promote master.', 4000);
           }
+      
+          const activeItem = keys.find(k => k.noteKey === activeKey);
+          if (!activeItem) {
+            return new Notice(`Couldn’t find imported key “${activeKey}”.`, 4000);
+          }
+      
           try {
-            await resolveMaster(apiBaseUrl, noteKey, apiKey, collabId, content);
+            await resolveMaster(
+              apiBaseUrl,
+              activeItem.noteKey,
+              activeItem.apiKey,
+              collabId,
+              content
+            );
             new Notice('Current note promoted to master', 3000);
-          } catch (err:any) {
+          } catch (err: any) {
             console.error('[MakeMaster]', err);
             new Notice(`Failed to promote master: ${err.message}`, 5000);
           }
         }
       });
       
-    
-    
-  
+      
+      this.addCommand({
+        id: 'make-current-master',
+        name: 'Promote current note as master',
+        callback: async () => {
+          const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+          if (!view?.file) {
+            return new Notice('Open a Markdown file to promote as master.', 3000);
+          }
+      
+          const content = await this.app.vault.read(view.file);
+          const { apiBaseUrl, collabId, keys, activeKey } = this.settings;
+      
+          if (!apiBaseUrl || !keys.length || !activeKey || !collabId) {
+            return new Notice('Missing settings; cannot promote master.', 4000);
+          }
+      
+          const activeItem = keys.find(k => k.noteKey === activeKey);
+          if (!activeItem) {
+            return new Notice(`Couldn’t find imported key “${activeKey}”.`, 4000);
+          }
+      
+          try {
+            await resolveMaster(
+              apiBaseUrl,
+              activeItem.noteKey,
+              activeItem.apiKey,
+              collabId,
+              content
+            );
+            new Notice('Current note promoted to master', 3000);
+          } catch (err: any) {
+            console.error('[MakeMaster]', err);
+            new Notice(`Failed to promote master: ${err.message}`, 5000);
+          }
+        }
+      });
+            this.addCommand({
+        id: 'import-collab-note',
+        name: 'Import Collaboration Note by Key',
+        callback: () => {
+          new ImportNoteModal(this.app, async (noteKey, apiKey) => {
+            // prevent duplicates
+            if ((this.settings.keys ?? []).some(k => k.noteKey === noteKey)) {
+              new Notice('That note is already imported');
+              return;
+            }
+            this.settings.keys.push({
+              noteKey,
+              apiKey,
+            });
+            this.settings.activeKey = noteKey;
+            await this.saveSettings();
+            new Notice(`Imported and activated note ${noteKey}`, 3000);
+          }).open();
+        }
+      });
+
+      this.addCommand({
+        id: 'resolve-master-note',
+        name: 'Merge & Publish Master from Offers',
+        callback: async () => {
+          const { apiBaseUrl, collabId, keys, activeKey } = this.settings;
+      
+          if (!apiBaseUrl || !collabId || !keys.length || !activeKey) {
+            return new Notice('Missing settings; cannot resolve master.', 4000);
+          }
+      
+          // find the active KeyItem
+          const activeItem = keys.find(k => k.noteKey === activeKey);
+          if (!activeItem) {
+            return new Notice(`Couldn’t find imported key “${activeKey}”.`, 4000);
+          }
+          const { noteKey, apiKey } = activeItem;
+      
+          // fetch current master
+          let current: string;
+          try {
+            current = await fetchMaster(apiBaseUrl, noteKey, apiKey);
+          } catch (err: any) {
+            console.error('[Resolve] fetchMaster failed', err);
+            return new Notice(`Failed to fetch master: ${err.message}`, 5000);
+          }
+      
+          // fetch all offers
+          let offersArr: { content: string }[];
+          try {
+            offersArr = await getOffers(apiBaseUrl, noteKey, apiKey);
+          } catch (err: any) {
+            console.error('[Resolve] getOffers failed', err);
+            return new Notice(`Failed to fetch offers: ${err.message}`, 5000);
+          }
+      
+          if (!offersArr.length) {
+            return new Notice('No offers to merge.', 3000);
+          }
+      
+          // open the multi‐offer modal
+          new ResolveConfirmation(
+            this.app,
+            'Review each offer and choose what to accept:',
+            current,
+            offersArr.map(o => o.content),
+            async (mergedContent: string) => {
+              try {
+                await resolveMaster(apiBaseUrl, noteKey, apiKey, collabId, mergedContent);
+                new Notice('Master resolved with your selections', 3000);
+              } catch (err: any) {
+                console.error('[Resolve] resolveMaster failed', err);
+                new Notice(`Failed to publish master: ${err.message}`, 5000);
+              }
+            }
+          ).open();
+        }
+      });
+
+
+      // does not work 
+      this.addCommand({
+        id: 'activate-note-from-current-file',
+        name: 'Use Current File as Collaboration Note',
+        callback: async () => {
+          // 1) Make sure user has a note open
+          const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+          if (!view?.file) {
+            return new Notice('Open a Markdown file to activate its note key.', 3000);
+          }
+      
+          // 2) Derive the candidate key from the file name
+          //    (e.g. if the file is "abc123.md", candidateKey = "abc123")
+          const candidateKey = view.file.basename;
+      
+          // 3) Find that key in your imported list
+          const match = this.settings.keys.find(k => k.noteKey === candidateKey);
+          if (!match) {
+            return new Notice(
+              `No collaboration note with key "${candidateKey}" found in settings.`,
+              3000
+            );
+          }
+      
+          // 4) Set it active and persist
+          this.settings.activeKey = candidateKey;
+          await this.saveSettings();
+          new Notice(`Activated collaboration note: ${candidateKey}`, 2000);
+        }
+      });
+      this.addCommand({
+        id: 'copy-active-note-key',
+        name: 'Copy Active Collaboration Note Key',
+        callback: async () => {
+          const { activeKey } = this.settings;
+          if (!activeKey) {
+            return new Notice('No active collaboration note key set.', 4000);
+          }
+          try {
+            await navigator.clipboard.writeText(activeKey);
+            new Notice(`Copied noteKey to clipboard: ${activeKey}`, 2000);
+          } catch (err) {
+            console.error('[CopyKey] Clipboard write failed', err);
+            new Notice('Failed to copy noteKey to clipboard.', 4000);
+          }
+        }
+      });
+      
+      // Copy apiKey for activeKey to clipboard
+      this.addCommand({
+        id: 'copy-active-api-key',
+        name: 'Copy API Key for Active Collaboration Note',
+        callback: async () => {
+          const { activeKey, keys } = this.settings;
+          if (!activeKey) {
+            return new Notice('No active collaboration note key set.', 4000);
+          }
+          const activeItem = keys.find(k => k.noteKey === activeKey);
+          if (!activeItem) {
+            return new Notice(
+              `Active noteKey (“${activeKey}”) not found in imported keys.`,
+              4000
+            );
+          }
+          try {
+            await navigator.clipboard.writeText(activeItem.apiKey);
+            new Notice(`Copied apiKey to clipboard ${activeItem.apiKey}`, 2000);
+          } catch (err) {
+            console.error('[CopyAPI] Clipboard write failed', err);
+            new Notice('Failed to copy apiKey to clipboard.', 4000);
+          }
+        }
+      });
+            
+      
+                  
+            
     console.log('[Plugin] Collaboration plugin loaded.');
   }
 
@@ -289,23 +481,23 @@ export default class MyPlugin extends Plugin {
   }
 
   private async ensureNoteCredentials() {
-    if (!this.settings.apiKey || !this.settings.noteKey) {
+    const { keys, apiBaseUrl, collabId } = this.settings;
+    // if we haven't imported/created any notes yet, create one
+    if (!keys.length) {
       try {
-        const { noteKey, apiKey } = await createNote(
-          this.settings.apiBaseUrl,
-          this.settings.collabId
-        );
-        this.settings.noteKey = noteKey;
-        this.settings.apiKey  = apiKey;
+        const { noteKey, apiKey } = await createNote(apiBaseUrl, collabId);
+        const first: KeyItem = { noteKey, apiKey };
+        this.settings.keys.push(first);
+        this.settings.activeKey = noteKey;
         await this.saveSettings();
-        new Notice('Created new collaboration note');
+        new Notice('Bootstrapped your first collaboration note');
       } catch (err) {
-        console.error('Failed to bootstrap note:', err);
-        new Notice('Could not create note—check your API');
+        console.error('[Bootstrap]', err);
+        new Notice('Could not create initial note—check your API settings');
       }
     }
   }
-  
+    
   
 }
 

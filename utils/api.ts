@@ -131,4 +131,21 @@ export async function createNote(
   return resp.json();
 }
 
-  
+export async function getOffers(
+  apiBaseUrl: string,
+  noteKey: string,
+  apiKey: string
+): Promise<{ content: string; sortKey: string; [key: string]: any }[]> {
+  const url = `${apiBaseUrl.replace(/\/*$/, '')}/notes/${encodeURIComponent(noteKey)}/offers`;
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'x-api-key': apiKey,
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to fetch offers: ${response.status} ${response.statusText}`);
+  }
+  // returns an array of raw items from DynamoDB (filtered server-side)
+  return response.json();
+}
