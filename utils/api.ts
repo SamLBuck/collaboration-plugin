@@ -28,27 +28,35 @@ export async function fetchMaster(
   /**
  * Write a test record into DynamoDB via our new endpoint.
  */
-export async function testWrite(
-  apiBaseUrl: string,
-  noteKey: string,
-  apiKey: string,
-  content: string
-): Promise<void> {
-  const url = `${apiBaseUrl.replace(/\/+$/,'')}/test`;
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey
-    },
-    body: JSON.stringify({ noteKey, content })
-  });
-  if (!resp.ok) {
-    const text = await resp.text().catch(()=>resp.statusText);
-    throw new Error(`testWrite failed: ${resp.status} ${text}`);
+  export async function testWrite(
+    apiBaseUrl: string,
+    noteKey: string,
+    apiKey: string,
+    content: string
+  ): Promise<void> {
+    //  change this…
+    // const url = `${apiBaseUrl.replace(/\/+$/,'')}/testWrite`;
+  
+    // …to this:
+    const url = `${apiBaseUrl.replace(/\/+$/,'')}/test`;
+  
+    console.log('[api] POST →', url, { noteKey, apiKey, content });
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey
+      },
+      body: JSON.stringify({ noteKey, content })
+    });
+    console.log('[api] status:', resp.status);
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => resp.statusText);
+      console.error('[api] testWrite failed:', resp.status, text);
+      throw new Error(`testWrite failed: ${resp.status} ${text}`);
+    }
   }
-}
-
+    
   /**
    * Pushes an offer/update for a collaborator's note.
    * @param apiBaseUrl - Base URL of the API Gateway
