@@ -14,7 +14,6 @@ import { createNote, fetchMaster, getOffers, pushOffer, resolveMaster, testWrite
 import { ReceivedPushConfirmation } from './settings/ReceivedPushConfirmation';
 import { ResolveConfirmation } from './settings/ResolveConfirmation';
 import { ImportNoteModal } from './views/ImportNoteModal';
-import { NoteKeyPickerModal } from './views/NoteKeyPickerModal';
 
 
 
@@ -33,6 +32,7 @@ interface PersonalNote {
 export interface KeyItem {
   noteKey: string;
   apiKey: string;
+  filePath:  string;            // which file this key is bound to
 }
 
 export interface MyPluginSettings {
@@ -158,12 +158,19 @@ export default class MyPlugin extends Plugin {
           return;
         }
     
+        const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+        if (!view?.file) {
+          return new Notice('Open a Markdown file to bind your new collaboration note to.', 4000);
+        }
+        const filePath = view.file.path;
+    
         try {
           const { noteKey, apiKey } = await createNote(apiBaseUrl, collabId);
     
           const keyItem: KeyItem = {
             noteKey,
             apiKey,
+            filePath,
           };
     
           keys.push(keyItem);
@@ -300,14 +307,92 @@ export default class MyPlugin extends Plugin {
               new Notice('That note is already imported');
               return;
             }
+            const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+            if (!view?.file) {
+              return new Notice('Open a Markdown file to bind your new collaboration note to.', 4000);
+            }
+            const filePath = view.file.path;
+        
             this.settings.keys.push({
               noteKey,
               apiKey,
+              filePath,
             });
             this.settings.activeKey = noteKey;
             await this.saveSettings();
             new Notice(`Imported and activated note ${noteKey}`, 3000);
           }).open();
+        }
+      });
+
+      this.addCommand({
+        id: 'activate-current-file-note',
+        name: 'Activate Collaboration Note for Current File',
+        callback: async () => {
+          const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+          if (!view?.file) {
+            return new Notice('Open a Markdown file first.', 3000);
+          }
+      
+          // find the KeyItem bound to this file
+          const filePath = view.file.path;
+          const activeItem = this.settings.keys.find(k => k.filePath === filePath);
+      
+          if (!activeItem) {
+            return new Notice(
+              `No collaboration note bound to "${view.file.name}". Pull or create one here first.`,
+              4000
+            );
+          }
+      
+          // flip the global activeKey
+          this.settings.activeKey = activeItem.noteKey;
+          await this.saveSettings();
+          new Notice(
+            `Activated note ${activeItem.noteKey} for ${view.file.name}`,
+            2000
+          );
+        }
+      });
+
+      this.addCommand({
+        id: 'clear-all-collab-keys',
+        name: 'Clear All Collaboration Keys',
+        callback: async () => {
+          this.settings.keys = [];
+          this.settings.activeKey = undefined;
+          await this.saveSettings();
+          new Notice('All collaboration keys cleared.', 3000);
+        }
+      });
+
+      this.addCommand({
+        id: 'unbind-current-file-collab-key',
+        name: 'Unbind Collaboration Key from Current File',
+        callback: async () => {
+          const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+          if (!view?.file) {
+            return new Notice('Open a Markdown file first.', 3000);
+          }
+      
+          const filePath = view.file.path;
+          const beforeCount = this.settings.keys.length;
+          this.settings.keys = this.settings.keys.filter(k => k.filePath !== filePath);
+      
+          if (this.settings.activeKey && 
+              this.settings.activeKey === 
+                (this.settings.keys.find(k => k.filePath === filePath)?.noteKey ?? '')
+          ) {
+            this.settings.activeKey = undefined;
+          }
+      
+          if (this.settings.keys.length === beforeCount) {
+            new Notice(`No collaboration key was bound to ${view.file.name}.`, 3000);
+            return;
+          }
+      
+          await this.saveSettings();
+          new Notice(`Unbound collaboration key from ${view.file.name}`, 3000);
         }
       });
 
@@ -368,38 +453,6 @@ export default class MyPlugin extends Plugin {
           ).open();
         }
       });
-
-
-      // does not work 
-      this.addCommand({
-        id: 'activate-note-from-current-file',
-        name: 'Use Current File as Collaboration Note',
-        callback: async () => {
-          // 1) Make sure user has a note open
-          const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-          if (!view?.file) {
-            return new Notice('Open a Markdown file to activate its note key.', 3000);
-          }
-      
-          // 2) Derive the candidate key from the file name
-          //    (e.g. if the file is "abc123.md", candidateKey = "abc123")
-          const candidateKey = view.file.basename;
-      
-          // 3) Find that key in your imported list
-          const match = this.settings.keys.find(k => k.noteKey === candidateKey);
-          if (!match) {
-            return new Notice(
-              `No collaboration note with key "${candidateKey}" found in settings.`,
-              3000
-            );
-          }
-      
-          // 4) Set it active and persist
-          this.settings.activeKey = candidateKey;
-          await this.saveSettings();
-          new Notice(`Activated collaboration note: ${candidateKey}`, 2000);
-        }
-      });
       this.addCommand({
         id: 'copy-active-note-key',
         name: 'Copy Active Collaboration Note Key',
@@ -443,10 +496,6 @@ export default class MyPlugin extends Plugin {
           }
         }
       });
-            
-      
-                  
-            
     console.log('[Plugin] Collaboration plugin loaded.');
   }
 
@@ -482,21 +531,49 @@ export default class MyPlugin extends Plugin {
 
   private async ensureNoteCredentials() {
     const { keys, apiBaseUrl, collabId } = this.settings;
-    // if we haven't imported/created any notes yet, create one
-    if (!keys.length) {
+    if (keys.length === 0) {
       try {
+        // 1) Create a new note remotely
         const { noteKey, apiKey } = await createNote(apiBaseUrl, collabId);
-        const first: KeyItem = { noteKey, apiKey };
-        this.settings.keys.push(first);
+  
+        // 2) Try to bind to the current Markdown file
+        let filePath = '';
+        const leaf = this.app.workspace.getMostRecentLeaf();
+        if (leaf?.view instanceof MarkdownView && leaf.view.file) {
+          filePath = leaf.view.file.path;
+        }
+  
+        // 3) Build & save the KeyItem
+        const first: KeyItem = {
+          noteKey,
+          apiKey,
+          filePath,
+        };
+        keys.push(first);
         this.settings.activeKey = noteKey;
         await this.saveSettings();
-        new Notice('Bootstrapped your first collaboration note');
-      } catch (err) {
+  
+        new Notice(
+          filePath
+            ? `Bootstrapped note ${noteKey} bound to ${filePath}`
+            : `Bootstrapped note ${noteKey} (no file bound)`
+        );
+      } catch (err: any) {
         console.error('[Bootstrap]', err);
-        new Notice('Could not create initial note—check your API settings');
+        new Notice('Could not create initial note—check your API settings', 4000);
       }
     }
   }
+  
+  private getKeyForCurrentFile(): KeyItem | null {
+    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+    if (!view?.file) return null;
+    return (
+      this.settings.keys.find(k => view.file && k.filePath === view.file.path) ??
+      null
+    );
+  }
+  
     
   
 }
