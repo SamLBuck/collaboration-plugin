@@ -245,7 +245,7 @@ export default class MyPlugin extends Plugin {
         );
       } catch (err: any) {
         console.error('[Bootstrap]', err);
-        new Notice('Could not create initial note—check your API settings', 4000);
+        // new Notice('Could not create initial note—check your API settings', 4000);
       }
     }
   }
