@@ -159,6 +159,8 @@ export class LinkNoteModal extends Modal {
       this.plugin.settings.activeKey = noteKey;
 
       await this.plugin.saveSettings();
+      this.plugin.events.trigger('collaboration-key-updated');
+
     }
 
     // Refresh list and close modal

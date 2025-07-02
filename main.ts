@@ -1,4 +1,4 @@
-import { App, Plugin, Notice, TFile, MarkdownView, WorkspaceLeaf, WorkspaceSidedock } from 'obsidian';
+import { App, Plugin, Notice, TFile, MarkdownView, WorkspaceLeaf, WorkspaceSidedock, Events } from 'obsidian';
 
 // Utils
 import { stripPersonalNoteBlocks } from './utils/stripPersonalNotes';
@@ -39,7 +39,7 @@ export interface MyPluginSettings {
   apiBaseUrl:   string;
   collabId:     string;
   keys:         KeyItem[];      // ← now required
-  linkedKeys?:  KeyItem[]; //
+  linkedKeys:  KeyItem[]; //
   activeKey?:   string;         // ← noteKey of the “current” one
   personalNotes: PersonalNote[];
 }
@@ -58,6 +58,8 @@ const DEFAULT_SETTINGS: MyPluginSettings = {
 export default class MyPlugin extends Plugin {
   settings: MyPluginSettings;
   private _debounceTimeout: NodeJS.Timeout;
+  events = new Events();  // <-- add this line
+
 
   async onload() {
 

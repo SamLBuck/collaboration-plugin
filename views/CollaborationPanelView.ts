@@ -82,7 +82,14 @@ export class CollaborationPanelView extends ItemView {
               }
             })
           );
-        
+
+          this.registerEvent(
+            this.plugin.events.on('collaboration-key-updated', async () => {
+                this.noteType = await this.determineNoteType(this.activeNoteFile);
+                await this.renderPanelContent();
+            })
+        );
+            
           // prime the panel
           this.activeNoteFile = this.app.workspace.getActiveFile();
           this.noteType       = await this.determineNoteType(this.activeNoteFile);
@@ -297,6 +304,13 @@ export class CollaborationPanelView extends ItemView {
                   linked.push({ noteKey, apiKey, filePath });
                   this.plugin.settings.activeKey = noteKey;
                   await this.plugin.saveSettings();
+                }
+                this.plugin.settings.keys = this.plugin.settings.keys || [];
+                const link = this.plugin.settings.keys;
+                if(!link.find(k => k.noteKey === noteKey && k.apiKey === apiKey && k.filePath === filePath)) {
+                    link.push({ noteKey, apiKey, filePath });
+                    this.plugin.settings.activeKey = noteKey;
+                    await this.plugin.saveSettings();
                 }
       return file;
     }
