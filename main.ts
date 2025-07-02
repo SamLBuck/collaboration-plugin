@@ -455,8 +455,9 @@ export default class MyPlugin extends Plugin {
             await this.saveSettings();
             new Notice(`Private personal note box created: "${newPersonalNote.title}".`, 3000);
 
-            // Optionally, place cursor inside the new block for immediate editing (after the lang identifier and ID line)
-            editor.setCursor(lineNumber + 2, 0); // +2 for lang identifier and ID line
+            // ✅ Move cursor out of the code block and blur to trigger rendering
+    editor.setCursor(lineNumber + 4, 0); // Skip past the code block
+    editor.blur(); // Trigger the Markdown render immediately
         });
 
         // --- Register Markdown Post Processor for rendering personal notes in Reading View
@@ -509,48 +510,55 @@ export default class MyPlugin extends Plugin {
             this.app.workspace.on('file-menu', (menu, file) => {
                 if (!(file instanceof TFile)) return;
 
-                const pulledKey = this.settings.linkedKeys.find(k => k.note === file.basename);
+                // Match key using the actual file name (basename without extension)
+                const noteName = file.basename;
+                const pulledKey = this.settings.linkedKeys.find(k => k.note === noteName);
+                if (!pulledKey) return;
 
-                if (!pulledKey) return; // Not pulled → skip
+                const parseInput = `${pulledKey.ip}-${pulledKey.note}|${pulledKey.access}`;
+                const parsedKeyInfo = parseKey(parseInput);
+
+                if (!parsedKeyInfo?.ip || !parsedKeyInfo?.noteName) {
+                    new Notice("Invalid key format.", 4000);
+                    return;
+                }
 
                 menu.addItem(item =>
-                item.setTitle('Pull Changes')
-                    .setIcon('book-down')
-                    .onClick(() => {
-                    const parseInput = `${pulledKey.ip}-${pulledKey.note}|${pulledKey.access}`;
-                    const parsedKeyInfo = parseKey(parseInput);
-
-                    if (!parsedKeyInfo?.ip || !parsedKeyInfo?.noteName) {
-                        new Notice("Invalid key format.", 4000);
-                        return;
-                    }
-
-                    rewriteExistingNote(this.app, parsedKeyInfo.ip, parsedKeyInfo.noteName, this);
-                    new Notice(`Requested latest changes for "${parsedKeyInfo.noteName}".`);
-                    })
+                    item
+                        .setTitle('Pull Changes')
+                        .setIcon('book-down')
+                        .onClick(() => {
+                            rewriteExistingNote(this.app, parsedKeyInfo.ip, parsedKeyInfo.noteName, this).then(() => {
+                                // Light refresh of file to re-trigger the menu
+                                const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+                                if (view?.file?.path === file.path) {
+                                    this.app.workspace.trigger("file-open", file);
+                                }
+                            });
+                            new Notice(`Requested latest changes for "${parsedKeyInfo.noteName}".`);
+                        })
                 );
 
                 menu.addItem(item =>
-                item.setTitle('Push Changes')
-                    .setIcon('book-up')
-                    .onClick(async () => {
-                    const parseInput = `${pulledKey.ip}-${pulledKey.note}|${pulledKey.access}`;
-                    const parsedKeyInfo = parseKey(parseInput);
+                    item
+                        .setTitle('Push Changes')
+                        .setIcon('book-up')
+                        .onClick(async () => {
+                            const content = await this.app.vault.read(file);
+                            const { sendNoteToHost } = await import('./networking/socket/client');
+                            sendNoteToHost(parsedKeyInfo.ip, parsedKeyInfo.noteName, content);
 
-                    if (!parsedKeyInfo?.ip || !parsedKeyInfo?.noteName) {
-                        new Notice("Invalid key format.", 4000);
-                        return;
-                    }
+                            new Notice(`Pushed changes for '${parsedKeyInfo.noteName}' to ${parsedKeyInfo.ip}`, 3000);
 
-                    const content = await this.app.vault.read(file);
-                    const { sendNoteToHost } = await import("./networking/socket/client");
-                    sendNoteToHost(parsedKeyInfo.ip, parsedKeyInfo.noteName, content);
-
-                    new Notice(`Pushed changes for '${parsedKeyInfo.noteName}' to ${parsedKeyInfo.ip}`, 3000);
-                    })
-            );
-        })
-    );
+                            // Optional: Light refresh after push (not strictly necessary unless UI gets out of sync)
+                            const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+                            if (view?.file?.path === file.path) {
+                                this.app.workspace.trigger("file-open", file);
+                            }
+                        })
+                );
+            })
+        );
     }
 
     onunload() {
