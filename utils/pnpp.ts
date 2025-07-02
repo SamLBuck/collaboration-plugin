@@ -60,11 +60,11 @@ class PersonalNoteChangeListener extends MarkdownRenderChild {
         if (updatedNote) {
             // Update location display if it has changed
             const newFileName = updatedNote.targetFilePath.split('/').pop()?.replace(/\.md$/, '') || 'Unknown File';
-            const newLocationText = `Location: ${newFileName} (Line ${updatedNote.lineNumber + 1})`;
-            if (this.locationSpan.textContent !== newLocationText) {
-                this.locationSpan.setText(newLocationText);
-                console.log(`[PNPP] Updated location display for ID ${updatedNote.id.substring(0,8)}... to ${newLocationText}`);
-            }
+            // const newLocationText = `Location: ${newFileName} (Line ${updatedNote.lineNumber + 1})`;
+            // if (this.locationSpan.textContent !== newLocationText) {
+            //     this.locationSpan.setText(newLocationText);
+            //     console.log(`[PNPP] Updated location display for ID ${updatedNote.id.substring(0,8)}... to ${newLocationText}`);
+            // }
 
             // Update title input value if it has changed in settings, but ONLY if the user is not actively typing in it.
             if (this.titleInput.value !== updatedNote.title && document.activeElement !== this.titleInput) {

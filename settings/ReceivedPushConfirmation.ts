@@ -1,3 +1,4 @@
+// push_confirmation_modal
 import { Modal, Setting, App } from "obsidian";
 
 export class ReceivedPushConfirmation extends Modal {
