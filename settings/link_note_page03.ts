@@ -1,282 +1,224 @@
-import { App, Modal, Setting, TextComponent, ButtonComponent, Notice, TFile } from "obsidian";
-import MyPlugin, { KeyItem } from "../main";
-//import { requestNoteFromPeer } from "../networking/socket/client";
-//import { pullNoteFromPeerNewNote, rewriteExistingNote } from "../utils/pull_note_command";
-import { parseKey } from "../utils/parse_key"; // Assuming parseKey is updated to handle full key string
+import { App, Modal, Setting, TextComponent, ButtonComponent, Notice, TFile } from 'obsidian';
+import type MyPlugin from '../main';
+import { KeyItem } from '../main';
+import { fetchMaster } from '../utils/api';
 
-// Define a generic ConfirmationModal for reuse
+/**
+ * Inline modal for confirming destructive actions
+ */
 class ConfirmationModal extends Modal {
-    message: string;
-    callback: (confirmed: boolean) => void;
+  private message: string;
+  private callback: (ok: boolean) => void;
 
-    constructor(app: App, message: string, callback: (confirmed: boolean) => void) {
-        super(app);
-        this.message = message;
-        this.callback = callback;
-    }
+  constructor(app: App, message: string, callback: (ok: boolean) => void) {
+    super(app);
+    this.message = message;
+    this.callback = callback;
+  }
 
-    onOpen() {
-        const { contentEl } = this;
-        contentEl.empty();
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.createEl('h2', { text: 'Confirm' });
+    contentEl.createEl('p', { text: this.message });
 
-        contentEl.createEl('h2', { text: 'Confirmation' });
-        contentEl.createEl('p', { text: this.message });
+    new Setting(contentEl)
+      .addButton(btn => btn
+        .setButtonText('Yes')
+        .setWarning()
+        .onClick(() => { this.callback(true); this.close(); }))
+      .addButton(btn => btn
+        .setButtonText('No')
+        .onClick(() => { this.callback(false); this.close(); }));
+  }
 
-        new Setting(contentEl)
-            .addButton(button => {
-                button.setButtonText('Confirm')
-                    .setCta()
-                    .setClass('mod-warning') // Use a warning style for destructive actions
-                    .onClick(() => {
-                        this.callback(true);
-                        this.close();
-                    });
-            })
-            .addButton(button => {
-                button.setButtonText('Cancel')
-                    .onClick(() => {
-                        this.callback(false);
-                        this.close();
-                    });
-            });
-    }
-
-    onClose() {
-        this.contentEl.empty();
-    }
+  onClose() {
+    this.contentEl.empty();
+  }
 }
 
-
 export class LinkNoteModal extends Modal {
-    plugin: MyPlugin;
-    linkNoteKeyInput: TextComponent;
-    private linkedKeysContainer: HTMLElement; // Container for displaying linked keys
+  private plugin: MyPlugin;
+  private keyInput!: TextComponent;
+  private listContainer!: HTMLElement;
 
-    constructor(app: App, plugin: MyPlugin) {
-        super(app);
-        this.plugin = plugin;
+  constructor(app: App, plugin: MyPlugin) {
+    super(app);
+    this.plugin = plugin;
+  }
+
+  async onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+
+    // Title & instructions
+    contentEl.createEl('h2', { text: 'Link Collaborative Note' });
+    contentEl.createEl('p', { text: 'Enter a collaboration key in the form noteKey:apiKey|noteName to pull and link a note.' });
+
+    // Key entry
+    new Setting(contentEl)
+      .setName('Collaboration Key')
+      .setDesc('Format: noteKey:apiKey|noteName')
+      .addText(text => {
+        this.keyInput = text;
+        text.setPlaceholder('e.g. 1ba4dd0f-...:58a378e4-...|MyNote');
+      });
+
+    // Pull & Link button
+    new Setting(contentEl)
+      .addButton(btn =>
+        btn
+          .setButtonText('Pull & Link')
+          .setCta()
+          .onClick(() => this.handlePullAndLink())
+      );
+
+    // List of linked keys
+    contentEl.createEl('h3', { text: 'My Linked Keys' });
+    this.listContainer = contentEl.createDiv({ cls: 'linked-keys-container' });
+    this.renderLinkedList();
+  }
+
+  onClose() {
+    this.contentEl.empty();
+  }
+
+  /**
+   * Pulls a note by raw key input (noteKey:apiKey|noteName) and records it in settings.linkedKeys
+   */
+  private async handlePullAndLink() {
+    const raw = this.keyInput.getValue().trim();
+    if (!raw) {
+      new Notice('Please enter a collaboration key first.', 3000);
+      return;
     }
 
-    async onOpen() {
-        const { contentEl } = this;
-        contentEl.empty();
-
-        // Make the modal bigger for more space
-        this.modalEl.style.width = '80%'; // Adjust as needed, e.g., '600px' or '80%'
-        this.modalEl.style.height = '70%'; // Adjust as needed, e.g., '500px' or '70%'
-        this.modalEl.style.maxWidth = '800px'; // Optional: Set a max-width
-        this.modalEl.style.maxHeight = '600px'; // Optional: Set a max-height
-
-
-        contentEl.createEl("h2", { text: "Pull Collaborative Note" });
-        contentEl.createEl('p', { text: 'Use this section to pull a shared note from a peer using a key.' });
-
-        new Setting(contentEl)
-            .setName('Share Key / Password')
-            .setDesc('Enter the key/password for the shared note you want to .')
-            .addText(text => {
-                this.linkNoteKeyInput = text;
-                text.setPlaceholder('e.g., 192.168.1.100-MySharedNote');
-            });
-
-        new Setting(contentEl)
-            .addButton(button => {
-                button.setButtonText('Pull Note')
-                    .setCta()
-                    .onClick(async () => {
-                        const input = this.linkNoteKeyInput.getValue().trim();
-                        if (!input) {
-                            new Notice('Please enter a Share Key / Password to pull a note.', 3000);
-                            return;
-                        }
-
-                        let parsedKeyInfo;
-                        try {
-                            parsedKeyInfo = parseKey(input);
-                            if (!parsedKeyInfo || !parsedKeyInfo.ip || !parsedKeyInfo.noteName) {
-                                throw new Error('Invalid key format. Expected "IP-NoteName".');
-                            }
-                        } catch (error: any) {
-                            new Notice(`Key parsing error: ${error.message}`, 5000);
-                            return;
-                        }
-
-                        const { ip, noteName: keyBasename } = parsedKeyInfo;
-                        const filePath = `${keyBasename}.md`; // Use parsed noteName for file path
-                        
-                        let file: TFile | null = this.app.vault.getAbstractFileByPath(filePath) as TFile;
-                        let overwrite = false;
-
-                        if (file) {
-                            overwrite = await new Promise(resolve => {
-                                new ConfirmationModal(this.app, `Note "${filePath}" already exists. Overwrite it with the pulled content?`, resolve).open();
-                            });
-
-                            if (!overwrite) {
-                                new Notice(`Pull cancelled for "${filePath}". Note not overwritten.`, 3000);
-                                return;
-                            }
-                        }
-
-                        try {
-                            if (file && overwrite) {
-                                await rewriteExistingNote(this.app, ip, keyBasename, this.plugin);
-                            } else {
-                                await pullNoteFromPeerNewNote(this.app, ip, keyBasename);
-                            }
-
-                            // Add the successfully used key to linkedKeys if it's not already there
-                            const existingLinkedKey = this.plugin.settings.linkedKeys.find(item => item.ip === input);
-                            if (!existingLinkedKey) {
-                                // Default access type for linked keys could be 'Pulled' or 'View'
-                                const newLinkedKeyItem: KeyItem = {
-                                    ip: input, note: keyBasename, access: 'Pulled',
-                                    //content: undefined
-                                };
-                                this.plugin.settings.linkedKeys.push(newLinkedKeyItem);
-                                await this.plugin.saveSettings();
-                                new Notice(`Key "${input}" added to your linked keys list.`, 3000);
-                            }
-
-                            // Open the created/updated note
-                            file = this.app.vault.getAbstractFileByPath(filePath) as TFile; // Re-fetch in case it was newly created
-                            if (file) {
-                                this.app.workspace.openLinkText(file.path, '', false);
-                            }
-							this.close();
-
-							file = this.app.vault.getAbstractFileByPath(filePath) as TFile;
-							if (file) {
-							// Switch to the pulled note
-									await this.app.workspace.getLeaf(true).openFile(file);
-									new Notice(`Pulled and opened "${file.basename}" successfully.`, 4000);
-							} else {
-
-                            
-                            // Re-render the linked keys list
-                            await this.renderLinkedKeysContent(this.linkedKeysContainer);
-							}
-                        } catch (error: any) {
-                            console.error('Error pulling note:', error);
-                            new Notice(`An error occurred while pulling the note: ${error.message}`, 5000);
-                        }
-                    });
-            });
-            new Setting(contentEl)
-            new Setting(contentEl)
-            .addButton(button => {
-                button.setButtonText("Push Note")
-                    .setCta()
-                    .onClick(async () => {
-                        const input = this.linkNoteKeyInput.getValue().trim();
-                        if (!input) {
-                            new Notice("Please enter a Share Key / Password to push a note.", 3000);
-                            return;
-                        }
-        
-                        let parsedKeyInfo;
-                        try {
-                            parsedKeyInfo = parseKey(input);
-                            if (!parsedKeyInfo || !parsedKeyInfo.ip || !parsedKeyInfo.noteName) {
-                                throw new Error('Invalid key format. Expected "IP-NoteName".');
-                            }
-                            console.log(parsedKeyInfo.ip)
-                            console.log(parsedKeyInfo.noteName)
-                        } catch (error: any) {
-                            new Notice(`Key parsing error: ${error.message}`, 5000);
-                            return;
-                        }
-                        if (parsedKeyInfo?.view !== "Edit") {
-                            new Notice("This key does not have edit permissions.");
-                            console.warn("Permission check failed:", parsedKeyInfo);
-                            return;
-                         } 
-                         
-        
-                        const { ip, noteName } = parsedKeyInfo;
-                        const file = this.app.vault.getAbstractFileByPath(`${noteName}.md`) as TFile;
-        
-                        if (!file) {
-                            new Notice(`Note "${noteName}" not found in your vault.`, 3000);
-                            return;
-                        }
-        
-                        const content = await this.app.vault.read(file);
-
-                        console.log(content)
-        
-                        console.log("Pushing with view:", parsedKeyInfo.view);
-
-                        //sendNoteToHost(ip, noteName, content);
-                        new Notice(`Pushed '${noteName}' to ${ip}`, 3000);
-                    });
-            });
-        
-        contentEl.createEl("h3", { text: "My Linked Key" });
-        this.linkedKeysContainer = contentEl.createDiv({ cls: 'linked-keys-container' });
-        await this.renderLinkedKeysContent(this.linkedKeysContainer);
+    // Split off optional noteName after '|'
+    const [rawKey, providedName] = raw.split('|');
+    const [noteKey, ...apiParts] = rawKey.split(':');
+    const apiKey = apiParts.join(':');
+    if (!noteKey || !apiKey) {
+      new Notice('Invalid format. Use noteKey:apiKey|noteName', 4000);
+      return;
     }
 
-    onClose() {
-        this.contentEl.empty();
+    // Fetch master content
+    let content: string;
+    try {
+      content = await fetchMaster(
+        this.plugin.settings.apiBaseUrl,
+        noteKey,
+        apiKey
+      );
+    } catch (err: any) {
+      console.error('[LinkNoteModal] fetchMaster error', err);
+      new Notice(`Failed to pull: ${err.message}`, 5000);
+      return;
     }
 
-    private async renderLinkedKeysContent(containerToRenderInto: HTMLElement): Promise<void> {
-        containerToRenderInto.empty();
+    // Determine file path: use provided noteName or fallback to noteKey
+    const name = (providedName || noteKey).trim();
+    const filePath = `${name}.md`;
+    const vault = this.app.vault;
+    const existing = vault.getAbstractFileByPath(filePath) as TFile | null;
 
-        const linkedKeys = this.plugin.settings.linkedKeys ?? [];
-
-        if (linkedKeys.length === 0) {
-            containerToRenderInto.createEl('p', { text: 'No external keys linked yet. Pull a note using a key from a peer to add it here.' , cls: 'empty-list-message' });
-        } else {
-            const listHeader = containerToRenderInto.createDiv({ cls: 'linked-keys-header' });
-            listHeader.style.display = 'grid';
-            // Adjusted grid columns for slimmer appearance and only Key, Note Name, Actions
-            listHeader.style.gridTemplateColumns = '2fr 1.5fr 0.5fr'; // Adjusted: Smaller 'fr' values
-            listHeader.createSpan({ text: 'Key (Full)' });
-            listHeader.createSpan({ text: 'Note Name' });
-            listHeader.createSpan({ text: 'Actions' });
-
-            linkedKeys.forEach((keyItem: KeyItem) => {
-                const keyRow = containerToRenderInto.createDiv({ cls: 'linked-keys-row' });
-                keyRow.style.display = 'grid';
-                // Adjusted grid columns for slimmer appearance and only Key, Note Name, Actions
-                keyRow.style.gridTemplateColumns = '2fr 1.5fr 0.5fr'; // Adjusted: Smaller 'fr' values
-
-                keyRow.createDiv({ text: keyItem.ip, cls: ['linked-key-id-display', 'field-content-box'] });
-                keyRow.createDiv({ text: keyItem.note, cls: ['linked-note-name-display', 'field-content-box'] });
-
-                const actionsDiv = keyRow.createDiv({ cls: 'linked-key-actions' });
-
-                // Copy button
-                new ButtonComponent(actionsDiv)
-                    .setIcon('copy')
-                    .setTooltip('Copy Key to Clipboard')
-                    .onClick(async () => {
-                        await navigator.clipboard.writeText(keyItem.ip);
-                        new Notice(`Key "${keyItem.ip}" copied to clipboard!`, 2000);
-                    });
-
-                // Delete button for linked keys
-                new ButtonComponent(actionsDiv)
-                    .setIcon('trash')
-                    .setTooltip('Remove from Linked Keys')
-                    .setClass('mod-warning')
-                    .onClick(async () => {
-                        const confirmDelete = await new Promise<boolean>(resolve => {
-                            new ConfirmationModal(this.app, `Are you sure you want to remove the linked key for "${keyItem.note}"? This will not delete the note itself.`, resolve).open();
-                        });
-
-                        if (confirmDelete) {
-                            this.plugin.settings.linkedKeys = this.plugin.settings.linkedKeys.filter(item => item.ip !== keyItem.ip);
-                            await this.plugin.saveSettings();
-                            new Notice(`Linked key for "${keyItem.note}" removed.`, 3000);
-                            await this.renderLinkedKeysContent(containerToRenderInto); // Re-render the list
-                        } else {
-                            new Notice("Removal cancelled.", 2000);
-                        }
-                    });
-            });
-        }
+    // Confirm overwrite if it exists
+    if (existing) {
+      const ok = await new Promise<boolean>(resolve =>
+        new ConfirmationModal(
+          this.app,
+          `File "${filePath}" already exists. Overwrite?`,
+          resolve
+        ).open()
+      );
+      if (!ok) {
+        new Notice('Operation cancelled.', 3000);
+        return;
+      }
+      await vault.modify(existing, content);
+    } else {
+      await vault.create(filePath, content);
     }
+
+    // Open the pulled note
+    const file = vault.getAbstractFileByPath(filePath) as TFile;
+    if (file) {
+      await this.app.workspace.getLeaf(true).openFile(file);
+      new Notice(`Pulled and opened ${file.basename}`, 3000);
+    }
+
+    // Record in linkedKeys
+    this.plugin.settings.linkedKeys = this.plugin.settings.linkedKeys || [];
+    const linked = this.plugin.settings.linkedKeys;
+    const keys = this.plugin.settings.keys || [];
+    // Only add if not already present
+    if (!linked.find(k => k.noteKey === noteKey && k.apiKey === apiKey && k.filePath === filePath)) {
+      linked.push({ noteKey, apiKey, filePath } as KeyItem);
+      keys.push({ noteKey, apiKey, filePath } as KeyItem);
+
+      this.plugin.settings.activeKey = noteKey;
+
+      await this.plugin.saveSettings();
+    }
+
+    // Refresh list and close modal
+    this.renderLinkedList();
+    this.close();
+  }
+
+  /**
+   * Renders the list of successful linked keys, showing the full original input key
+   */
+  private renderLinkedList() {
+    this.listContainer.empty();
+    const linked = this.plugin.settings.linkedKeys || [];
+
+    if (!linked.length) {
+      this.listContainer.createEl('p', { text: 'No linked keys yet.', cls: 'empty-list-message' });
+      return;
+    }
+
+    // Header
+    const header = this.listContainer.createDiv({ cls: 'linked-header' });
+    header.style.display = 'grid';
+    header.style.gridTemplateColumns = '3fr 1fr 1fr';
+    header.createSpan({ text: 'Full Key' });
+    header.createSpan({ text: 'File' });
+    header.createSpan({ text: 'Actions' });
+
+    // Rows
+    linked.forEach(item => {
+      const row = this.listContainer.createDiv({ cls: 'linked-row' });
+      row.style.display = 'grid';
+      row.style.gridTemplateColumns = '3fr 1fr 1fr';
+
+      // show the entire reconstructed key
+      const displayKey = `${item.noteKey}:${item.apiKey}|${item.filePath.replace(/\.md$/, '')}`;
+      row.createDiv({ text: displayKey, cls: 'field-content-box' });
+      row.createDiv({ text: item.filePath, cls: 'field-content-box' });
+
+      const actions = row.createDiv({ cls: 'linked-actions' });
+      new ButtonComponent(actions)
+        .setIcon('copy')
+        .setTooltip('Copy full key')
+        .onClick(async () => {
+          await navigator.clipboard.writeText(displayKey);
+          new Notice('Full key copied');
+        });
+      new ButtonComponent(actions)
+        .setIcon('trash')
+        .setWarning()
+        .setTooltip('Remove key')
+        .onClick(async () => {
+          this.plugin.settings.linkedKeys = this.plugin.settings.linkedKeys!.filter(
+            k => !(k.noteKey === item.noteKey && k.apiKey === item.apiKey && k.filePath === item.filePath)
+          );
+          if (this.plugin.settings.activeKey === item.noteKey) {
+            this.plugin.settings.activeKey = undefined;
+          }
+          await this.plugin.saveSettings();
+          this.renderLinkedList();
+        });
+    });
+  }
 }

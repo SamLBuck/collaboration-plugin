@@ -1,13 +1,10 @@
 // views/CollaborationPanelView.ts
 import { App, ItemView, WorkspaceLeaf, ButtonComponent, Notice, Setting, TextComponent, setIcon, TFile, Modal } from 'obsidian';
 import MyPlugin, { KeyItem } from '../main';
-import { generateKey } from '../storage/keyManager';
-import { shareCurrentNoteWithFileName } from '../utils/share_active_note';
 //import { requestNoteFromPeer } from '../networking/socket/client';
 
-import { KEY_LIST_VIEW_TYPE } from './KeyListView';
-import { LINK_NOTE_VIEW_TYPE } from './LinkNoteView';
 import { parseKey } from '../utils/parse_key';
+import { fetchMaster } from '../utils/api';
 
 // --- INLINED: ConfirmationModal class definition (consistent with other views) ---
 class ConfirmationModal extends Modal {
@@ -48,19 +45,17 @@ class ConfirmationModal extends Modal {
 export const COLLABORATION_VIEW_TYPE = 'collaboration-panel-view';
 
 // Define types for note categorization with new names
-type NoteType = 'none' | 'owner' | 'collaborator'; // CHANGED: 'push' to 'owner', 'pulled' to 'collaborator'
+type NoteType = 'none' | 'owner'; // CHANGED: 'push' to 'owner', 'pulled' to 'collaborator'
 
 export class CollaborationPanelView extends ItemView {
+    getViewType(): string {
+        return COLLABORATION_VIEW_TYPE
+    }
     plugin: MyPlugin;
     activeNoteFile: TFile | null = null;
     noteType: NoteType = 'none';
 
     noteInput: TextComponent;
-    noteTitleInput: TextComponent;
-    accessTypeView: HTMLInputElement;
-    accessTypeEdit: HTMLInputElement;
-    accessTypeViewAndComment: HTMLInputElement;
-    accessTypeEditWithApproval: HTMLInputElement;
     linkNoteKeyInput: TextComponent; // Added missing property
 
     constructor(leaf: WorkspaceLeaf, plugin: MyPlugin) {
@@ -68,9 +63,6 @@ export class CollaborationPanelView extends ItemView {
         this.plugin = plugin;
     }
 
-    getViewType(): string {
-        return COLLABORATION_VIEW_TYPE;
-    }
 
     getDisplayText(): string {
         return 'Collaboration Panel';
@@ -81,150 +73,126 @@ export class CollaborationPanelView extends ItemView {
     }
 
     async onOpen(): Promise<void> {
-        this.contentEl.empty();
-        this.contentEl.addClass('collaboration-panel');
-
-        this.activeNoteFile = this.app.workspace.getActiveFile();
-        this.noteType = await this.determineNoteType(this.activeNoteFile);
-        
-        this.renderPanelContent();
-
         this.registerEvent(
             this.app.workspace.on("file-open", async (file) => {
-                if (file) {
-                    this.activeNoteFile = file;
-                    this.noteType = await this.determineNoteType(this.activeNoteFile);
-                    this.renderPanelContent();
-                }
+              if (file instanceof TFile) {
+                this.activeNoteFile = file;
+                this.noteType       = await this.determineNoteType(file);
+                await this.renderPanelContent();
+              }
             })
-        );
-    }
-
+          );
+        
+          // prime the panel
+          this.activeNoteFile = this.app.workspace.getActiveFile();
+          this.noteType       = await this.determineNoteType(this.activeNoteFile);
+          await this.renderPanelContent();
+        }
+        
     async onClose(): Promise<void> {
         console.log('Collaboration Panel View closed');
     }
 
     private async determineNoteType(file: TFile | null): Promise<NoteType> {
-        if (!file) {
-            return 'none';
-        }
-
-        const noteName = file.basename;
-
-        const isOwner = this.plugin.settings.keys.some(keyItem => keyItem.note === noteName); // has the status of no type
-        if (isOwner) {
-            return 'owner'; // has the status of push
-        }
-
-        const isCollaborator = this.plugin.settings.linkedKeys.some(keyItem => keyItem.note === noteName); // CHANGED: isPullable to isCollaborator
-        if (isCollaborator) {
-            return 'collaborator'; // has the status of a pulled note
-        }
-
-        return 'none';
-    }
-
-    private renderPanelContent(): void {
-        this.contentEl.empty();
-
-        this.contentEl.createEl('h1', { text: `Control Panel` });
+        if (!file) return 'none';
+        return this.plugin.settings.keys.some(k => k.filePath === file.path)
+          ? 'owner'
+          : 'none';
+      }
+            
+    //   private async renderPanelContent(): Promise<void> {
+    //     // 1) grab the latest file
+    //     this.activeNoteFile = this.app.workspace.getActiveFile();
+    //     // 2) recompute its type
+    //     this.noteType       = await this.determineNoteType(this.activeNoteFile);
+      
+    //     // 3) clear & redraw
+    //     this.contentEl.empty();
+      
+    //     this.contentEl.createEl('h1', { text: `Control Panel` });
         
-        let displayNoteTypeName: string;
-        switch (this.noteType) {
-            case 'none':
-                displayNoteTypeName = 'None';
-                break;
-            case 'owner': // CHANGED: 'push' to 'owner'
-                displayNoteTypeName = 'Owner'; // CHANGED: 'Push' to 'Owner'
-                break;
-            case 'collaborator': // CHANGED: 'pulled' to 'collaborator'
-                displayNoteTypeName = 'Collaborator'; // CHANGED: 'Pulled' to 'Collaborator'
-                break;
-            default:
-                displayNoteTypeName = 'Unknown';
+    //     let displayNoteTypeName: string;
+    //     switch (this.noteType) {
+    //         case 'none':
+    //             displayNoteTypeName = 'None';
+    //             break;
+    //         case 'owner': // CHANGED: 'push' to 'owner'
+    //             displayNoteTypeName = 'Owner'; // CHANGED: 'Push' to 'Owner'
+    //             break;
+    //         default:
+    //             displayNoteTypeName = 'Unknown';
+    //     }
+
+    //     this.contentEl.createEl('hr');
+
+    //     switch (this.noteType) {
+    //         case 'owner': // CHANGED: 'push' to 'owner'
+    //             this.renderOwnerNotePanel(); // CHANGED: renderPushNotePanel to renderOwnerNotePanel
+    //             break;
+    //         case 'none':
+    //         default:
+    //             this.renderNoneNotePanel();
+    //             break;
+    //     }
+
+    //     // this.renderNavigationButtons();
+    //     // this.renderAutomaticUpdatesSection();
+    // }
+    private async renderPanelContent(): Promise<void> {
+        if (!this.activeNoteFile) return;
+        this.contentEl.empty();
+        this.noteType = await this.determineNoteType(this.activeNoteFile);
+      
+        if (this.noteType === 'owner') {
+          await this.renderOwnerNotePanel();
+        } else {
+          this.renderNoneNotePanel();
         }
-
-        this.contentEl.createEl('hr');
-
-        switch (this.noteType) {
-            case 'owner': // CHANGED: 'push' to 'owner'
-                this.renderOwnerNotePanel(); // CHANGED: renderPushNotePanel to renderOwnerNotePanel
-                break;
-            case 'collaborator': // CHANGED: 'pulled' to 'collaborator'
-                this.renderCollaboratorNotePanel(); // CHANGED: renderPulledNotePanel to renderCollaboratorNotePanel
-                break;
-            case 'none':
-            default:
-                this.renderNoneNotePanel();
-                break;
-        }
-
-        this.renderNavigationButtons();
-        this.renderAutomaticUpdatesSection();
-    }
+      }
+      
 
     private renderNoneNotePanel(): void {
         this.contentEl.createEl('h2', { text: 'Create New Shareable Note' });
         this.contentEl.createEl('p', { text: 'This note is not currently shared. Generate a new key to share it.' });
         
         new Setting(this.contentEl)
-            .setName('Generate New Key')
-            .setDesc('Generate a new key for the specified note and access type. The generated key will be copied to your clipboard and saved.')
-            .addButton(button =>
-                button
-                    .setButtonText('Generate')
-                    .setCta()
-                    .onClick(async () => {
-                        const noteName = this.noteInput.getValue().trim();
-                        const accessType = this.getSelectedAccessType();
-                        const customTitle = this.noteTitleInput.getValue().trim() || "personal-note";
+        .setName('Generate New Key')
+        .setDesc('Generate a new collaboration note for this file and copy its key.')
+        .addButton(button =>
+          button
+            .setButtonText('Generate')
+            .onClick(async () => {
 
-                        if (!noteName) {
-                            new Notice('Please provide a Note Name to generate a key.', 4000);
-                            return;
-                        }
-                        if (!accessType) {
-                            new Notice('Please select an Access Type to generate a key.', 4000);
-                            return;
-                        }
+                const name = this.noteInput.getValue().trim();
+                if (!name) {
+                  new Notice('Please enter a note name.', 4000);
+                  return;
+                }
+        
+              // 1) Create & bind a new note remotely
+              const file = this.app.vault.getAbstractFileByPath(`${name}.md`) as TFile;
+              if (!file) {
+                new Notice(`File "${name}" not found. Please ensure the file exists.`, 4000);
+                return;
+              }
+              const newKeyItem = await this.plugin.createCollabNoteWithFile(file);
+              if (!newKeyItem) {
+                // creation failed or was cancelled
+                return;
+              }
+              const noteName = newKeyItem.filePath.replace(/\.md$/, '');
+              const outKey = `${newKeyItem.noteKey}:${newKeyItem.apiKey}|${noteName}`;
+      
+              new Notice(`New key: ${outKey}`, 8000);
+              await navigator.clipboard.writeText(outKey);
+              
+      
+              await this.renderPanelContent();
+            })
+            .setCta() 
 
-                        const existingKey = this.plugin.settings.keys.find(
-                            key => key.note === noteName && key.access === accessType
-                        );
-                        if (existingKey) {
-                            new Notice(`A key for "${noteName}" with "${accessType}" access already exists. Cannot generate a duplicate. Existing Key: ${existingKey.ip}`, 8000);
-                            await navigator.clipboard.writeText(existingKey.ip);
-                            return;
-                        }
-
-                        try {
-                            const newKeyItem = await generateKey(this.plugin, noteName, accessType);
-                            const success = await addKey(this.plugin, newKeyItem);
-
-                            if (success) {
-                                new Notice(`Generated & Saved:\n${newKeyItem.ip}\nFor Note: "${newKeyItem.note}" (Access: ${newKeyItem.access})`, 8000);
-                                await navigator.clipboard.writeText(newKeyItem.ip);
-
-                                this.plugin.settings.personalNotes[noteName] = {
-                                    lineCount: 0,
-                                    title: customTitle
-                                };
-                                await this.plugin.saveSettings();
-
-                                shareCurrentNoteWithFileName(this.plugin, this.app, newKeyItem.note);
-                                this.activeNoteFile = this.app.workspace.getActiveFile();
-                                this.noteType = await this.determineNoteType(this.activeNoteFile);
-                                this.renderPanelContent();
-                            } else {
-                                new Notice("Failed to add key. It might already exist (password collision).", 4000);
-                            }
-                        } catch (error: any) {
-                            console.error("Error generating or adding key:", error);
-                            new Notice(`Error: Could not generate key. ${error.message}`, 5000);
-                        }
-                    })
-            );
-
+        );
+      
         new Setting(this.contentEl)
             .setName('Note')
             .setDesc('The note this key will be associated with.')
@@ -241,353 +209,183 @@ export class CollaborationPanelView extends ItemView {
                         new Notice('Suggested current note!');
                     });
             });
-
-        new Setting(this.contentEl)
-            .setName('Title')
-            .setDesc('Optional friendly title for this personal note.')
-            .addText(text => {
-                this.noteTitleInput = text;
-                text.setPlaceholder('e.g. Meeting Notes, Ideas...');
-            });
             
-        const accessTypeSetting = new Setting(this.contentEl)
-            .setName('Access Type')
-            .setDesc('Select the type of access this key grants for the note.');
 
-        const checkboxContainer = accessTypeSetting.controlEl.createDiv({ cls: 'access-type-checkboxes' });
-        checkboxContainer.style.display = 'flex';
-        checkboxContainer.style.flexDirection = 'column';
-        checkboxContainer.style.gap = '8px';
-
-        const createCheckbox = (name: string, checked: boolean = false): HTMLInputElement => {
-            const wrapper = checkboxContainer.createDiv({ cls: 'checkbox-wrapper' });
-            const checkbox = wrapper.createEl('input', { type: 'checkbox', cls: 'access-type-checkbox' });
-            const label = wrapper.createEl('label', { text: name, cls: 'access-type-label' });
-            label.prepend(checkbox);
-            checkbox.checked = checked;
-
-            checkbox.onchange = (evt) => {
-                const targetCheckbox = evt.target as HTMLInputElement;
-                if (targetCheckbox.checked) {
-                    [this.accessTypeView, this.accessTypeEdit, this.accessTypeViewAndComment, this.accessTypeEditWithApproval].forEach(cb => {
-                        if (cb && cb !== targetCheckbox) {
-                            cb.checked = false;
-                        }
-                    });
-                    new Notice(`Access type selected: ${name}`);
-                } else {
-                    const anyChecked = [this.accessTypeView, this.accessTypeEdit, this.accessTypeViewAndComment, this.accessTypeEditWithApproval].some(cb => cb?.checked);
-                    if (!anyChecked) {
-                        targetCheckbox.checked = true;
-                        new Notice("At least one access type must be selected.", 3000);
-                    }
-                }
-            };
-            return checkbox;
-        };
-
-        this.accessTypeView = createCheckbox('View', true);
-        this.accessTypeEdit = createCheckbox('Edit', false);
 
                 this.contentEl.createEl('p', { text: 'pull a shared note from a peer using a key.' });
         
-                // Input for the Share Key / Password (consistent with modal)
                 new Setting(this.contentEl)
-                    .setName('Share Key')
-                    .setDesc('Enter the key for the shared note you want to pull.')
-                    .addText(text => {
-                        this.linkNoteKeyInput = text;
-                        text.setPlaceholder('e.g., 192.168.1.100-MySharedNote');
-                    });
-        
-                // Pull Button (consistent with modal)
-                new Setting(this.contentEl)
-                    .addButton(button => {
-                        button.setButtonText('Pull Note')
-                            .setCta()
-                            .onClick(async () => {
-                                const input = this.linkNoteKeyInput.getValue().trim();
-                                if (!input) {
-                                    new Notice('Please enter a Share Key / Password to pull a note.', 3000);
-                                    return;
-                                }
-        
-                                let parsedKeyInfo;
-                                try {
-                                    parsedKeyInfo = parseKey(input);
-                                    if (!parsedKeyInfo || !parsedKeyInfo.ip || !parsedKeyInfo.noteName) {
-                                        throw new Error('Invalid key format. Expected "IP-NoteName".');
-                                    }
-                                } catch (error: any) {
-                                    new Notice(`Key parsing error: ${error.message}`, 5000);
-                                    return;
-                                }
-        
-                                const { ip, noteName: keyBasename } = parsedKeyInfo;
-                                const filePath = `${keyBasename}.md`; // Assuming all notes are in the root for now
-        
-                                let file: TFile | null = this.app.vault.getAbstractFileByPath(filePath) as TFile;
-                                let overwrite = false;
-        
-                                if (file) {
-                                    overwrite = await new Promise(resolve => {
-                                        new ConfirmationModal(this.app, `Note "${filePath}" already exists. Overwrite it with the pulled content?`, resolve).open();
-                                    });
-        
-                                    if (!overwrite) {
-                                        new Notice(`Pull cancelled for "${filePath}". Note not overwritten.`, 3000);
-                                        return;
-                                    }
-                                }
-        
-                                try {
-                                    if (file && overwrite) {
-                                        await rewriteExistingNote(this.app, ip, keyBasename, this.plugin);
-                                    } else {
-                                        await pullNoteFromPeerNewNote(this.app, ip, keyBasename);
-                                    }
-        
-                                    // Add the successfully used key to linkedKeys if it's not already there
-                                    const existingLinkedKey = this.plugin.settings.linkedKeys.find(item => item.ip === input);
-                                    if (!existingLinkedKey) {
-                                        const newLinkedKeyItem: KeyItem = {
-                                            ip: input, note: keyBasename, access: 'Pulled',
-                                        };
-                                        this.plugin.settings.linkedKeys.push(newLinkedKeyItem);
-                                        await this.plugin.saveSettings();
-                                        //new Notice(`Key "${input}" added to your linked keys list.`, 3000);
-                                    }
-        
-                                    // Open the created/updated note
-                                    file = this.app.vault.getAbstractFileByPath(filePath) as TFile; // Re-fetch in case it was newly created
-                                    if (file) {
-                                        await this.app.workspace.getLeaf(true).openFile(file); // Open in a new leaf
-                                        new Notice(`Pulled and opened "${file.basename}" successfully.`, 4000);
-                                    } else {
-                                        new Notice(`Pulled "${keyBasename}" successfully, but could not open the file.`, 4000);
-                                    }
-        
-        
-                                } catch (error: any) {
-                                    new Notice(`An error occurred while pulling the note: ${error.message}`, 5000);
-                                }
-                            });
-                    });
-        
+                .setName('Pull Collaboration Note')
+                .setDesc('Enter a key of the form noteKey:apiKey|noteName to pull.')
+                .addText(text => {
+                  this.linkNoteKeyInput = text;
+                  text.setPlaceholder('e.g., ab12cd34-…:myApiKey123|MyNoteName');
+                })
+                .addButton(btn =>
+                  btn
+                    .setButtonText('Pull & Link')
+                    .setCta()
+                    .onClick(async () => {
+                      const raw = this.linkNoteKeyInput.getValue().trim();
+                      const file = await this.handlePullAndLink(raw);
+                      if (!file) return;
+              
+                      // 2) Point the panel at that new file
+                      this.activeNoteFile = file;
+                      this.noteType = await this.determineNoteType(file);
+              
+                      // 3) Redraw the whole view
+                      await this.renderPanelContent();
+                    })
+                );
+
+              }
+              
+              // 2) Updated handlePullAndLink signature
+              private async handlePullAndLink(raw: string): Promise<TFile | void> {
+                if (!raw) {
+                  new Notice('Please enter a collaboration key first.', 3000);
+                  return;
+                }
+                const [rawKey, providedName] = raw.split('|');
+                const [noteKey, ...apiParts] = rawKey.split(':');
+                const apiKey = apiParts.join(':');
+                if (!noteKey || !apiKey) {
+                  new Notice('Invalid format. Use noteKey:apiKey|noteName', 4000);
+                  return;
+                }
+              
+                // fetch from server
+                let content: string;
+                try {
+                  content = await fetchMaster(this.plugin.settings.apiBaseUrl, noteKey, apiKey);
+                } catch (e: any) {
+                  new Notice(`Failed to pull: ${e.message}`, 5000);
+                  return;
+                }
+              
+                // determine file path
+                const name = (providedName || noteKey).trim();
+                const filePath = `${name}.md`;
+                const vault = this.app.vault;
+                const existing = vault.getAbstractFileByPath(filePath) as TFile;
+              
+                // confirm overwrite
+                if (existing) {
+                  const ok = await new Promise<boolean>(res =>
+                    new ConfirmationModal(this.app, `Overwrite ${filePath}?`, res).open()
+                  );
+                  if (!ok) {
+                    new Notice('Cancelled.', 3000);
+                    return;
+                  }
+                  await vault.modify(existing, content);
+                } else {
+                  await vault.create(filePath, content);
+                }
+              
+                // open the new note
+                const file = vault.getAbstractFileByPath(filePath) as TFile;
+                if (file) {
+                  await this.app.workspace.getLeaf(true).openFile(file);
+                }
+              
+                // record in linkedKeys & activate
+                this.plugin.settings.linkedKeys = this.plugin.settings.linkedKeys || [];
+                const linked = this.plugin.settings.linkedKeys;
+                if (!linked.find(k => k.noteKey === noteKey && k.apiKey === apiKey && k.filePath === filePath)) {
+                  linked.push({ noteKey, apiKey, filePath });
+                  this.plugin.settings.activeKey = noteKey;
+                  await this.plugin.saveSettings();
+                }
+      return file;
     }
-    
+
+    // CHANGED: Renamed from renderPushNotePanel to renderOwnerNotePanel
+
     // CHANGED: Renamed from renderPushNotePanel to renderOwnerNotePanel
     private renderOwnerNotePanel(): void {
-        const noteName = this.activeNoteFile?.basename || '';
-        const keyItem = this.plugin.settings.keys.find(k => k.note === noteName);
-
-        this.contentEl.createEl('h2', { text: 'Owner Note Tools' }); // CHANGED: 'Push Note Tools' to 'Owner Note Tools'
-        this.contentEl.createEl('p', { text: `${noteName} has a key associated with it. You are the host.` });
-        
-        if (keyItem) {
-            this.contentEl.createEl('p', { text: `${keyItem.ip}` });
-            
-            new Setting(this.contentEl)
-                .setName('Delete Key & Registry Content') 
-                .addButton(button =>
-                    button
-                        .setButtonText('Delete Key & Content') 
-                        .setWarning()
-                        .onClick(async () => {
-                            if (keyItem) {
-                                const confirmDelete = await new Promise<boolean>(resolve => {
-                                    new ConfirmationModal(this.app, `Are you sure you want to delete the key for "${noteName}" AND remove its content from your local sharing registry? This action cannot be undone.`, resolve).open(); 
-                                });
-
-                                if (confirmDelete) {
-                                    const deleted = await deleteKeyAndContent(this.plugin, keyItem.note);
-                                    if (deleted) {
-                                        new Notice(`Key for "${noteName}" and its content deleted from registry.`, 5000);
-                                        this.activeNoteFile = this.app.workspace.getActiveFile();
-                                        this.noteType = await this.determineNoteType(this.activeNoteFile);
-                                        this.renderPanelContent();
-                                    } else {
-                                        new Notice(`Failed to delete key for "${noteName}". It might not exist.`, 4000);
-                                    }
-                                } else {
-                                    new Notice("Deletion cancelled.", 2000);
-                                }
-                            }
-                        })
-                );
-        } else {
-            this.contentEl.createEl('p', { text: 'Error: Key not found for this owned note.' }); // CHANGED: pushable to owned
+        if (!this.activeNoteFile) return;
+        const filePath = this.activeNoteFile.path;
+        const noteName = this.activeNoteFile.basename;
+      
+        // find once by full path
+        const key = this.plugin.settings.keys.find(k => k.filePath === filePath);
+      
+        this.contentEl.createEl('p', {
+          text: `${noteName} has a key associated with it. You are a collaborator.`
+        });
+      
+        if (!key) {
+          this.contentEl.createEl('p', { text: 'Error: Key not found for this note.' });
+          return;
         }
-    }
-
-    // CHANGED: Renamed from renderPulledNotePanel to renderCollaboratorNotePanel
-    private renderCollaboratorNotePanel(): void {
-        const noteName = this.activeNoteFile?.basename || '';
-        const keyItem = this.plugin.settings.linkedKeys.find(k => k.note === noteName);
-
-        this.contentEl.createEl('h2', { text: 'Tools' }); // CHANGED: 'Pulled Note Tools' to 'Collaborator Note Tools'
-        this.contentEl.createEl('p', { text: `${noteName} has been pulled. You can pull the latest changes.` });
-
-        if (keyItem) {
-            this.contentEl.createEl('p', { text: `${keyItem.ip}` });
-
-            // --- START MOVED: Push Changes Button ---
-            new Setting(this.contentEl)
-                .setName('Share Changes ')
-                .addButton(button =>
-                    button
-                        .setButtonText('Push Changes')
-                        .setCta()
-                        .onClick(async () => {
-                            const input = keyItem.ip; // Use the pulled key's IP for pushing back
-                            if (!input) {
-                                new Notice("Could not determine source key to push changes.", 3000);
-                                return;
-                            }
-        
-                            let parsedKeyInfo;
-                            try {
-                                parsedKeyInfo = parseKey(input);
-                                if (!parsedKeyInfo || !parsedKeyInfo.ip || !parsedKeyInfo.noteName) {
-                                    throw new Error('Invalid key format. Expected "IP-NoteName".');
-                                }
-                            } catch (error: any) {
-                                new Notice(`Key parsing error: ${error.message}`, 5000);
-                                return;
-                            }
-                            // Check if the pulled key has "Edit" access
-                            if (parsedKeyInfo?.view !== "Edit") {
-                                new Notice("This pulled note's key does not have 'Edit' permissions to push changes back to the source.", 5000);
-                                return;
-                            } 
-        
-                            const { ip, noteName } = parsedKeyInfo;
-                            const file = this.app.vault.getAbstractFileByPath(`${noteName}.md`) as TFile;
-        
-                            if (!file) {
-                                new Notice(`Note "${noteName}" not found in your vault.`, 3000);
-                                return;
-                            }
-        
-                            const content = await this.app.vault.read(file);
-        
-                            console.log("Pushing content from pulled note to source:", ip, noteName);
-        
-                            //const { sendNoteToHost } = await import("../networking/socket/client");
-                            //sendNoteToHost(ip, noteName, content);
-                            new Notice(`Pushed changes for '${noteName}' to original host: ${ip}`, 3000);
-                        })
-                );
-            // --- END MOVED: Push Changes Button ---
-
-            // --- START MOVED: Pull Changes Button ---
-            new Setting(this.contentEl)
-                .setName('Pull Latest Changes')
-                .addButton(button =>
-                    button
-                        .setButtonText('Pull Changes')
-                        .setCta()
-                        .onClick(async () => {
-                            if (keyItem) {
-                                const parsedKeyInfo = parseKey(keyItem.ip); // Ensure parseKey is robust
-                                if(parsedKeyInfo?.ip === undefined || parsedKeyInfo?.noteName === undefined) {
-                                    new Notice("Invalid key format for pulling. Expected 'IP-NoteName|access type'.", 4000);
-                                    return;
-                                }
-                                // The rewriteExistingNote function already takes the IP and NoteName
-                                rewriteExistingNote(this.app, parsedKeyInfo.ip, keyItem.note, this.plugin); 
-                                new Notice(`Requested latest changes for "${noteName}".`);
-                            } else {
-                                new Notice("Could not find key for this pullable note.", 4000);
-                            }
-                        })
-                );
-            // --- END MOVED: Pull Changes Button ---
-
-            // Keep the Delete Key & Registry Content here, as it's relevant for pulled notes if you want to unlink them
-            new Setting(this.contentEl)
-                .setName('Unlink Note') 
-                .addButton(button =>
-                    button
-                        .setButtonText('Unlink Note') 
-                        .setWarning()
-                        .onClick(async () => {
-                            if (keyItem) {
-                                const confirmDelete = await new Promise<boolean>(resolve => {
-                                    new ConfirmationModal(this.app, `Are you sure you want to unlink "${noteName}"? It will no longer automatically pull updates.`, resolve).open(); 
-                                });
-
-                                if (confirmDelete) {
-                                    this.plugin.settings.linkedKeys = this.plugin.settings.linkedKeys.filter(item => item.note !== noteName);
-                                    await this.plugin.saveSettings();
-                                    new Notice(`Note "${noteName}" unlinked.`, 5000);
-                                    this.activeNoteFile = this.app.workspace.getActiveFile();
-                                    this.noteType = await this.determineNoteType(this.activeNoteFile);
-                                    this.renderPanelContent();
-                                } else {
-                                    new Notice("Unlinking cancelled.", 2000);
-                                }
-                            } else {
-                                new Notice("Error: Key not found for this pulled note.", 4000);
-                            }
-                        })
-                );
-        } else {
-            this.contentEl.createEl('p', { text: 'Error: Linked key not found for this pulled note.' });
-        }
-    }
-
-    private renderNavigationButtons(): void {
-        // this.contentEl.createEl('h2', { text: 'Navigation' });
-        const navButtonContainer = this.contentEl.createDiv({ cls: 'settings-nav-buttons' });
-        navButtonContainer.style.display = 'flex';
-        navButtonContainer.style.justifyContent = 'space-between';
-        navButtonContainer.style.marginTop = '20px';
-
-        // const leftButtons = navButtonContainer.createDiv();  hid the left buttons for 
-        // new Setting(leftButtons)
-        //     .addButton(button => {
-        //         button.setButtonText('List of keys')
-        //             .onClick(() => {
-        //                 this.plugin.activateView(KEY_LIST_VIEW_TYPE);
-        //             });
-        //     });
-
-        // const rightButtons = navButtonContainer.createDiv();
-        // new Setting(rightButtons)
-        //     .addButton(button => {
-        //         button.setButtonText('Link Note')
-        //             .onClick(() => {
-        //                 this.plugin.activateView(LINK_NOTE_VIEW_TYPE);
-        //             });
-        //     });
-
-        //navButtonContainer.appendChild(leftButtons);
-        //navButtonContainer.appendChild(rightButtons);
-    }
-
-    private renderAutomaticUpdatesSection(): void {
-
+        const outKey = `${key.noteKey}:${key.apiKey}|${noteName}`;
         new Setting(this.contentEl)
-            .setName("Automatic Note Registry Updates")
-            .setDesc("Automatically updates when a note is modified.")
-            .addToggle((toggle) =>
-                toggle
-                    .setValue(this.plugin.settings.autoUpdateRegistry)
-                    .onChange(async (value) => {
-                        this.plugin.settings.autoUpdateRegistry = value;
-                        await this.plugin.saveSettings();
-                        console.log(`[Settings] Auto-update registry set to ${value}`);
-                    })
-            );
-    }
+          .setName('Key')
+          .setDesc(outKey)
+          .addButton(btn =>
+            btn
+              .setIcon('copy')
+              .setTooltip('Copy collaboration key')
+              .onClick(async () => {
+                await navigator.clipboard.writeText(outKey);
+                new Notice('Copied key to clipboard!', 2000);
+              })
+          );
+                    
+        // DELETE
+      
+        // PUSH OFFER
+        new Setting(this.contentEl)
+          .setName('Push Offer')
+          .addButton(btn =>
+            btn.setButtonText('Push Offer').onClick(() => this.plugin.pushOfferToServer())
+            .setCta() 
+          );
+            
+        // RESOLVE
+        new Setting(this.contentEl)
+          .setName('Resolve Master')
+          .addButton(btn =>
+            btn
+              .setButtonText('Resolve Master')
+              .onClick(() => this.plugin.resolveMasterNote())
+              .setCta() 
+          );
+      
+        // PULL LATEST
+        new Setting(this.contentEl)
+          .setName('Pull Latest')
+          .addButton(btn =>
+            btn.setButtonText('Pull Latest').onClick(() => this.plugin.pullMasterNote())
+            .setCta() 
+          );
+          new Setting(this.contentEl)
+          .setName('Delete Key')
+          .addButton(btn =>
+            btn
+              .setButtonText('Delete Key')
+              .setWarning()
+              .onClick(async () => {
+                const confirm = await new Promise<boolean>(res =>
+                  new ConfirmationModal(
+                    this.app,
+                    `Really delete the key for "${noteName}"?`,
+                    res
+                  ).open()
+                );
+                if (!confirm) return;
+                this.plugin.settings.keys = this.plugin.settings.keys.filter(
+                  k => k.filePath !== filePath
+                );
+                await this.plugin.saveSettings();
+                new Notice(`Key for "${noteName}" deleted.`, 3000);
+                this.activeNoteFile = this.app.workspace.getActiveFile();
+                this.noteType = await this.determineNoteType(this.activeNoteFile);
+                this.renderPanelContent();
+              })
+          );
 
-
-    getSelectedAccessType(): string | null {
-        if (this.accessTypeView.checked) return 'View';
-        if (this.accessTypeEdit.checked) return 'Edit';
-        if (this.accessTypeViewAndComment.checked) return 'View and Comment';
-        if (this.accessTypeEditWithApproval.checked) return 'Edit w/ Approval';
-        return null;
-    }
-} 
+      }
+      }

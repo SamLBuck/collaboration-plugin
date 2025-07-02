@@ -1,7 +1,8 @@
 // srettings/PersonalNoteEditModal.ts
 
 import { App, Modal, Setting, Notice } from 'obsidian';
-import MyPlugin, { PersonalNote } from '../main';
+import MyPlugin from '../main';
+import PersonalNote from '../main';
 
 export class PersonalNoteEditModal extends Modal {
     plugin: MyPlugin;
@@ -14,8 +15,8 @@ export class PersonalNoteEditModal extends Modal {
         super(app);
         this.plugin = plugin;
         this.note = note;
-        this.newTitle = note.title || '';
-        this.newContent = note.content;
+        // this.newTitle = note.title || '';
+        // this.newContent = note.content;
         this.titleEl.setText('Edit Personal Note');
     }
 
@@ -64,19 +65,19 @@ export class PersonalNoteEditModal extends Modal {
                     .setButtonText('Save Note')
                     .setCta()
                     .onClick(async () => {
-                        this.note.title = this.newTitle.trim();
-                        this.note.content = this.newContent.trim();
-                        this.note.updatedAt = Date.now();
+                        // this.note.title = this.newTitle.trim();
+                        // this.note.content = this.newContent.trim();
+                        // this.note.updatedAt = Date.now();
 
-                        if (this.note.content === '') {
-                            new Notice('Personal note content cannot be empty! Not saved.', 3000);
-                            return; // Do not close the modal if content is empty
-                        }
+                        // if (this.note.content === '') {
+                        //     new Notice('Personal note content cannot be empty! Not saved.', 3000);
+                        //     return; // Do not close the modal if content is empty
+                        // }
 
                         await this.plugin.saveSettings();
                         new Notice('Personal note updated!', 2000);
                         // Trigger a custom event to notify any listeners (like the post-processor) to re-render
-                        (this.app as any).trigger('plugin:personal-notes-updated', this.note.id); // Pass the ID for specific update
+                        // (this.app as any).trigger('plugin:personal-notes-updated', this.note.id); // Pass the ID for specific update
                         this.resolvePromise(true); // Resolve the promise indicating save success
                         this.close();
                     });

@@ -1,9 +1,8 @@
 // src/views/PersonalNotesView.ts
 
 import { ItemView, WorkspaceLeaf, debounce, Notice, TFile, setIcon } from 'obsidian';
-import MyPlugin, { PersonalNote } from '../main';
+import MyPlugin from '../main';
 import { PERSONAL_NOTES_VIEW_TYPE } from '../constants/viewTypes';
-import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
 
 export class PersonalNotesView extends ItemView {
     plugin: MyPlugin;

@@ -114,7 +114,6 @@ export async function fetchMaster(
       throw new Error(`Failed to resolve master: ${response.status} ${response.statusText}`);
     }
   }
-
   /**
  * Create a new collaboration note and receive its access credentials. 
  */
