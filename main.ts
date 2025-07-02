@@ -15,6 +15,11 @@ import { ReceivedPushConfirmation } from './settings/ReceivedPushConfirmation';
 import { ResolveConfirmation } from './settings/ResolveConfirmation';
 import { ImportNoteModal } from './views/ImportNoteModal';
 
+import { nanoid } from "nanoid";
+
+function generateCollabId(): string {
+  return nanoid(12); // e.g. "YJc7Xlhp0e4S"
+}
 
 
 // Settings interface
@@ -57,7 +62,9 @@ const DEFAULT_SETTINGS: MyPluginSettings = {
 
 export default class MyPlugin extends Plugin {
   settings: MyPluginSettings;
+  
   private _debounceTimeout: NodeJS.Timeout;
+
   events = new Events();  // <-- add this line
 
 
@@ -67,6 +74,11 @@ export default class MyPlugin extends Plugin {
     await this.loadSettings();
     await this.ensureNoteCredentials();
 
+    if (this.settings.collabId === '') {
+      this.settings.collabId = nanoid(12);  // shorter ID
+      await this.saveSettings();
+    }
+  
 
     // Register settings tab
     this.addSettingTab(new PluginSettingsTab(this.app, this));
@@ -640,4 +652,5 @@ public async clearAllCollabKeys(): Promise<void> {
 
 
 }
+
 
