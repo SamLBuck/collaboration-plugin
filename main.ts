@@ -164,6 +164,7 @@ export function waitForWebSocketConnection(url: string, plugin: MyPlugin, retrie
                 console.error("[Plugin] Failed to connect to WebSocket server after multiple attempts.");
             }
         };
+        
 
         socket.onmessage = async (event: MessageEvent) => {
             try {
