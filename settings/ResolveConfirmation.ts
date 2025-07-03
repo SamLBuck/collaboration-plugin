@@ -40,20 +40,8 @@ export class ResolveConfirmation extends Modal {
     container.style.display = 'flex';
     container.style.gap = '12px';
 
-    // ── Left pane: current working master (read‐only) ──
-    const curBox = container.createDiv();
-    curBox.style.flex = '1';
-    curBox.style.border = '1px solid var(--background-modifier-border)';
-    curBox.style.padding = '0.5em';
-    curBox.style.overflowY = 'auto';
-    curBox.style.maxHeight = '500px';
-    curBox.createEl('strong', { text: 'Current Master' });
-    const curTA = curBox.createEl('textarea') as HTMLTextAreaElement;
-    curTA.value = this.currentContent;
-    curTA.readOnly = true;
-    curTA.style.width = '100%';
-    curTA.style.height = '400px';
 
+    
     // ── Right pane: this offer (editable) ──
     const incBox = container.createDiv();
     incBox.style.flex = '1';
@@ -67,24 +55,40 @@ export class ResolveConfirmation extends Modal {
     incTA.style.width = '100%';
     incTA.style.height = '400px';
 
-    // ── Buttons ──
-    new Setting(contentEl)
-      .addButton((btn) =>
-        btn
-          .setButtonText('Accept Offer')
-          .setCta()
-          .onClick(() => {
-            // copy whatever the user has in the right pane into currentContent
-            this.currentContent = incTA.value;
-            this.nextOrFinish();
-          })
-      )
-      .addButton((btn) =>
-        btn.setButtonText('Skip Offer').onClick(() => {
-          this.nextOrFinish();
-        })
-      );
-  }
+    // ── Left pane: current working master (read‐only) ──
+    const curBox = container.createDiv();
+    curBox.style.flex = '1';
+    curBox.style.border = '1px solid var(--background-modifier-border)';
+    curBox.style.padding = '0.5em';
+    curBox.style.overflowY = 'auto';
+    curBox.style.maxHeight = '500px';
+    curBox.createEl('strong', { text: 'Current Master' });
+    const curTA = curBox.createEl('textarea') as HTMLTextAreaElement;
+    curTA.value = this.currentContent;
+    curTA.readOnly = false;
+    curTA.style.width = '100%';
+    curTA.style.height = '400px';
+
+// ── Button row (LEFT-aligned) ──
+const btnRow = new Setting(contentEl);
+btnRow.settingEl.style.justifyContent = 'flex-start';  // push to the left
+
+btnRow
+  .addButton((btn) =>
+    btn
+      .setButtonText('Skip Offer')           // first button
+      .onClick(() => this.nextOrFinish())
+  )
+  .addButton((btn) =>
+    btn
+      .setButtonText('Update Master')        // blue CTA
+      .setCta()
+      .onClick(() => {
+        this.currentContent = curTA.value;   // keep whatever’s in master
+        this.nextOrFinish();
+      })
+ );
+}
 
   private nextOrFinish() {
     this.idx++;
