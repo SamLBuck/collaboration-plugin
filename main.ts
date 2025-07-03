@@ -14,7 +14,6 @@ import {
     setIcon, // For icons in post-processor
     Menu, // For editor menu and file menu
 } from 'obsidian';
-
 import { registerAddKeyCommand } from './utils/add_key_command';
 import { registerDeleteKeyCommand } from './utils/delete_key_command';
 import { KeyListModal } from './settings/key_list_page02';
@@ -229,8 +228,13 @@ export default class MyPlugin extends Plugin {
 
     async onload() {
         console.log("Loading collaboration plugin...");
+        new Notice("click the icon to open the Collaboration Panel");
+
+
         await this.loadSettings();
         
+
+
         // --- NEW: Initialize NoteManager here ---
         // This ensures a single instance is available throughout the plugin's lifecycle.
         this.noteManager = new NoteManager(this, "ws://localhost:3010");
@@ -238,6 +242,8 @@ export default class MyPlugin extends Plugin {
         // Sart WebSocket server
         startWebSocketServerProcess(this.app, this);
         waitForWebSocketConnection("ws://localhost:3010", this);
+
+
 
         // --- NEW: Update personal note locations on plugin load ---
         await updatePersonalNoteLocations(this);
@@ -254,6 +260,20 @@ export default class MyPlugin extends Plugin {
         registerShareCurrentNoteCommand(this);
         registerUpdateRegistryCommand(this);
         registerSyncFromServerToSettings(this); // Added back sync command if missing
+
+
+        this.addCommand({
+          id: 'open-collab-panel',      // <- this ID you can call programmatically
+          name: 'Open Collaboration Panel',
+          callback: () => this.activateView(COLLABORATION_VIEW_TYPE)
+        });
+    
+        // 2) Hook your ribbon icon to that command:
+        this.addRibbonIcon('columns-3', 'Open Collaboration Panel', () => {
+          // Note: use this.app.commands, not this.commands
+          ;(this.app as any).commands.executeCommandById('open-collab-panel');
+        });
+        
 
         this.addCommand({
             id: 'delete-note-from-registry',
@@ -435,8 +455,9 @@ export default class MyPlugin extends Plugin {
             await this.saveSettings();
             new Notice(`Private personal note box created: "${newPersonalNote.title}".`, 3000);
 
-            // Optionally, place cursor inside the new block for immediate editing (after the lang identifier and ID line)
-            editor.setCursor(lineNumber + 2, 0); // +2 for lang identifier and ID line
+            // ✅ Move cursor out of the code block and blur to trigger rendering
+    editor.setCursor(lineNumber + 4, 0); // Skip past the code block
+    editor.blur(); // Trigger the Markdown render immediately
         });
 
         // --- Register Markdown Post Processor for rendering personal notes in Reading View
@@ -487,44 +508,57 @@ export default class MyPlugin extends Plugin {
 
         this.registerEvent(
             this.app.workspace.on('file-menu', (menu, file) => {
-                console.log('[Plugin] Right-clicked:', file.path); 
-
                 if (!(file instanceof TFile)) return;
 
-            const keyItem = this.keys.find(key => key.note === file.basename);
-            if (!keyItem) return; // Only show if you have a matching key
+                // Match key using the actual file name (basename without extension)
+                const noteName = file.basename;
+                const pulledKey = this.settings.linkedKeys.find(k => k.note === noteName);
+                if (!pulledKey) return;
 
-            menu.addItem(item =>
-                item.setTitle('Pull Changes')
-                    .setIcon('book-down')
-                    .onClick(() => {
-                        const parsedKeyInfo = parseKey(keyItem.ip);
-                        if (parsedKeyInfo?.ip && parsedKeyInfo?.noteName) {
-                            rewriteExistingNote(this.app, parsedKeyInfo.ip, parsedKeyInfo.noteName, this);
+                const parseInput = `${pulledKey.ip}-${pulledKey.note}|${pulledKey.access}`;
+                const parsedKeyInfo = parseKey(parseInput);
+
+                if (!parsedKeyInfo?.ip || !parsedKeyInfo?.noteName) {
+                    new Notice("Invalid key format.", 4000);
+                    return;
+                }
+
+                menu.addItem(item =>
+                    item
+                        .setTitle('Pull Changes')
+                        .setIcon('book-down')
+                        .onClick(() => {
+                            rewriteExistingNote(this.app, parsedKeyInfo.ip, parsedKeyInfo.noteName, this).then(() => {
+                                // Light refresh of file to re-trigger the menu
+                                const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+                                if (view?.file?.path === file.path) {
+                                    this.app.workspace.trigger("file-open", file);
+                                }
+                            });
                             new Notice(`Requested latest changes for "${parsedKeyInfo.noteName}".`);
-                        } else {
-                            new Notice("Invalid key format.", 4000);
-                        }
-                    })
-            );
+                        })
+                );
 
-            menu.addItem(item =>
-                item.setTitle('Push Changes')
-                    .setIcon('book-up')
-                    .onClick(async () => {
-                        const parsedKeyInfo = parseKey(keyItem.ip);
-                        if (parsedKeyInfo?.ip && parsedKeyInfo?.noteName) {
-                            const fileContent = await this.app.vault.read(file as TFile);
-                            const { sendNoteToHost } = await import("./networking/socket/client");
-                            sendNoteToHost(parsedKeyInfo.ip, parsedKeyInfo.noteName, fileContent);
+                menu.addItem(item =>
+                    item
+                        .setTitle('Push Changes')
+                        .setIcon('book-up')
+                        .onClick(async () => {
+                            const content = await this.app.vault.read(file);
+                            const { sendNoteToHost } = await import('./networking/socket/client');
+                            sendNoteToHost(parsedKeyInfo.ip, parsedKeyInfo.noteName, content);
+
                             new Notice(`Pushed changes for '${parsedKeyInfo.noteName}' to ${parsedKeyInfo.ip}`, 3000);
-                        } else {
-                            new Notice("Invalid key format.", 4000);
-                        }
-                    })
-            );
-        })
-    );
+
+                            // Optional: Light refresh after push (not strictly necessary unless UI gets out of sync)
+                            const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+                            if (view?.file?.path === file.path) {
+                                this.app.workspace.trigger("file-open", file);
+                            }
+                        })
+                );
+            })
+        );
     }
 
     onunload() {

@@ -1,9 +1,10 @@
 // src/utils/pnpp.ts
 
-import { App, Plugin, MarkdownPostProcessorContext, Notice, setIcon, MarkdownRenderChild, TFile } from 'obsidian';
+import { App, Plugin, MarkdownPostProcessorContext, Notice, setIcon, MarkdownRenderChild, TFile, MarkdownView } from 'obsidian';
 import MyPlugin from '../main';
 import { PersonalNote } from '../main';
 import { removePersonalNoteBlockFromFile } from './removePersonalNoteBlockFromFile'; // NEW: Import the new utility
+import { ConfirmDeleteModal } from '../settings/ConfrimDeleteModal';
 
 // A class to manage the lifecycle of the event listener for each rendered personal note.
 // This class is crucial for handling real-time updates to the UI based on changes in plugin settings.
@@ -59,11 +60,11 @@ class PersonalNoteChangeListener extends MarkdownRenderChild {
         if (updatedNote) {
             // Update location display if it has changed
             const newFileName = updatedNote.targetFilePath.split('/').pop()?.replace(/\.md$/, '') || 'Unknown File';
-            const newLocationText = `Location: ${newFileName} (Line ${updatedNote.lineNumber + 1})`;
-            if (this.locationSpan.textContent !== newLocationText) {
-                this.locationSpan.setText(newLocationText);
-                console.log(`[PNPP] Updated location display for ID ${updatedNote.id.substring(0,8)}... to ${newLocationText}`);
-            }
+            // const newLocationText = `Location: ${newFileName} (Line ${updatedNote.lineNumber + 1})`;
+            // if (this.locationSpan.textContent !== newLocationText) {
+            //     this.locationSpan.setText(newLocationText);
+            //     console.log(`[PNPP] Updated location display for ID ${updatedNote.id.substring(0,8)}... to ${newLocationText}`);
+            // }
 
             // Update title input value if it has changed in settings, but ONLY if the user is not actively typing in it.
             if (this.titleInput.value !== updatedNote.title && document.activeElement !== this.titleInput) {
@@ -119,18 +120,57 @@ Expected format: \`\`\`personal-note\\nid:YOUR-UUID\\nYour Content\`\`\`
             }
 
             // Retrieve the personal note data from the plugin's settings using the extracted ID.
-            const personalNote: PersonalNote | undefined = plugin.settings.personalNotes.find(
-                (note) => note.id === noteId
-            );
+            let personalNote: PersonalNote | undefined = plugin.settings.personalNotes.find(
+	note => note.id === noteId
+);
 
-            // If the note data is not found in settings, render an error message.
-            if (!personalNote) {
-                el.addClass('personal-note-error');
-                el.createEl('div', { text: `Error: Personal Note with ID ${noteId} not found in plugin settings. It might have been deleted from settings, but not from the file.` });
-                el.createEl('pre', { text: source });
-                console.error(`Personal Note Post-Processor: Note with ID ${noteId} not found in settings.`);
-                return;
-            }
+if (!personalNote) {
+	console.warn(`[Personal Notes] Note with ID ${noteId} not found in settings. Attempting to recover from file...`);
+
+	// Try to recover from file
+	const file = plugin.app.vault.getAbstractFileByPath(ctx.sourcePath);
+	if (file instanceof TFile) {
+		const fileContent = await plugin.app.vault.read(file);
+		const blockRegex = new RegExp(
+			`<!-- PERSONAL_NOTE:${noteId} -->([\\s\\S]*?)<!-- END_PERSONAL_NOTE -->`,
+			'm'
+		);
+		const match = fileContent.match(blockRegex);
+
+		if (match) {
+			const blockContent = match[1].trim();
+			const rebuiltNote: PersonalNote = {
+				id: noteId,
+				targetFilePath: ctx.sourcePath,
+				lineNumber: ctx.getSectionInfo(el)?.lineStart ?? 0,
+				title: `Recovered Note`,
+				content: blockContent,
+				isExpanded: true,
+				createdAt: Date.now(),
+				updatedAt: Date.now()
+			};
+
+			plugin.settings.personalNotes.push(rebuiltNote);
+			await plugin.saveSettings();
+
+			console.info(`[Personal Notes] Successfully recovered note with ID ${noteId}.`);
+			personalNote = rebuiltNote;
+		} else {
+			el.addClass('personal-note-error');
+			el.createEl('div', { text: `Error: Personal Note with ID ${noteId} not found and could not be recovered.` });
+			el.createEl('pre', { text: source });
+			console.error(`[Personal Notes] Could not recover note ID ${noteId} — block not found in file.`);
+			return;
+		}
+	} else {
+		el.addClass('personal-note-error');
+		el.createEl('div', { text: `Error: Personal Note with ID ${noteId} not found and file not available.` });
+		el.createEl('pre', { text: source });
+		console.error(`[Personal Notes] Could not recover note ID ${noteId} — file not found.`);
+		return;
+	}
+}
+
 
             // --- Render the custom HTML UI for the personal note ---
             const wrapper = el.createEl('div', { cls: 'personal-note-wrapper' });
@@ -151,16 +191,11 @@ Expected format: \`\`\`personal-note\\nid:YOUR-UUID\\nYour Content\`\`\`
 
             const minimizeButton = controls.createEl('button', { cls: 'personal-note-minimize' });
             // Using 'minus-square' / 'plus-square' for consistency with common UI patterns.
-            setIcon(minimizeButton, personalNote.isExpanded ? 'minus-square' : 'plus-square'); 
-            minimizeButton.setAttribute('aria-label', 'Toggle expand/collapse');
-
-            const saveAndCloseButton = controls.createEl('button', { cls: 'personal-note-save-close' });
-            // Using 'folder' icon for 'Save and Close'.
-            setIcon(saveAndCloseButton, 'folder'); 
-            saveAndCloseButton.setAttribute('aria-label', 'Save and close note');
+            setIcon(minimizeButton, personalNote.isExpanded ? 'minus' : 'plus'); 
+            minimizeButton.setAttribute('aria-label', 'Expand/collapse');
 
             const deleteButton = controls.createEl('button', { cls: 'personal-note-delete' });
-            setIcon(deleteButton, 'trash');
+            setIcon(deleteButton, 'x');
             deleteButton.setAttribute('aria-label', 'Delete personal note');
 
             const statusSpan = controls.createEl('span', { cls: 'personal-note-status' });
@@ -174,8 +209,17 @@ Expected format: \`\`\`personal-note\\nid:YOUR-UUID\\nYour Content\`\`\`
             
             textArea.value = personalNote.content; // Now, content is already an empty string from main.ts if new
 
-            // Dynamically adjust textarea rows based on content length for better UX
-            textArea.rows = Math.max(3, personalNote.content.split('\n').length || 1);
+            // --- Auto-resize textarea based on content ---
+            const autoResize = () => {
+                textArea.style.height = 'auto'; // Reset height to shrink if needed
+                textArea.style.height = textArea.scrollHeight + 'px'; // Grow to fit content
+            };
+
+            // Call once initially
+            setTimeout(autoResize,0);
+
+            // Attach input listener
+            textArea.addEventListener('input', autoResize);
 
             // Location Span: Displays the file name and line number
             const locationSpan = wrapper.createEl('span', { cls: 'personal-note-location' });
@@ -236,70 +280,47 @@ Expected format: \`\`\`personal-note\\nid:YOUR-UUID\\nYour Content\`\`\`
                     wrapper.removeClass('personal-note-collapsed');
                     wrapper.addClass('personal-note-expanded');
                     contentDiv.style.display = 'block';
-                    setIcon(minimizeButton, 'minus-square'); // Update icon
+                    setIcon(minimizeButton, 'minus'); // Update icon
                 } else {
                     wrapper.removeClass('personal-note-expanded');
                     wrapper.addClass('personal-note-collapsed');
                     contentDiv.style.display = 'none';
-                    setIcon(minimizeButton, 'plus-square'); // Update icon
+                    setIcon(minimizeButton, 'plus'); // Update icon
                 }
                 await plugin.saveSettings(); // Save the new expansion state
             });
 
-            // Save and Close button click handler
-            saveAndCloseButton.addEventListener('click', async () => {
-                personalNote.title = titleInput.value; // Capture latest title from input
-                personalNote.content = textArea.value; // Capture latest content from textarea
-                personalNote.updatedAt = Date.now();
-                personalNote.isExpanded = false; // Collapse the note when saved and closed
-
-                await plugin.saveSettings();
-                new Notice('Personal note saved and closed!', 2000);
-
-                // Update UI to collapsed state
-                wrapper.removeClass('personal-note-expanded');
-                wrapper.addClass('personal-note-collapsed');
-                contentDiv.style.display = 'none';
-                setIcon(minimizeButton, 'plus-square'); // Set icon to "plus" (collapsed)
-
-                statusSpan.setText('Saved & Closed');
-            });
-
-
             // Delete button click handler
-            deleteButton.addEventListener('click', async () => {
-                if (confirm('Are you sure you want to delete this personal note? This cannot be undone.')) {
-                    // Find the file that contains this personal note
+            deleteButton.addEventListener("click", () => {
+                new ConfirmDeleteModal(plugin.app, async () => {
                     const targetFile = plugin.app.vault.getAbstractFileByPath(personalNote.targetFilePath);
 
                     if (targetFile instanceof TFile) {
                         try {
-                            // Remove the note's data from the plugin settings array
                             plugin.settings.personalNotes = plugin.settings.personalNotes.filter(
                                 (note) => note.id !== personalNote.id
                             );
-                            await plugin.saveSettings(); // Save the updated settings
+                            await plugin.saveSettings();
 
-                            // --- NEW: Call the utility to remove the block from the file ---
                             await removePersonalNoteBlockFromFile(plugin.app, targetFile, personalNote.id);
-                            // --- END NEW ---
-                            
-                            new Notice('Personal note completely deleted!', 2000);
-                            wrapper.remove(); // Remove the entire UI wrapper for this note from the DOM
+
+                            new Notice("Personal note deleted!", 2000);
+                            wrapper.remove();
+
                         } catch (error) {
                             console.error(`[Personal Notes] Failed to delete block from file ${targetFile.path}:`, error);
                             new Notice(`Error deleting personal note from file. Please manually remove the block.`, 5000);
                         }
                     } else {
-                        // If file not found, still remove from settings
                         plugin.settings.personalNotes = plugin.settings.personalNotes.filter(
                             (note) => note.id !== personalNote.id
                         );
                         await plugin.saveSettings();
-                        new Notice('Personal note deleted from registry (file not found). Please check your file manually.', 5000);
+
+                        new Notice("Personal note deleted from registry (file not found). Please check your file manually.", 5000);
                         wrapper.remove();
                     }
-                }
+                }).open();
             });
 
             // Add the PersonalNoteChangeListener as a child to the MarkdownPostProcessorContext.

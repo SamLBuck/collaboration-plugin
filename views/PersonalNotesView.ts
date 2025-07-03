@@ -23,7 +23,7 @@ export class PersonalNotesView extends ItemView {
     }
 
     getIcon(): string {
-        return 'sticky-note'; // Or any other suitable icon
+        return 'file-user'; // Or any other suitable icon
     }
 
     async onOpen(): Promise<void> {
