@@ -118,7 +118,7 @@ function hasEditAccess(plugin: MyPlugin, note: string): boolean {
     plugin.settings.linkedKeys.some(k => k.note === note && k.ip.includes("|Edit"));
 }
 
-export function waitForWebSocketConnection(url: string, plugin: MyPlugin, retries = 15): void {
+export function waitForWebSocketConnection(url: string, plugin: MyPlugin, retries = 3): void {
   let attempt = 0;
   let pingInterval: NodeJS.Timeout;
   const tryConnect = () => {

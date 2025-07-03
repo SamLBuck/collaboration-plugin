@@ -82,8 +82,10 @@ export class KeyListModal extends Modal {
     private async renderKeyListContent(containerToRenderInto: HTMLElement): Promise<void> {
         containerToRenderInto.empty();
 
-        const currentKeys = this.plugin.settings.keys; 
-
+          const currentKeys = this.plugin.settings.keys.filter(
+              k => k.ip && k.note && k.access
+           );
+          
         if (currentKeys.length === 0) {
             containerToRenderInto.createEl('p', { text: 'No keys currently stored.', cls: 'empty-list-message' });
         } else {
