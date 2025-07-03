@@ -14,30 +14,15 @@ import {
     setIcon, // For icons in post-processor
     Menu, // For editor menu and file menu
 } from 'obsidian';
-import { registerAddKeyCommand } from './utils/add_key_command';
-import { registerDeleteKeyCommand } from './utils/delete_key_command';
-import { KeyListModal } from './settings/key_list_page02';
-import { LinkNoteModal } from './settings/link_note_page03';
-import { generateKey, addKey } from './storage/keyManager';
-import { registerNoteWithPeer, requestNoteFromPeer, sendNoteToHost } from './networking/socket/client';
 import { PluginSettingsTab } from "./settings/plugin_setting_tab";
 import { FileSystemAdapter } from "obsidian";
 const { spawn } = require("child_process");
 import * as path from "path";
 import * as fs from "fs";
 const noteRegistry = require("./networking/socket/dist/noteRegistry.cjs");
-import * as http from "http";
 import { tempKeyInputModal } from './settings/tempKeyInputModal';
-import { tempIPInputModal } from './settings/tempIPInputModal';
-import { getLocalIP } from './utils/get-ip';
-import { registerGenerateKeyCommand } from './utils/generate_key_command';
-import { registerPullNoteCommand, rewriteExistingNote } from './utils/pull_note_command';
-import { registerStartServerCommand, startWebSocketServerProcess } from './utils/start_server_command';
-import { registerShowIPCommand } from './utils/show_ip_command';
-import { registerListSharedKeysCommand } from './utils/list_keys_command';
-import { registerShareCurrentNoteCommand } from './utils/share_active_note'; // Existing, will add another command for stripping
-import { registerSyncFromServerToSettings, syncRegistryFromServer } from './utils/sync_command';
-import { registerUpdateRegistryCommand } from './utils/share_active_note';
+import { rewriteExistingNote } from './utils/pull_note_command';
+import {  startWebSocketServerProcess } from './utils/start_server_command';
 import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs for personal notes
 
 // --- MODIFIED IMPORTS for Personal Notes and Views:
@@ -56,7 +41,6 @@ import { updatePersonalNoteLocations } from './utils/updatePersonalNoteLocations
 
 import { NoteManager } from "./networking/socket/NoteManager";
 import { parseKey } from './utils/parse_key';
-import { exec } from 'child_process';
 
 
 export type NoteRegistry = Record<string, string>; // key => content
@@ -87,7 +71,7 @@ interface noteRegistry {
 interface MyPluginSettings {
     mySetting: string;
     keys: KeyItem[]; // Keys created by this user/plugin instance
-    linkedKeys: KeyItem[]; // NEW: Keys received/linked from external sources
+    linkedKeys: KeyItem[]; // Keys received/linked from external sources
     registry: noteRegistry[];
     autoUpdateRegistry: boolean;
     personalNotes: PersonalNote[]; // Personal notes metadata + content
@@ -245,35 +229,26 @@ export default class MyPlugin extends Plugin {
         waitForWebSocketConnection("ws://localhost:3010", this);
 
 
-
-        // --- NEW: Update personal note locations on plugin load ---
         await updatePersonalNoteLocations(this);
-        // --- END NEW ---
-
-        // Register custom commands (Command Palette commands)
-        registerGenerateKeyCommand(this.app, this);
-        registerAddKeyCommand(this);
-        registerDeleteKeyCommand(this);
-        registerStartServerCommand(this.app, this);
-        registerShowIPCommand(this.app, this);
-        registerPullNoteCommand(this.app, this);
-        registerListSharedKeysCommand(this);
-        registerShareCurrentNoteCommand(this);
-        registerUpdateRegistryCommand(this);
-        registerSyncFromServerToSettings(this); // Added back sync command if missing
 
 
-        this.addCommand({
-          id: 'open-collab-panel',      // <- this ID you can call programmatically
-          name: 'Open Collaboration Panel',
-          callback: () => this.activateView(COLLABORATION_VIEW_TYPE)
-        });
     
         // 2) Hook your ribbon icon to that command:
         this.addRibbonIcon('columns-3', 'Open Collaboration Panel', () => {
           // Note: use this.app.commands, not this.commands
           ;(this.app as any).commands.executeCommandById('open-collab-panel');
         });
+
+        
+        this.addCommand({
+          id: 'open-collab-panel',      // <- this ID you can call programmatically
+          name: 'Open Collaboration Panel',
+          callback: () => this.activateView(COLLABORATION_VIEW_TYPE)
+        });
+        
+        await (this.app as any).commands.executeCommandById('open-collab-panel');
+
+
         
 
         this.addCommand({
@@ -400,13 +375,10 @@ export default class MyPlugin extends Plugin {
             this.activateView(COLLABORATION_VIEW_TYPE); // Open the main control panel
         });
 
-        // --- NEW: Ribbon icon to open Personal Notes Panel ---
         this.addRibbonIcon('file-user', 'Open Personal Notes Panel', () => {
             console.log("Ribbon icon clicked! Calling activateView for Personal Notes Panel");
             this.activateView(PERSONAL_NOTES_VIEW_TYPE);
         });
-        // --- END NEW ---
-
 
         this.addRibbonIcon('file-plus-2', 'Create Private Personal Note (In-Note)', async () => {
             const activeFile = this.app.workspace.getActiveFile();

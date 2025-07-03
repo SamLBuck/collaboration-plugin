@@ -419,36 +419,36 @@ export class CollaborationPanelView extends ItemView {
                 );
         }
             
-        if (!viewKey || !editKey) {
-            const missingAccess = !viewKey ? 'View' : 'Edit';
+        // if (!viewKey || !editKey) {
+        //     const missingAccess = !viewKey ? 'View' : 'Edit';
     
-            new Setting(this.contentEl)
-                .setName(`Generate ${missingAccess} Key`)
-                .setDesc(`Create a ${missingAccess.toLowerCase()} access key for this note.`)
-                .addButton(button =>
-                    button
-                        .setButtonText(`Add ${missingAccess} Key`)
-                        .setCta()
-                        .onClick(async () => {
-                            try {
-                                const newKeyItem = await generateKey(this.plugin, noteName, missingAccess);
-                                const success = await addKey(this.plugin, newKeyItem);
+        //     new Setting(this.contentEl)
+        //         .setName(`Generate ${missingAccess} Key`)
+        //         .setDesc(`Create a ${missingAccess.toLowerCase()} access key for this note.`)
+        //         .addButton(button =>
+        //             button
+        //                 .setButtonText(`Add ${missingAccess} Key`)
+        //                 .setCta()
+        //                 .onClick(async () => {
+        //                     try {
+        //                         const newKeyItem = await generateKey(this.plugin, noteName, missingAccess);
+        //                         const success = await addKey(this.plugin, newKeyItem);
     
-                                if (success) {
-                                    await navigator.clipboard.writeText(newKeyItem.ip);
-                                    new Notice(`${missingAccess} key generated and copied:\n${newKeyItem.ip}`);
-                                    this.renderPanelContent(); // Refresh panel to show both keys
-                                } else {
-                                    new Notice("Failed to add key (possible collision).");
-                                }
-                            } catch (err: any) {
-                                new Notice(`Error creating key: ${err.message}`);
-                            }
-                        })
-                );
-        }
+        //                         if (success) {
+        //                             await navigator.clipboard.writeText(newKeyItem.ip);
+        //                             new Notice(`${missingAccess} key generated and copied:\n${newKeyItem.ip}`);
+        //                             this.renderPanelContent(); // Refresh panel to show both keys
+        //                         } else {
+        //                             new Notice("Failed to add key (possible collision).");
+        //                         }
+        //                     } catch (err: any) {
+        //                         new Notice(`Error creating key: ${err.message}`);
+        //                     }
+        //                 })
+        //         );
+        // }
     
-        // Delete section
+        // Delete /
         new Setting(this.contentEl)
             .setName('Delete Key & Registry Content')
             .addButton(button =>
@@ -507,6 +507,16 @@ export class CollaborationPanelView extends ItemView {
                   content
                 });
               }
+
+              if (file instanceof TFile) {
+                const key = file.basename; // Uses basename as key for auto-update
+                const content = await this.app.vault.read(file);
+                await shareCurrentNoteWithFileName(this.plugin, this.app, key);
+                // console.log(`[Auto-Update] Registry updated for note '${key}'.`);
+            } else {
+                console.warn(` Skipped updating registry for non-TFile instance.`);
+            }
+
       
               await this.plugin.saveSettings();
               new Notice(`Saved "${noteName}" content to registry.`, 3000);
