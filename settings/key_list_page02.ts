@@ -58,7 +58,11 @@ export class KeyListModal extends Modal {
 
   private async renderKeyListContent(container: HTMLElement): Promise<void> {
     container.empty();
-    const keys: KeyItem[] = this.plugin.settings.keys;
+    const keys = this.plugin.settings.keys.filter(
+      k => k?.noteKey && k?.apiKey && k?.filePath
+    );
+  
+  
     if (!keys.length) {
       container.createEl('p', { text: 'No collaboration keys stored.', cls: 'empty-list-message' });
       return;
