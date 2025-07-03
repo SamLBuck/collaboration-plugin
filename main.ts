@@ -35,7 +35,7 @@ import { registerPullNoteCommand, rewriteExistingNote } from './utils/pull_note_
 import { registerStartServerCommand, startWebSocketServerProcess } from './utils/start_server_command';
 import { registerShowIPCommand } from './utils/show_ip_command';
 import { registerListSharedKeysCommand } from './utils/list_keys_command';
-import { registerShareCurrentNoteCommand } from './utils/share_active_note'; // Existing, will add another command for stripping
+import { registerShareCurrentNoteCommand, shareCurrentNoteWithFileName } from './utils/share_active_note'; // Existing, will add another command for stripping
 import { registerSyncFromServerToSettings, syncRegistryFromServer } from './utils/sync_command';
 import { registerUpdateRegistryCommand } from './utils/share_active_note';
 import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs for personal notes
@@ -455,7 +455,7 @@ export default class MyPlugin extends Plugin {
             await this.saveSettings();
             new Notice(`Private personal note box created: "${newPersonalNote.title}".`, 3000);
 
-            // ✅ Move cursor out of the code block and blur to trigger rendering
+            // Move cursor out of the code block and blur to trigger rendering
     editor.setCursor(lineNumber + 4, 0); // Skip past the code block
     editor.blur(); // Trigger the Markdown render immediately
         });
@@ -482,19 +482,24 @@ export default class MyPlugin extends Plugin {
         // --- END NEW ---
 
         this.app.vault.on("modify", async (file) => {
-            if (this.settings.autoUpdateRegistry) {
-                if (file instanceof TFile) {
-                    const key = file.basename; // Uses basename as key for auto-update
-                    const content = await this.app.vault.read(file);
-                    await updateNoteRegistry(this, key, content);
-                    console.log(`[Auto-Update] Registry updated for note '${key}'.`);
-                } else {
-                    console.warn(`[Auto-Update] Skipped updating registry for non-TFile instance.`);
-                }
+          if (this.settings.autoUpdateRegistry) {
+            if (file instanceof TFile) {
+              const keyItem = file.basename; // Uses basename as key for auto-update
+              const text = await this.app.vault.read(file);
+              await shareCurrentNoteWithFileName(this, this.app, keyItem);
+              // console.log(`[Auto-Update] Registry updated for note '${key}'.`);
+              const key = file.basename; // Uses basename as key for auto-update
+              const content = await this.app.vault.read(file);
+              await updateNoteRegistry(this, key, content);
+    
+              console.log(`[Auto-Update] Registry updated for note '${key}'.`);
+            } else {
+              console.warn(`[Auto-Update] Skipped updating registry for non-TFile instance.`);
             }
+          }
         });
-
-
+    
+    
         this.addSettingTab(new PluginSettingsTab(this.app, this));
 
         // --- MODIFIED: Activate the Collaboration Panel AFTER layout is ready ---

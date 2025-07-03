@@ -348,54 +348,24 @@ h3 {
     border-bottom: 1px solid var(--background-modifier-border); /* Subtle separator */
 }
 
-.personal-note-title {
-    font-weight: bold;
+.personal-note-title-input {
+    width: 80%;
+    font-size: 1.1em;
+    font-weight: 600;
+    padding: 6px 8px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+    box-sizing: border-box;
+    background-color: var(--background-primary);
     color: var(--text-normal);
-    flex-grow: 1; /* Allows title to take available space */
+    margin-bottom: 6px;
 }
 
-/* Controls (buttons, status) container */
-.personal-note-controls {
-    display: flex;
-    align-items: center;
-    gap: 8px; /* Space between buttons and status */
-}
-
-/* Style for the buttons within the note block */
-.personal-note-minimize,
-.personal-note-delete {
-    display: flex; /* To center icon if it's an SVG */
-    align-items: center;
-    justify-content: center;
-    width: 24px; /* Fixed width for consistent button size */
-    height: 24px; /* Fixed height for consistent button size */
-    border: none;
-    background-color: transparent;
-    color: var(--text-muted); /* Obsidian's muted text color for icons */
-    cursor: pointer;
-    border-radius: var(--button-radius); /* Rounded corners */
-    transition: color 0.2s ease-in-out, background-color 0.2s ease-in-out;
-}
-
-.personal-note-minimize:hover,
-.personal-note-delete:hover {
-    background-color: var(--background-modifier-hover); /* Obsidian hover color */
-    color: var(--text-normal);
-}
-
-.personal-note-delete:hover {
-    color: var(--text-error); /* Red on hover for delete */
-}
 
 /* Status text (e.g., "Saved", "Typing...") */
 .personal-note-status {
     font-size: var(--font-ui-smallest);
     color: var(--text-faint);
-}
-
-/* Content area (where the textarea resides) */
-.personal-note-content {
-    /* No specific styles needed here yet, controlled by expanded/collapsed */
 }
 
 /* Textarea for note content */
@@ -437,3 +407,4 @@ h3 {
     border-radius: 6px;
     color: var(--text-error);
 }
+
