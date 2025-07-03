@@ -41,6 +41,7 @@ import { updatePersonalNoteLocations } from './utils/updatePersonalNoteLocations
 
 import { NoteManager } from "./networking/socket/NoteManager";
 import { parseKey } from './utils/parse_key';
+import { shareCurrentNoteWithFileName } from './utils/share_active_note';
 
 
 export type NoteRegistry = Record<string, string>; // key => content
@@ -428,17 +429,13 @@ export default class MyPlugin extends Plugin {
             await this.saveSettings();
             new Notice(`Private personal note box created: "${newPersonalNote.title}".`, 3000);
 
-            // ✅ Move cursor out of the code block and blur to trigger rendering
+            // Move cursor out of the code block and blur to trigger rendering
     editor.setCursor(lineNumber + 4, 0); // Skip past the code block
     editor.blur(); // Trigger the Markdown render immediately
         });
 
         // --- Register Markdown Post Processor for rendering personal notes in Reading View
         registerPersonalNotePostProcessor(this);
-        // --- END NEW ---
-
-        // --- NEW: Listen for file changes to update personal note locations (Debounced) ---
-        // This replaces the updateLineCount logic and is more robust for personal notes.
         this.registerEvent(this.app.vault.on('modify', async (file) => {
             if (file instanceof TFile && file.extension === 'md') {
                 if (this._debounceUpdateLocationsTimeout) {
@@ -447,27 +444,6 @@ export default class MyPlugin extends Plugin {
                 this._debounceUpdateLocationsTimeout = setTimeout(async () => {
                     console.log(`[Personal Notes] File modified: ${file.path}. Checking for personal note location updates.`);
                     await updatePersonalNoteLocations(this, file.path); // Use the dedicated utility
-                    // Trigger a general update event to ensure views/post-processors refresh
-                    (this.app.workspace as any).trigger('plugin:personal-notes-updated');
-                }, 1000); // Debounce by 1 second
-            }
-        }));
-        // --- END NEW ---
-
-        this.app.vault.on("modify", async (file) => {
-            if (this.settings.autoUpdateRegistry) {
-                if (file instanceof TFile) {
-                    const key = file.basename; // Uses basename as key for auto-update
-                    const content = await this.app.vault.read(file);
-                    await updateNoteRegistry(this, key, content);
-                    console.log(`[Auto-Update] Registry updated for note '${key}'.`);
-                } else {
-                    console.warn(`[Auto-Update] Skipped updating registry for non-TFile instance.`);
-                }
-            }
-        });
-
-
         this.addSettingTab(new PluginSettingsTab(this.app, this));
 
         // --- MODIFIED: Activate the Collaboration Panel AFTER layout is ready ---

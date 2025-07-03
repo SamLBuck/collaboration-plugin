@@ -497,16 +497,6 @@ export class CollaborationPanelView extends ItemView {
               const content = await this.app.vault.read(file);
               const noteName = file.basename;
       
-              // Construct or update the registry entry
-              const index = this.plugin.settings.registry.findIndex(entry => entry.key === noteName);
-              if (index !== -1) {
-                this.plugin.settings.registry[index].content = content;
-              } else {
-                this.plugin.settings.registry.push({
-                  key: noteName,
-                  content
-                });
-              }
 
               if (file instanceof TFile) {
                 const key = file.basename; // Uses basename as key for auto-update
@@ -517,6 +507,7 @@ export class CollaborationPanelView extends ItemView {
                 console.warn(` Skipped updating registry for non-TFile instance.`);
             }
 
+                await updateNoteRegistry(this.plugin, noteName, content);
       
               await this.plugin.saveSettings();
               new Notice(`Saved "${noteName}" content to registry.`, 3000);

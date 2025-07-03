@@ -38,7 +38,7 @@ export async function shareCurrentNoteWithFileName(plugin: MyPlugin, app: App, f
 		registerNoteWithPeer("ws://localhost:3010", key, content);
 		updateNoteRegistry(plugin, key, content);
 
-		new Notice(`Note '${key}' added to list, check Key List for confirmation!.`);
+		// new Notice(`Note '${key}' added to list, check Key List for confirmation!.`);
 	}
 	catch (error: any) {
         console.error("Error sharing note by filename:", error);
