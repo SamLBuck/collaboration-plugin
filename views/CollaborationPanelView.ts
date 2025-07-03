@@ -288,7 +288,6 @@ export class CollaborationPanelView extends ItemView {
         };
 
         this.accessTypeView = createCheckbox('View', true);
-        this.accessTypeEdit = createCheckbox('Edit', false);
 
                 this.contentEl.createEl('p', { text: 'pull a shared note from a peer using a key.' });
         
@@ -526,54 +525,6 @@ export class CollaborationPanelView extends ItemView {
         if (keyItem) {
             this.contentEl.createEl('p', { text: `${keyItem.ip}` });
 
-            // --- START MOVED: Push Changes Button ---
-            new Setting(this.contentEl)
-                .setName('Share Changes ')
-                .addButton(button =>
-                    button
-                        .setButtonText('Push Changes')
-                        .setCta()
-                        .onClick(async () => {
-                            const input = keyItem.ip; // Use the pulled key's IP for pushing back
-                            if (!input) {
-                                new Notice("Could not determine source key to push changes.", 3000);
-                                return;
-                            }
-        
-                            let parsedKeyInfo;
-                            try {
-                                parsedKeyInfo = parseKey(input);
-                                if (!parsedKeyInfo || !parsedKeyInfo.ip || !parsedKeyInfo.noteName) {
-                                    throw new Error('Invalid key format. Expected "IP-NoteName".');
-                                }
-                            } catch (error: any) {
-                                new Notice(`Key parsing error: ${error.message}`, 5000);
-                                return;
-                            }
-                            // Check if the pulled key has "Edit" access
-                            if (parsedKeyInfo?.view !== "Edit") {
-                                new Notice("This pulled note's key does not have 'Edit' permissions to push changes back to the source.", 5000);
-                                return;
-                            } 
-        
-                            const { ip, noteName } = parsedKeyInfo;
-                            const file = this.app.vault.getAbstractFileByPath(`${noteName}.md`) as TFile;
-        
-                            if (!file) {
-                                new Notice(`Note "${noteName}" not found in your vault.`, 3000);
-                                return;
-                            }
-        
-                            const content = await this.app.vault.read(file);
-        
-                            console.log("Pushing content from pulled note to source:", ip, noteName);
-        
-                            const { sendNoteToHost } = await import("../networking/socket/client");
-                            sendNoteToHost(ip, noteName, content);
-                            new Notice(`Pushed changes for '${noteName}' to original host: ${ip}`, 3000);
-                        })
-                );
-            // --- END MOVED: Push Changes Button ---
 
             // --- START MOVED: Pull Changes Button ---
             new Setting(this.contentEl)

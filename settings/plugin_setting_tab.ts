@@ -84,8 +84,7 @@ export class PluginSettingsTab extends PluginSettingTab {
 			return checkbox;
 		};
 
-		this.accessTypeView = createCheckbox('View', false);
-		this.accessTypeEdit = createCheckbox('Edit', true);
+		this.accessTypeView = createCheckbox('View', true);
 		//this.accessTypeViewAndComment = createCheckbox('View and Comment', false);
 		//this.accessTypeEditWithApproval = createCheckbox('Edit w/ Approval', false);
 
@@ -171,9 +170,6 @@ export class PluginSettingsTab extends PluginSettingTab {
 
 	getSelectedAccessType(): string | null {
 		if (this.accessTypeView.checked) return 'View';
-		if (this.accessTypeEdit.checked) return 'Edit';
-		if (this.accessTypeViewAndComment.checked) return 'View and Comment';
-		if (this.accessTypeEditWithApproval.checked) return 'Edit w/ Approval';
 		return null;
 	}
 }
