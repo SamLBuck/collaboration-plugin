@@ -2,7 +2,6 @@
 
 import { TFile, Notice } from 'obsidian';
 import MyPlugin from '../main'; // Ensure correct import path
-import { PersonalNote } from '../main'; // Ensure correct import path
 
 /**
  * Scans Obsidian notes to update the stored line numbers of personal note blocks.

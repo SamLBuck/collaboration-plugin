@@ -4,16 +4,16 @@ import { App, Modal, Setting } from 'obsidian';
 export class ResolveConfirmation extends Modal {
   private message: string;
   private currentContent: string;
-  private offers: string[];
-  private callback: (mergedContent: string) => void;
+  private offers: any[];            // ← can be string OR object
+  private callback: (merged: string) => void;
   private idx = 0;
 
   constructor(
     app: App,
     message: string,
     currentContent: string,
-    offers: string[],
-    callback: (mergedContent: string) => void
+    offers: any[],                  // accept whatever we get
+    callback: (merged: string) => void
   ) {
     super(app);
     this.message = message;
@@ -23,7 +23,6 @@ export class ResolveConfirmation extends Modal {
   }
 
   onOpen() {
-    // make it wider
     this.modalEl.style.minWidth = '1200px';
     this.renderStep();
   }
@@ -32,15 +31,40 @@ export class ResolveConfirmation extends Modal {
     const { contentEl } = this;
     contentEl.empty();
 
-    contentEl.createEl('h2', { text: `Offer ${this.idx + 1} of ${this.offers.length}` });
+    /* --- extract collabId + content gracefully --- */
+    const raw     = this.offers[this.idx];
+    const content =
+      typeof raw === 'string' ? raw : raw?.content ?? '';
+    const collabId =
+      typeof raw === 'string'
+        ? '(unknown)'
+        : raw?.collabId ?? raw?.sortKey ?? '(unknown)';
+
+    /* --- header --- */
+    contentEl.createEl('h2', {
+      text: `Offer ${this.idx + 1} of ${this.offers.length} — from ${collabId}`,
+    });
     contentEl.createEl('p', { text: this.message });
 
-    // two‐column layout
+    /* --- two-column layout --- */
     const container = contentEl.createDiv();
     container.style.display = 'flex';
     container.style.gap = '12px';
 
-    // ── Left pane: current working master (read‐only) ──
+    /* Incoming Offer (right pane) */
+    const incBox = container.createDiv();
+    incBox.style.flex = '1';
+    incBox.style.border = '1px solid var(--background-modifier-border)';
+    incBox.style.padding = '0.5em';
+    incBox.style.overflowY = 'auto';
+    incBox.style.maxHeight = '500px';
+    incBox.createEl('strong', { text: 'Incoming Offer' });
+    const incTA = incBox.createEl('textarea') as HTMLTextAreaElement;
+    incTA.value = content;
+    incTA.style.width = '100%';
+    incTA.style.height = '400px';
+
+    /* Current Master (left pane) */
     const curBox = container.createDiv();
     curBox.style.flex = '1';
     curBox.style.border = '1px solid var(--background-modifier-border)';
@@ -50,39 +74,26 @@ export class ResolveConfirmation extends Modal {
     curBox.createEl('strong', { text: 'Current Master' });
     const curTA = curBox.createEl('textarea') as HTMLTextAreaElement;
     curTA.value = this.currentContent;
-    curTA.readOnly = true;
+    curTA.readOnly = false;
     curTA.style.width = '100%';
     curTA.style.height = '400px';
 
-    // ── Right pane: this offer (editable) ──
-    const incBox = container.createDiv();
-    incBox.style.flex = '1';
-    incBox.style.border = '1px solid var(--background-modifier-border)';
-    incBox.style.padding = '0.5em';
-    incBox.style.overflowY = 'auto';
-    incBox.style.maxHeight = '500px';
-    incBox.createEl('strong', { text: 'Incoming Offer' });
-    const incTA = incBox.createEl('textarea') as HTMLTextAreaElement;
-    incTA.value = this.offers[this.idx];
-    incTA.style.width = '100%';
-    incTA.style.height = '400px';
+    /* Button row */
+    const btnRow = new Setting(contentEl);
+    btnRow.settingEl.style.justifyContent = 'flex-start';
 
-    // ── Buttons ──
-    new Setting(contentEl)
-      .addButton((btn) =>
-        btn
-          .setButtonText('Accept Offer')
+    btnRow
+      .addButton((b) =>
+        b.setButtonText('Skip Offer').onClick(() => this.nextOrFinish())
+      )
+      .addButton((b) =>
+        b
+          .setButtonText('Update Master')
           .setCta()
           .onClick(() => {
-            // copy whatever the user has in the right pane into currentContent
-            this.currentContent = incTA.value;
+            this.currentContent = curTA.value;
             this.nextOrFinish();
           })
-      )
-      .addButton((btn) =>
-        btn.setButtonText('Skip Offer').onClick(() => {
-          this.nextOrFinish();
-        })
       );
   }
 
@@ -92,7 +103,6 @@ export class ResolveConfirmation extends Modal {
       this.renderStep();
     } else {
       this.close();
-      // at the end, hand back the final currentContent
       this.callback(this.currentContent);
     }
   }
