@@ -194,6 +194,8 @@ export function waitForWebSocketConnection(url: string, plugin: MyPlugin, retrie
 }
 
 
+
+
 export default class MyPlugin extends Plugin {
   settings: MyPluginSettings;
   registry: noteRegistry[] = []; // This will be deprecated in favor of settings.registry
@@ -234,20 +236,29 @@ export default class MyPlugin extends Plugin {
 
 
 
-    // 2) Hook your ribbon icon to that command:
-    this.addRibbonIcon('columns-3', 'Open Collaboration Panel', () => {
-      // Note: use this.app.commands, not this.commands
-      ; (this.app as any).commands.executeCommandById('open-collab-panel');
-    });
-
-
+    this.registerView(
+      COLLABORATION_VIEW_TYPE,
+      (leaf) => new CollaborationPanelView(leaf, this)
+    );
+    
+    const SHORT_ID = 'open-collab-panel';
+    const FULL_ID  = `${this.manifest.id}:${SHORT_ID}`;
+    
     this.addCommand({
-      id: 'open-collab-panel',      // <- this ID you can call programmatically
+      id: SHORT_ID,
       name: 'Open Collaboration Panel',
-      callback: () => this.activateView(COLLABORATION_VIEW_TYPE)
+      callback: () => this.activateCollabView()
     });
-
-    await (this.app as any).commands.executeCommandById('open-collab-panel');
+    
+    this.addRibbonIcon('columns-3', 'Open Collaboration Panel', () => {
+      this.activateCollabView();
+    });
+    
+    // 4️⃣  Auto-open once the workspace is ready
+    this.app.workspace.onLayoutReady(() => {
+      this.activateCollabView();          // ← one-time auto-open
+    });
+    
 
 
 
@@ -572,6 +583,8 @@ export default class MyPlugin extends Plugin {
       }
       fs.unlinkSync(pidPath);
     }
+
+    
   }
 
   async loadSettings() {
@@ -599,6 +612,28 @@ export default class MyPlugin extends Plugin {
     // --- END NEW ---
     this.registry = this.settings.registry;
   }
+
+  async activateCollabView() {
+    // Try to reuse an existing leaf
+    let leaf = this.app.workspace.getLeavesOfType(COLLABORATION_VIEW_TYPE)[0];
+  
+    if (!leaf) {
+      // Create one in the right sidebar
+      const potentialLeaf = this.app.workspace.getRightLeaf(false);
+      if (potentialLeaf) {
+        leaf = potentialLeaf;
+      } else {
+        throw new Error("Failed to get a right leaf.");
+      }
+      await leaf.setViewState({
+        type: COLLABORATION_VIEW_TYPE,
+        active: true
+      });
+    }
+  
+    this.app.workspace.revealLeaf(leaf);
+  }
+  
 
   async saveSettings() {
     // Save all settings, including linkedKeys and personalNotes
