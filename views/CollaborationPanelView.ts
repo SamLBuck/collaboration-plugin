@@ -76,7 +76,7 @@ export class CollaborationPanelView extends ItemView {
     }
 
     getIcon(): string {
-        return 'share';
+        return 'columns-3';
     }
 
     async onOpen(): Promise<void> {
@@ -244,15 +244,15 @@ export class CollaborationPanelView extends ItemView {
                 this.contentEl.createEl('p', { text: 'pull a shared note from a peer using a key.' });
         
                 new Setting(this.contentEl)
-                .setName('Pull Collaboration Note')
-                .setDesc('Enter a key of the form noteKey:apiKey|noteName to pull.')
+                .setName('Enter Collaboration Key')
+                .setDesc('Enter a key of the form noteKey:apiKey|noteName to get .')
                 .addText(text => {
                   this.linkNoteKeyInput = text;
                   text.setPlaceholder('e.g., ab12cd34-…:myApiKey123|MyNoteName');
                 })
                 .addButton(btn =>
                   btn
-                    .setButtonText('Pull & Link')
+                    .setButtonText('Get Note')
                     .setCta()
                     .onClick(async () => {
                       const raw = this.linkNoteKeyInput.getValue().trim();
@@ -362,7 +362,7 @@ export class CollaborationPanelView extends ItemView {
           .setDesc(outKey)
           .addButton(btn =>
             btn
-              .setIcon('copy')
+              .setButtonText('Copy')
               .setTooltip('Copy collaboration key')
               .onClick(async () => {
                 await navigator.clipboard.writeText(outKey);
@@ -405,11 +405,14 @@ export class CollaborationPanelView extends ItemView {
             btn.setButtonText('Get Note Changes').onClick(() => this.plugin.pullMasterNote())
             .setCta() 
           );
+          
+          // DELETE
           new Setting(this.contentEl)
-          .setName('Delete Key')
+          .setName('Stop Collaboration')
+          .setDesc('Removes the ability to collaborate with friends and share your changes')
           .addButton(btn =>
             btn
-              .setButtonText('Delete Key')
+              .setButtonText('Stop Collaboration')
               .setWarning()
               .onClick(async () => {
                 const confirm = await new Promise<boolean>(res =>
