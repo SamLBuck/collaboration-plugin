@@ -88,8 +88,22 @@ export default class MyPlugin extends Plugin {
     this.registerView(PERSONAL_NOTES_VIEW_TYPE, leaf => new PersonalNotesView(leaf, this));
 
     // Ribbon icons
-    this.addRibbonIcon('columns-3', 'Open Collaboration Panel', () => this.activateView(COLLABORATION_VIEW_TYPE));
-    this.addRibbonIcon('file-user', 'Open Personal Notes', () => this.activateView(PERSONAL_NOTES_VIEW_TYPE));
+    this.addRibbonIcon('columns-3', 'Open Collaboration Panel', () =>
+      this.activateCollabView()
+    );
+    
+    //  User-visible command (optional but nice)
+    this.addCommand({
+      id: 'open-collab-panel',
+      name: 'Open Collaboration Panel',
+      callback: () => this.activateCollabView(),
+    });
+        this.addRibbonIcon('file-user', 'Open Personal Notes', () => this.activateView(PERSONAL_NOTES_VIEW_TYPE));
+
+        this.app.workspace.onLayoutReady(() => {
+          this.activateCollabView();
+        });
+        
     // Personal notes processing
     registerPersonalNotePostProcessor(this);
     this.registerEvent(
@@ -666,6 +680,23 @@ public async clearAllCollabKeys(): Promise<void> {
   new Notice('All collaboration keys cleared.', 3000);
 }
 
+/** Ensure the Collaboration Panel exists on the right sidebar and reveal it. */
+async activateCollabView(): Promise<void> {
+  // 1 reuse if it already exists 
+  let leaf = this.app.workspace.getLeavesOfType(COLLABORATION_VIEW_TYPE)[0];
+
+  if (!leaf) {
+    // 2 otherwise create one in the right dock
+    leaf = this.app.workspace.getRightLeaf(false) ?? this.app.workspace.getUnpinnedLeaf();
+    if (!leaf) {
+      throw new Error('Failed to create or retrieve a workspace leaf.');
+    }
+    await leaf.setViewState({ type: COLLABORATION_VIEW_TYPE, active: true });
+  }
+
+  // 3 bring it to the front
+  this.app.workspace.revealLeaf(leaf);
+}
 
 }
 
