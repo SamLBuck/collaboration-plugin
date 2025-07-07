@@ -430,7 +430,7 @@ public async pushOfferToServer(): Promise<void> {
       collabId,
       content
     );
-    new Notice('Offer pushed successfully.', 3000);
+    new Notice('Changes sent successfully.', 3000);
   } catch (e: any) {
     console.error('[Push] Error pushing offer:', e);
     new Notice(`Failed to push offer: ${e.message}`, 4000);
