@@ -498,68 +498,75 @@ public async promoteCurrentNoteAsMaster(): Promise<void> {
     await this.saveSettings();
     new Notice(`Unbound collaboration key from ${view.file.name}`, 3000);
   }
-  
-  public async resolveMasterNote(): Promise<void> {
-    const { apiBaseUrl, collabId, keys, activeKey } = this.settings;
-  
-    /* ── sanity checks ── */
-    if (!apiBaseUrl || !collabId || !keys.length || !activeKey) {
-      new Notice('Missing settings; cannot resolve master.', 4_000);
-      return;
-    }
-  
-    const activeItem = keys.find(k => k.noteKey === activeKey);
-    if (!activeItem) {
-      new Notice(`Couldn’t find imported key “${activeKey}”.`, 4_000);
-      return;
-    }
-    const { noteKey, apiKey } = activeItem;
-  
-    /* ── get current master ── */
-    let current: string;
-    try {
-      current = await fetchMaster(apiBaseUrl, noteKey, apiKey);
-    } catch (err: any) {
-      console.error('[Resolve] fetchMaster failed', err);
-      new Notice(`Failed to fetch master: ${err.message}`, 5_000);
-      return;
-    }
-  
-    /* ── get offers (let TS infer type) ── */
-    let offersArr;                                // ← no explicit interface
-    try {
-      offersArr = await getOffers(apiBaseUrl, noteKey, apiKey);
-    } catch (err: any) {
-      console.error('[Resolve] getOffers failed', err);
-      new Notice(`Failed to fetch offers: ${err.message}`, 5_000);
-      return;
-    }
-  
-    if (!offersArr.length) {
-      new Notice('No offers to merge.', 3_000);
-      return;
-    }
-  
-    // @ts-ignore  // handy while debugging; remove later
-    window._offers = offersArr;
-  
-    /* ── open modal with full objects ── */
+  /** Resolve outstanding offers into a new master and wait for completion. */
+public async resolveMasterNote(): Promise<void> {
+  const { apiBaseUrl, collabId, keys, activeKey } = this.settings;
+
+  /* ── sanity checks ─────────────────────────────────────────────── */
+  if (!apiBaseUrl || !collabId || !keys.length || !activeKey) {
+    new Notice('Missing settings; cannot resolve master.', 4_000);
+    return;
+  }
+  const activeItem = keys.find(k => k.noteKey === activeKey);
+  if (!activeItem) {
+    new Notice(`Couldn’t find imported key “${activeKey}”.`, 4_000);
+    return;
+  }
+  const { noteKey, apiKey } = activeItem;
+
+  /* ── fetch current master ─────────────────────────────────────── */
+  let current: string;
+  try {
+    current = await fetchMaster(apiBaseUrl, noteKey, apiKey);
+  } catch (err: any) {
+    console.error('[Resolve] fetchMaster failed', err);
+    new Notice(`Failed to fetch master: ${err.message}`, 5_000);
+    return;
+  }
+
+  /* ── fetch offers ─────────────────────────────────────────────── */
+  let offersArr: any[];
+  try {
+    offersArr = await getOffers(apiBaseUrl, noteKey, apiKey);
+  } catch (err: any) {
+    console.error('[Resolve] getOffers failed', err);
+    new Notice(`Failed to fetch offers: ${err.message}`, 5_000);
+    return;
+  }
+
+  if (!offersArr.length) {
+    new Notice('No offers to merge.', 3_000);
+    return;
+  }
+
+  /* ── wrap the modal flow in a Promise so callers can await it ── */
+  return new Promise<void>((resolve, reject) => {
     new ResolveConfirmation(
       this.app,
       'Review each offer and choose what to accept:',
       current,
-      offersArr,                     // pass objects untouched
-      async (merged: string) => {
+      offersArr,
+      /* onConfirm */ async (merged: string) => {
         try {
-          await resolveMaster(apiBaseUrl, noteKey, apiKey, collabId, merged);
-          new Notice('Master resolved with your selections', 3_000);
+          await resolveMaster(
+            apiBaseUrl,
+            noteKey,
+            apiKey,
+            collabId,
+            merged
+          );
+          new Notice('Master resolved with your selections.', 3_000);
+          resolve();                              // <- promise fulfilled
         } catch (err: any) {
           console.error('[Resolve] resolveMaster failed', err);
           new Notice(`Failed to publish master: ${err.message}`, 5_000);
+          reject(err);                            // <- promise rejected
         }
       }
     ).open();
-  }
+  });
+}
+
   
   public async copyActiveNoteKey(): Promise<void> {
     const { activeKey } = this.settings;

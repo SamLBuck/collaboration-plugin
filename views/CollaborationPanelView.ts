@@ -11,6 +11,8 @@ class ConfirmationModal extends Modal {
     message: string;
     callback: (confirmed: boolean) => void;
 
+
+
     constructor(app: App, message: string, callback: (confirmed: boolean) => void) {
         super(app);
         this.message = message;
@@ -48,6 +50,11 @@ export const COLLABORATION_VIEW_TYPE = 'collaboration-panel-view';
 type NoteType = 'none' | 'owner'; // CHANGED: 'push' to 'owner', 'pulled' to 'collaborator'
 
 export class CollaborationPanelView extends ItemView {
+
+  private offersCountEl: HTMLElement | null = null;   
+  private offersPollId: number | null = null;         // ← NEW
+
+
     getViewType(): string {
         return COLLABORATION_VIEW_TYPE
     }
@@ -83,6 +90,18 @@ export class CollaborationPanelView extends ItemView {
             })
           );
 
+          this.offersPollId = window.setInterval(async () => {
+            if (this.noteType !== 'owner' || !this.activeNoteFile) return;
+            const key = this.plugin.settings.keys.find(
+                k => k.filePath === this.activeNoteFile!.path
+            );
+            if (key) await this.refreshOffersDisplay(key.noteKey, key.apiKey);
+        }, 10_000);                        
+        
+        this.contentEl.addEventListener('click', this.handleContentClick);
+        // 10 000 ms = 10 s
+    
+
           this.registerEvent(
             this.plugin.events.on('collaboration-key-updated', async () => {
                 this.noteType = await this.determineNoteType(this.activeNoteFile);
@@ -96,10 +115,13 @@ export class CollaborationPanelView extends ItemView {
           await this.renderPanelContent();
         }
         
-    async onClose(): Promise<void> {
-        console.log('Collaboration Panel View closed');
-    }
+        async onClose(): Promise<void> {
+          if (this.offersPollId) window.clearInterval(this.offersPollId);   // 
+          this.contentEl.removeEventListener('click', this.handleContentClick);   // 
 
+          console.log('Collaboration Panel View closed');
+      }
+      
     private async determineNoteType(file: TFile | null): Promise<NoteType> {
         if (!file) return 'none';
         return this.plugin.settings.keys.some(k => k.filePath === file.path)
@@ -318,7 +340,7 @@ export class CollaborationPanelView extends ItemView {
     // CHANGED: Renamed from renderPushNotePanel to renderOwnerNotePanel
 
     // CHANGED: Renamed from renderPushNotePanel to renderOwnerNotePanel
-    private renderOwnerNotePanel(): void {
+    private async renderOwnerNotePanel(): Promise<void> {
         if (!this.activeNoteFile) return;
         const filePath = this.activeNoteFile.path;
         const noteName = this.activeNoteFile.basename;
@@ -364,7 +386,12 @@ export class CollaborationPanelView extends ItemView {
           .addButton(btn =>
             btn
               .setButtonText('Resolve Master')
-              .onClick(() => this.plugin.resolveMasterNote())
+              .onClick(async () => {
+                await this.plugin.resolveMasterNote();     // 1) push merge to server
+                await this.plugin.pullMasterNote();        // 2) pull fresh master back
+                await this.refreshOffersDisplay(key.noteKey, key.apiKey); // 3) update count
+                new Notice('Master resolved and updated.', 3000);
+              })
               .setCta() 
           );
       
@@ -401,5 +428,43 @@ export class CollaborationPanelView extends ItemView {
               })
           );
 
+          this.offersCountEl = this.contentEl.createEl('p', { text: 'Offers pending: …' });
+          await this.refreshOffersDisplay(key.noteKey, key.apiKey);   // first update
+          
+
       }
+
+      private async getOffersCount(noteKey: string, apiKey: string): Promise<number> {
+        try {
+            const url = `${this.plugin.settings.apiBaseUrl}/notes/${noteKey}/offers`;
+            const res = await fetch(url, { headers: { 'x-api-key': apiKey } });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const offers = (await res.json()) as unknown[];
+            return offers.length;
+        } catch (err) {
+            console.error('[Collab] getOffersCount failed', err);
+            return 0;
+        }
+      
+    }
+
+    private async refreshOffersDisplay(noteKey: string, apiKey: string) {
+      if (!this.offersCountEl) return;
+      const cnt = await this.getOffersCount(noteKey, apiKey);
+      if (this.offersCountEl) {
+          this.offersCountEl.textContent = `Offers pending: ${cnt}`;
+      }
+  }
+  private handleContentClick = async () => {
+    if (this.noteType !== 'owner' || !this.activeNoteFile) return;
+    const key = this.plugin.settings.keys.find(
+      k => k.filePath === this.activeNoteFile!.path
+    );
+    if (key) await this.refreshOffersDisplay(key.noteKey, key.apiKey);
+  };
+  
+    
+    
+    
+    
       }
