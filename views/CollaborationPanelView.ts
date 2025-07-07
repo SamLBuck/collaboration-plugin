@@ -352,27 +352,30 @@ export class CollaborationPanelView extends ItemView {
       
         // PUSH OFFER
         new Setting(this.contentEl)
-          .setName('Push Offer')
+          .setName('Send Note Changes')
+          .setDesc('Sends your changes to your friend')
           .addButton(btn =>
-            btn.setButtonText('Push Offer').onClick(() => this.plugin.pushOfferToServer())
+            btn.setButtonText('Send Note Changes').onClick(() => this.plugin.pushOfferToServer())
             .setCta() 
           );
             
         // RESOLVE
         new Setting(this.contentEl)
-          .setName('Resolve Master')
+          .setName('Resolve Conflicts')
+          .setDesc('Fix any differences between your version and friend\'s/friends\' so you all have the same content')
           .addButton(btn =>
             btn
-              .setButtonText('Resolve Master')
+              .setButtonText('Resolve Conflicts')
               .onClick(() => this.plugin.resolveMasterNote())
               .setCta() 
           );
       
         // PULL LATEST
         new Setting(this.contentEl)
-          .setName('Pull Latest')
+          .setName('Get Note Changes')
+          .setDesc('Get your friend\'s newest version of the note')
           .addButton(btn =>
-            btn.setButtonText('Pull Latest').onClick(() => this.plugin.pullMasterNote())
+            btn.setButtonText('Get Note Changes').onClick(() => this.plugin.pullMasterNote())
             .setCta() 
           );
           new Setting(this.contentEl)
