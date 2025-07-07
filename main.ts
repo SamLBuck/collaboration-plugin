@@ -501,57 +501,66 @@ public async promoteCurrentNoteAsMaster(): Promise<void> {
   
   public async resolveMasterNote(): Promise<void> {
     const { apiBaseUrl, collabId, keys, activeKey } = this.settings;
-    // Guard required settings
+  
+    /* ── sanity checks ── */
     if (!apiBaseUrl || !collabId || !keys.length || !activeKey) {
-      new Notice('Missing settings; cannot resolve master.', 4000);
+      new Notice('Missing settings; cannot resolve master.', 4_000);
       return;
     }
-    // Find the active KeyItem
+  
     const activeItem = keys.find(k => k.noteKey === activeKey);
     if (!activeItem) {
-      new Notice(`Couldn’t find imported key “${activeKey}”.`, 4000);
+      new Notice(`Couldn’t find imported key “${activeKey}”.`, 4_000);
       return;
     }
     const { noteKey, apiKey } = activeItem;
-    //Fetch the current master
+  
+    /* ── get current master ── */
     let current: string;
     try {
       current = await fetchMaster(apiBaseUrl, noteKey, apiKey);
     } catch (err: any) {
       console.error('[Resolve] fetchMaster failed', err);
-      new Notice(`Failed to fetch master: ${err.message}`, 5000);
+      new Notice(`Failed to fetch master: ${err.message}`, 5_000);
       return;
     }
-    //Fetch all offers
-    let offersArr: { content: string }[];
+  
+    /* ── get offers (let TS infer type) ── */
+    let offersArr;                                // ← no explicit interface
     try {
       offersArr = await getOffers(apiBaseUrl, noteKey, apiKey);
     } catch (err: any) {
       console.error('[Resolve] getOffers failed', err);
-      new Notice(`Failed to fetch offers: ${err.message}`, 5000);
+      new Notice(`Failed to fetch offers: ${err.message}`, 5_000);
       return;
     }
+  
     if (!offersArr.length) {
-      new Notice('No offers to merge.', 3000);
+      new Notice('No offers to merge.', 3_000);
       return;
     }
+  
+    // @ts-ignore  // handy while debugging; remove later
+    window._offers = offersArr;
+  
+    /* ── open modal with full objects ── */
     new ResolveConfirmation(
       this.app,
       'Review each offer and choose what to accept:',
       current,
-      offersArr.map(o => o.content),
-      async (mergedContent: string) => {
+      offersArr,                     // pass objects untouched
+      async (merged: string) => {
         try {
-          await resolveMaster(apiBaseUrl, noteKey, apiKey, collabId, mergedContent);
-          new Notice('Master resolved with your selections', 3000);
+          await resolveMaster(apiBaseUrl, noteKey, apiKey, collabId, merged);
+          new Notice('Master resolved with your selections', 3_000);
         } catch (err: any) {
           console.error('[Resolve] resolveMaster failed', err);
-          new Notice(`Failed to publish master: ${err.message}`, 5000);
+          new Notice(`Failed to publish master: ${err.message}`, 5_000);
         }
       }
     ).open();
   }
-
+  
   public async copyActiveNoteKey(): Promise<void> {
     const { activeKey } = this.settings;
     if (!activeKey) {

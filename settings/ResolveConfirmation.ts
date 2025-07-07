@@ -4,16 +4,16 @@ import { App, Modal, Setting } from 'obsidian';
 export class ResolveConfirmation extends Modal {
   private message: string;
   private currentContent: string;
-  private offers: string[];
-  private callback: (mergedContent: string) => void;
+  private offers: any[];            // ← can be string OR object
+  private callback: (merged: string) => void;
   private idx = 0;
 
   constructor(
     app: App,
     message: string,
     currentContent: string,
-    offers: string[],
-    callback: (mergedContent: string) => void
+    offers: any[],                  // accept whatever we get
+    callback: (merged: string) => void
   ) {
     super(app);
     this.message = message;
@@ -23,7 +23,6 @@ export class ResolveConfirmation extends Modal {
   }
 
   onOpen() {
-    // make it wider
     this.modalEl.style.minWidth = '1200px';
     this.renderStep();
   }
@@ -32,17 +31,27 @@ export class ResolveConfirmation extends Modal {
     const { contentEl } = this;
     contentEl.empty();
 
-    contentEl.createEl('h2', { text: `Offer ${this.idx + 1} of ${this.offers.length}` });
+    /* --- extract collabId + content gracefully --- */
+    const raw     = this.offers[this.idx];
+    const content =
+      typeof raw === 'string' ? raw : raw?.content ?? '';
+    const collabId =
+      typeof raw === 'string'
+        ? '(unknown)'
+        : raw?.collabId ?? raw?.sortKey ?? '(unknown)';
+
+    /* --- header --- */
+    contentEl.createEl('h2', {
+      text: `Offer ${this.idx + 1} of ${this.offers.length} — from ${collabId}`,
+    });
     contentEl.createEl('p', { text: this.message });
 
-    // two‐column layout
+    /* --- two-column layout --- */
     const container = contentEl.createDiv();
     container.style.display = 'flex';
     container.style.gap = '12px';
 
-
-    
-    // ── Right pane: this offer (editable) ──
+    /* Incoming Offer (right pane) */
     const incBox = container.createDiv();
     incBox.style.flex = '1';
     incBox.style.border = '1px solid var(--background-modifier-border)';
@@ -51,11 +60,11 @@ export class ResolveConfirmation extends Modal {
     incBox.style.maxHeight = '500px';
     incBox.createEl('strong', { text: 'Incoming Offer' });
     const incTA = incBox.createEl('textarea') as HTMLTextAreaElement;
-    incTA.value = this.offers[this.idx];
+    incTA.value = content;
     incTA.style.width = '100%';
     incTA.style.height = '400px';
 
-    // ── Left pane: current working master (read‐only) ──
+    /* Current Master (left pane) */
     const curBox = container.createDiv();
     curBox.style.flex = '1';
     curBox.style.border = '1px solid var(--background-modifier-border)';
@@ -69,26 +78,24 @@ export class ResolveConfirmation extends Modal {
     curTA.style.width = '100%';
     curTA.style.height = '400px';
 
-// ── Button row (LEFT-aligned) ──
-const btnRow = new Setting(contentEl);
-btnRow.settingEl.style.justifyContent = 'flex-start';  // push to the left
+    /* Button row */
+    const btnRow = new Setting(contentEl);
+    btnRow.settingEl.style.justifyContent = 'flex-start';
 
-btnRow
-  .addButton((btn) =>
-    btn
-      .setButtonText('Skip Offer')           // first button
-      .onClick(() => this.nextOrFinish())
-  )
-  .addButton((btn) =>
-    btn
-      .setButtonText('Update Master')        // blue CTA
-      .setCta()
-      .onClick(() => {
-        this.currentContent = curTA.value;   // keep whatever’s in master
-        this.nextOrFinish();
-      })
- );
-}
+    btnRow
+      .addButton((b) =>
+        b.setButtonText('Skip Offer').onClick(() => this.nextOrFinish())
+      )
+      .addButton((b) =>
+        b
+          .setButtonText('Update Master')
+          .setCta()
+          .onClick(() => {
+            this.currentContent = curTA.value;
+            this.nextOrFinish();
+          })
+      );
+  }
 
   private nextOrFinish() {
     this.idx++;
@@ -96,7 +103,6 @@ btnRow
       this.renderStep();
     } else {
       this.close();
-      // at the end, hand back the final currentContent
       this.callback(this.currentContent);
     }
   }
