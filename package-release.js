@@ -3,7 +3,7 @@ const fs      = require("fs");
 const archiver= require("archiver");
 
 const manifest= JSON.parse(fs.readFileSync("manifest.json","utf8"));
-const zipName = `collaboration-plugin-v${manifest.version}.zip`;
+const zipName = `collaboration-plugin.zip`;
 
 const output  = fs.createWriteStream(zipName);
 const archive = archiver("zip",{ zlib:{ level:9 } });

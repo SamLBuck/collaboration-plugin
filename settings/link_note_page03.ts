@@ -162,56 +162,6 @@ export class LinkNoteModal extends Modal {
                         }
                     });
             });
-            new Setting(contentEl)
-            new Setting(contentEl)
-            .addButton(button => {
-                button.setButtonText("Push Note")
-                    .setCta()
-                    .onClick(async () => {
-                        const input = this.linkNoteKeyInput.getValue().trim();
-                        if (!input) {
-                            new Notice("Please enter a Share Key / Password to push a note.", 3000);
-                            return;
-                        }
-        
-                        let parsedKeyInfo;
-                        try {
-                            parsedKeyInfo = parseKey(input);
-                            if (!parsedKeyInfo || !parsedKeyInfo.ip || !parsedKeyInfo.noteName) {
-                                throw new Error('Invalid key format. Expected "IP-NoteName".');
-                            }
-                            console.log(parsedKeyInfo.ip)
-                            console.log(parsedKeyInfo.noteName)
-                        } catch (error: any) {
-                            new Notice(`Key parsing error: ${error.message}`, 5000);
-                            return;
-                        }
-                        if (parsedKeyInfo?.view !== "Edit") {
-                            new Notice("This key does not have edit permissions.");
-                            console.warn("Permission check failed:", parsedKeyInfo);
-                            return;
-                         } 
-                         
-        
-                        const { ip, noteName } = parsedKeyInfo;
-                        const file = this.app.vault.getAbstractFileByPath(`${noteName}.md`) as TFile;
-        
-                        if (!file) {
-                            new Notice(`Note "${noteName}" not found in your vault.`, 3000);
-                            return;
-                        }
-        
-                        const content = await this.app.vault.read(file);
-
-                        console.log(content)
-        
-                        console.log("Pushing with view:", parsedKeyInfo.view);
-
-                        const { sendNoteToHost } = await import("../networking/socket/client");
-                        sendNoteToHost(ip, noteName, content);
-                        new Notice(`Pushed '${noteName}' to ${ip}`, 3000);
-                    });
-            });
         
         contentEl.createEl("h3", { text: "My Linked Key" });
         this.linkedKeysContainer = contentEl.createDiv({ cls: 'linked-keys-container' });
@@ -222,62 +172,76 @@ export class LinkNoteModal extends Modal {
         this.contentEl.empty();
     }
 
-    private async renderLinkedKeysContent(containerToRenderInto: HTMLElement): Promise<void> {
-        containerToRenderInto.empty();
-
-        const linkedKeys = this.plugin.settings.linkedKeys ?? [];
-
-        if (linkedKeys.length === 0) {
-            containerToRenderInto.createEl('p', { text: 'No external keys linked yet. Pull a note using a key from a peer to add it here.' , cls: 'empty-list-message' });
-        } else {
-            const listHeader = containerToRenderInto.createDiv({ cls: 'linked-keys-header' });
-            listHeader.style.display = 'grid';
-            // Adjusted grid columns for slimmer appearance and only Key, Note Name, Actions
-            listHeader.style.gridTemplateColumns = '2fr 1.5fr 0.5fr'; // Adjusted: Smaller 'fr' values
-            listHeader.createSpan({ text: 'Key (Full)' });
-            listHeader.createSpan({ text: 'Note Name' });
-            listHeader.createSpan({ text: 'Actions' });
-
-            linkedKeys.forEach((keyItem: KeyItem) => {
-                const keyRow = containerToRenderInto.createDiv({ cls: 'linked-keys-row' });
-                keyRow.style.display = 'grid';
-                // Adjusted grid columns for slimmer appearance and only Key, Note Name, Actions
-                keyRow.style.gridTemplateColumns = '2fr 1.5fr 0.5fr'; // Adjusted: Smaller 'fr' values
-
-                keyRow.createDiv({ text: keyItem.ip, cls: ['linked-key-id-display', 'field-content-box'] });
-                keyRow.createDiv({ text: keyItem.note, cls: ['linked-note-name-display', 'field-content-box'] });
-
-                const actionsDiv = keyRow.createDiv({ cls: 'linked-key-actions' });
-
-                // Copy button
-                new ButtonComponent(actionsDiv)
-                    .setIcon('copy')
-                    .setTooltip('Copy Key to Clipboard')
-                    .onClick(async () => {
-                        await navigator.clipboard.writeText(keyItem.ip);
-                        new Notice(`Key "${keyItem.ip}" copied to clipboard!`, 2000);
-                    });
-
-                // Delete button for linked keys
-                new ButtonComponent(actionsDiv)
-                    .setIcon('trash')
-                    .setTooltip('Remove from Linked Keys')
-                    .setClass('mod-warning')
-                    .onClick(async () => {
-                        const confirmDelete = await new Promise<boolean>(resolve => {
-                            new ConfirmationModal(this.app, `Are you sure you want to remove the linked key for "${keyItem.note}"? This will not delete the note itself.`, resolve).open();
-                        });
-
-                        if (confirmDelete) {
-                            this.plugin.settings.linkedKeys = this.plugin.settings.linkedKeys.filter(item => item.ip !== keyItem.ip);
-                            await this.plugin.saveSettings();
-                            new Notice(`Linked key for "${keyItem.note}" removed.`, 3000);
-                            await this.renderLinkedKeysContent(containerToRenderInto); // Re-render the list
-                        } else {
-                            new Notice("Removal cancelled.", 2000);
-                        }
-                    });
+    private async renderLinkedKeysContent(container: HTMLElement): Promise<void> {
+        container.empty();
+    
+        /* ── keep only items that match the view-only shape ────────────── */
+        const raw = this.plugin.settings.linkedKeys ?? [];
+        const viewOnlyKeys = raw.filter(k => typeof k.ip === 'string' && typeof k.note === 'string');
+    
+        /* ── (optional) CLEAN the array so junk rows never return ──────── */
+        if (viewOnlyKeys.length !== raw.length) {            // ← delete this block
+            this.plugin.settings.linkedKeys = viewOnlyKeys;  //   if you prefer
+            await this.plugin.saveSettings();                //   to *hide* only.
+        }                                                    // ───────── CLEAN
+    
+        if (viewOnlyKeys.length === 0) {
+            container.createEl('p', {
+                text: 'No external keys linked yet. Pull a note using a key from a peer to add it here.',
+                cls: 'empty-list-message'
             });
+            return;
         }
+    
+        /* ── header row ───────────────────────────────────────────────── */
+        const header = container.createDiv({ cls: 'linked-keys-header' });
+        header.style.display = 'grid';
+        header.style.gridTemplateColumns = '2fr 1.5fr 0.5fr';
+        header.createSpan({ text: 'Key (Full)' });
+        header.createSpan({ text: 'Note Name' });
+        header.createSpan({ text: 'Actions' });
+    
+        /* ── data rows ───────────────────────────────────────────────── */
+        viewOnlyKeys.forEach(keyItem => {
+            const row = container.createDiv({ cls: 'linked-keys-row' });
+            row.style.display = 'grid';
+            row.style.gridTemplateColumns = '2fr 1.5fr 0.5fr';
+    
+            /* full key + note name */
+            row.createDiv({ text: keyItem.ip,   cls: ['linked-key-id-display',  'field-content-box'] });
+            row.createDiv({ text: keyItem.note, cls: ['linked-note-name-display','field-content-box'] });
+    
+            /* actions */
+            const actions = row.createDiv({ cls: 'linked-key-actions' });
+    
+            new ButtonComponent(actions)
+                .setIcon('copy')
+                .setTooltip('Copy Key to Clipboard')
+                .onClick(async () => {
+                    await navigator.clipboard.writeText(keyItem.ip);
+                    new Notice(`Key "${keyItem.ip}" copied to clipboard!`, 2_000);
+                });
+    
+            new ButtonComponent(actions)
+                .setIcon('trash')
+                .setTooltip('Remove from Linked Keys')
+                .setClass('mod-warning')
+                .onClick(async () => {
+                    const ok = await new Promise<boolean>(res =>
+                        new ConfirmationModal(
+                            this.app,
+                            `Remove the linked key for "${keyItem.note}"? This does not delete the note itself.`,
+                            res
+                        ).open()
+                    );
+                    if (!ok) return;
+    
+                    this.plugin.settings.linkedKeys =
+                        this.plugin.settings.linkedKeys.filter(k => k !== keyItem);
+                    await this.plugin.saveSettings();
+                    new Notice(`Linked key for "${keyItem.note}" removed.`, 3_000);
+                    await this.renderLinkedKeysContent(container);  // refresh list
+                });
+        });
     }
-}
+    }

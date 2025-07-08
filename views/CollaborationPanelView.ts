@@ -288,7 +288,6 @@ export class CollaborationPanelView extends ItemView {
         };
 
         this.accessTypeView = createCheckbox('View', true);
-        this.accessTypeEdit = createCheckbox('Edit', false);
 
                 this.contentEl.createEl('p', { text: 'pull a shared note from a peer using a key.' });
         
@@ -420,36 +419,36 @@ export class CollaborationPanelView extends ItemView {
                 );
         }
             
-        if (!viewKey || !editKey) {
-            const missingAccess = !viewKey ? 'View' : 'Edit';
+        // if (!viewKey || !editKey) {
+        //     const missingAccess = !viewKey ? 'View' : 'Edit';
     
-            new Setting(this.contentEl)
-                .setName(`Generate ${missingAccess} Key`)
-                .setDesc(`Create a ${missingAccess.toLowerCase()} access key for this note.`)
-                .addButton(button =>
-                    button
-                        .setButtonText(`Add ${missingAccess} Key`)
-                        .setCta()
-                        .onClick(async () => {
-                            try {
-                                const newKeyItem = await generateKey(this.plugin, noteName, missingAccess);
-                                const success = await addKey(this.plugin, newKeyItem);
+        //     new Setting(this.contentEl)
+        //         .setName(`Generate ${missingAccess} Key`)
+        //         .setDesc(`Create a ${missingAccess.toLowerCase()} access key for this note.`)
+        //         .addButton(button =>
+        //             button
+        //                 .setButtonText(`Add ${missingAccess} Key`)
+        //                 .setCta()
+        //                 .onClick(async () => {
+        //                     try {
+        //                         const newKeyItem = await generateKey(this.plugin, noteName, missingAccess);
+        //                         const success = await addKey(this.plugin, newKeyItem);
     
-                                if (success) {
-                                    await navigator.clipboard.writeText(newKeyItem.ip);
-                                    new Notice(`${missingAccess} key generated and copied:\n${newKeyItem.ip}`);
-                                    this.renderPanelContent(); // Refresh panel to show both keys
-                                } else {
-                                    new Notice("Failed to add key (possible collision).");
-                                }
-                            } catch (err: any) {
-                                new Notice(`Error creating key: ${err.message}`);
-                            }
-                        })
-                );
-        }
+        //                         if (success) {
+        //                             await navigator.clipboard.writeText(newKeyItem.ip);
+        //                             new Notice(`${missingAccess} key generated and copied:\n${newKeyItem.ip}`);
+        //                             this.renderPanelContent(); // Refresh panel to show both keys
+        //                         } else {
+        //                             new Notice("Failed to add key (possible collision).");
+        //                         }
+        //                     } catch (err: any) {
+        //                         new Notice(`Error creating key: ${err.message}`);
+        //                     }
+        //                 })
+        //         );
+        // }
     
-        // Delete section
+        // Delete /
         new Setting(this.contentEl)
             .setName('Delete Key & Registry Content')
             .addButton(button =>
@@ -498,16 +497,17 @@ export class CollaborationPanelView extends ItemView {
               const content = await this.app.vault.read(file);
               const noteName = file.basename;
       
-              // Construct or update the registry entry
-              const index = this.plugin.settings.registry.findIndex(entry => entry.key === noteName);
-              if (index !== -1) {
-                this.plugin.settings.registry[index].content = content;
-              } else {
-                this.plugin.settings.registry.push({
-                  key: noteName,
-                  content
-                });
-              }
+
+              if (file instanceof TFile) {
+                const key = file.basename; // Uses basename as key for auto-update
+                const content = await this.app.vault.read(file);
+                await shareCurrentNoteWithFileName(this.plugin, this.app, key);
+                // console.log(`[Auto-Update] Registry updated for note '${key}'.`);
+            } else {
+                console.warn(` Skipped updating registry for non-TFile instance.`);
+            }
+
+                await updateNoteRegistry(this.plugin, noteName, content);
       
               await this.plugin.saveSettings();
               new Notice(`Saved "${noteName}" content to registry.`, 3000);
@@ -526,54 +526,6 @@ export class CollaborationPanelView extends ItemView {
         if (keyItem) {
             this.contentEl.createEl('p', { text: `${keyItem.ip}` });
 
-            // --- START MOVED: Push Changes Button ---
-            new Setting(this.contentEl)
-                .setName('Share Changes ')
-                .addButton(button =>
-                    button
-                        .setButtonText('Push Changes')
-                        .setCta()
-                        .onClick(async () => {
-                            const input = keyItem.ip; // Use the pulled key's IP for pushing back
-                            if (!input) {
-                                new Notice("Could not determine source key to push changes.", 3000);
-                                return;
-                            }
-        
-                            let parsedKeyInfo;
-                            try {
-                                parsedKeyInfo = parseKey(input);
-                                if (!parsedKeyInfo || !parsedKeyInfo.ip || !parsedKeyInfo.noteName) {
-                                    throw new Error('Invalid key format. Expected "IP-NoteName".');
-                                }
-                            } catch (error: any) {
-                                new Notice(`Key parsing error: ${error.message}`, 5000);
-                                return;
-                            }
-                            // Check if the pulled key has "Edit" access
-                            if (parsedKeyInfo?.view !== "Edit") {
-                                new Notice("This pulled note's key does not have 'Edit' permissions to push changes back to the source.", 5000);
-                                return;
-                            } 
-        
-                            const { ip, noteName } = parsedKeyInfo;
-                            const file = this.app.vault.getAbstractFileByPath(`${noteName}.md`) as TFile;
-        
-                            if (!file) {
-                                new Notice(`Note "${noteName}" not found in your vault.`, 3000);
-                                return;
-                            }
-        
-                            const content = await this.app.vault.read(file);
-        
-                            console.log("Pushing content from pulled note to source:", ip, noteName);
-        
-                            const { sendNoteToHost } = await import("../networking/socket/client");
-                            sendNoteToHost(ip, noteName, content);
-                            new Notice(`Pushed changes for '${noteName}' to original host: ${ip}`, 3000);
-                        })
-                );
-            // --- END MOVED: Push Changes Button ---
 
             // --- START MOVED: Pull Changes Button ---
             new Setting(this.contentEl)
