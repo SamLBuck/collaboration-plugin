@@ -19,7 +19,7 @@ import { FileSystemAdapter } from "obsidian";
 const { spawn } = require("child_process");
 import * as path from "path";
 import * as fs from "fs";
-const noteRegistry = require("./networking/socket/dist/noteRegistry.cjs");
+// const noteRegistry = require("./networking/socket/dist/noteRegistry.cjs");
 import { tempKeyInputModal } from './settings/tempKeyInputModal';
 import { rewriteExistingNote } from './utils/pull_note_command';
 import { startWebSocketServerProcess } from './utils/start_server_command';
@@ -236,13 +236,20 @@ export default class MyPlugin extends Plugin {
 
 
 
+    // this.registerView(
+    //   COLLABORATION_VIEW_TYPE,
+    //   (leaf) => new CollaborationPanelView(leaf, this)
+    // );
+    
+    const SHORT_ID = 'open-collab-panel';
+    const FULL_ID  = `${this.manifest.id}:${SHORT_ID}`;
+    
     this.registerView(
       COLLABORATION_VIEW_TYPE,
       (leaf) => new CollaborationPanelView(leaf, this)
     );
     
-    const SHORT_ID = 'open-collab-panel';
-    const FULL_ID  = `${this.manifest.id}:${SHORT_ID}`;
+    // 2️⃣  Add a user-visible command (optional, still nice to have)
     
     this.addCommand({
       id: SHORT_ID,
@@ -250,6 +257,7 @@ export default class MyPlugin extends Plugin {
       callback: () => this.activateCollabView()
     });
     
+    // 3️⃣  Add a ribbon icon that calls the same helper
     this.addRibbonIcon('columns-3', 'Open Collaboration Panel', () => {
       this.activateCollabView();
     });
@@ -258,7 +266,7 @@ export default class MyPlugin extends Plugin {
     this.app.workspace.onLayoutReady(() => {
       this.activateCollabView();          // ← one-time auto-open
     });
-    
+        
 
 
 
@@ -351,10 +359,6 @@ export default class MyPlugin extends Plugin {
     });
 
     // Register all Collaboration Panel Views
-    this.registerView(
-      COLLABORATION_VIEW_TYPE,
-      (leaf) => new CollaborationPanelView(leaf, this)
-    );
     this.registerView(
       KEY_LIST_VIEW_TYPE,
       (leaf) => new KeyListView(leaf, this)
@@ -613,28 +617,18 @@ export default class MyPlugin extends Plugin {
     this.registry = this.settings.registry;
   }
 
-  async activateCollabView() {
-    // Try to reuse an existing leaf
-    let leaf = this.app.workspace.getLeavesOfType(COLLABORATION_VIEW_TYPE)[0];
-  
-    if (!leaf) {
-      // Create one in the right sidebar
-      const potentialLeaf = this.app.workspace.getRightLeaf(false);
-      if (potentialLeaf) {
-        leaf = potentialLeaf;
-      } else {
-        throw new Error("Failed to get a right leaf.");
-      }
-      await leaf.setViewState({
-        type: COLLABORATION_VIEW_TYPE,
-        active: true
-      });
-    }
-  
-    this.app.workspace.revealLeaf(leaf);
-  }
-  
+/** Ensure the collaboration panel exists, then reveal it. */
+async activateCollabView() {
+  const leaf = this.app.workspace.getRightLeaf(true)!;   // guaranteed
 
+  await leaf.setViewState({
+    type: COLLABORATION_VIEW_TYPE,
+    active: true,
+  });
+
+  this.app.workspace.revealLeaf(leaf);
+}
+  
   async saveSettings() {
     // Save all settings, including linkedKeys and personalNotes
     await this.saveData(this.settings);
