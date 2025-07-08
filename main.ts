@@ -12,7 +12,8 @@ import {
   MarkdownView,
   MarkdownPostProcessorContext, // For post-processor
   setIcon, // For icons in post-processor
-  Menu, // For editor menu and file menu
+  Menu,
+  Events, // For editor menu and file menu
 } from 'obsidian';
 import { PluginSettingsTab } from "./settings/plugin_setting_tab";
 import { FileSystemAdapter } from "obsidian";
@@ -198,6 +199,7 @@ export function waitForWebSocketConnection(url: string, plugin: MyPlugin, retrie
 
 export default class MyPlugin extends Plugin {
   settings: MyPluginSettings;
+  events = new Events();
   registry: noteRegistry[] = []; // This will be deprecated in favor of settings.registry
 
   autoRegistryUpdate: boolean = false; // Auto-update registry setting (retained user's default)
@@ -617,18 +619,40 @@ export default class MyPlugin extends Plugin {
     this.registry = this.settings.registry;
   }
 
-/** Ensure the collaboration panel exists, then reveal it. */
-async activateCollabView() {
-  const leaf = this.app.workspace.getRightLeaf(true)!;   // guaranteed
-
-  await leaf.setViewState({
-    type: COLLABORATION_VIEW_TYPE,
-    active: true,
-  });
-
-  this.app.workspace.revealLeaf(leaf);
-}
+   /** Ensure the Collaboration Panel exists (re-use if possible), then reveal it at top. */
+   async activateCollabView(): Promise<void> {
+     // 1. Re-use if it already exists in the right sidebar
+     let leaf = this.app.workspace
+       .getLeavesOfType(COLLABORATION_VIEW_TYPE)
+       .find(l => l.parent instanceof WorkspaceSidedock);
   
+     // 2. Otherwise create one (true = create sidebar if missing)
+     if (!leaf) {
+       const rightLeaf = this.app.workspace.getRightLeaf(true);
+       if (rightLeaf) {
+         leaf = rightLeaf;
+       }
+     }
+
+     // 3. Activate it *and* clear any saved scroll/other state
+     if (leaf) {
+       await leaf.setViewState({
+         type: COLLABORATION_VIEW_TYPE,
+         state: {},     // ← AWS branch clears previous scroll position
+         active: true,
+       });
+     } else {
+       console.error("[ActivateCollabView] Failed to activate view: leaf is undefined.");
+     }
+  
+   // 4. Reveal it
+     if (leaf) {
+       this.app.workspace.revealLeaf(leaf);
+     } else {
+       console.error("[ActivateCollabView] Failed to reveal leaf: leaf is undefined.");
+     }
+   }
+    
   async saveSettings() {
     // Save all settings, including linkedKeys and personalNotes
     await this.saveData(this.settings);
@@ -641,68 +665,39 @@ async activateCollabView() {
 
   // New method to activate/open a specific collaboration panel view
   async activateView(viewType: string) {
-    console.log(`[ActivateView] Attempting to activate view: ${viewType}`);
     const { workspace } = this.app;
-    let targetLeaf: WorkspaceLeaf | null = null;
-
-    // Helper to check if a leaf is in the right sidebar
-    const isLeafInRightSidebar = (leaf: WorkspaceLeaf): boolean => {
-      if (!leaf || !workspace.rightSplit) return false;
-      // Check if the leaf's direct parent or its parent's parent is the rightSplit
-      // This covers leaves directly in the sidebar or within a tab group in the sidebar.
-      return (leaf.parent instanceof WorkspaceSidedock && leaf.parent === workspace.rightSplit) ||
-        (leaf.parent?.parent instanceof WorkspaceSidedock && leaf.parent?.parent === workspace.rightSplit);
-    };
-
-    // 1. Check if the active leaf is already the target view type and in the right sidebar
-    //    This means we don't need to do anything, it's already visible.
-    if (workspace.activeLeaf &&
-      workspace.activeLeaf.view.getViewType() === viewType &&
-      isLeafInRightSidebar(workspace.activeLeaf)) {
-      console.log(`[ActivateView] Target view (${viewType}) is already active in the right sidebar.`);
-      return; // Already where we want to be.
+  
+    // 1️⃣ If the active leaf is already our view in the right sidebar, just return.
+    const active = workspace.activeLeaf;
+    if (
+      active &&
+      active.view.getViewType() === viewType &&
+      active.parent instanceof WorkspaceSidedock
+    ) {
+      return;
     }
-
-    // 2. Try to find an existing leaf of this viewType in the right sidebar to reuse.
-    const allLeavesOfViewType = workspace.getLeavesOfType(viewType);
-    for (const l of allLeavesOfViewType) {
-      const isPopout = !!l.view?.containerEl?.closest('.mod-popout-window');
-      if (!isPopout && isLeafInRightSidebar(l)) {
-        targetLeaf = l;
-        console.log(`[ActivateView] Found existing leaf of type ${viewType} in right sidebar. Reusing it.`);
-        break;
-      }
+  
+    // 2️⃣ Try to find any existing leaf of this type in the right sidebar
+    let leaf = workspace
+      .getLeavesOfType(viewType)
+      .find(l => l.parent instanceof WorkspaceSidedock);
+  
+    // 3️⃣ If still none, create the right-sidebar split (true = create if missing)
+    if (!leaf) {
+      leaf = workspace.getRightLeaf(true);
     }
-
-    // 3. If no suitable existing leaf was found, try to reuse the current active leaf
-    //    IF it's in the right sidebar. This ensures the current sidebar tab gets replaced.
-    if (!targetLeaf && workspace.activeLeaf && isLeafInRightSidebar(workspace.activeLeaf)) {
-      targetLeaf = workspace.activeLeaf;
-      console.log(`[ActivateView] Reusing active leaf in right sidebar for view type: ${viewType}`);
-    }
-
-    // 4. If still no leaf, get a new leaf specifically for the right sidebar.
-    //    getRightLeaf(true) will create it if it's doesn't exist and ensures it's in the right sidebar.
-    if (!targetLeaf) {
-      console.log(`[ActivateView] No suitable leaf found or reused. Getting a new leaf for the right sidebar for view type: ${viewType}`);
-      targetLeaf = workspace.getRightLeaf(false);
-    }
-
-    // 5. Final check and set view state
-    if (targetLeaf) {
-      console.log(`[ActivateView] Setting view state for leaf. Parent: ${targetLeaf.parent?.constructor.name}`);
-      await targetLeaf.setViewState({
-        type: viewType,
-        active: true, // Make this the active tab in its pane
-      });
-      workspace.revealLeaf(targetLeaf);
-      console.log(`[ActivateView] View ${viewType} activated and revealed in right sidebar.`);
-    } else {
-      console.error(`[ActivateView] Failed to obtain or activate a leaf for view type: ${viewType}.`);
-      new Notice(`Failed to open ${viewType} panel. Could not find or create a suitable pane.`, 6000);
-    }
+  
+    // 4️⃣ Set the view, clearing any saved state (e.g. scroll position)
+    await leaf.setViewState({
+      type: viewType,
+      state: {},       // ← wipes saved scroll / layout
+      active: true,
+    });
+  
+    // 5️⃣ Reveal it in the sidebar
+    workspace.revealLeaf(leaf);
   }
-
+  
   // --- MODIFIED: restorePersonalNotesIntoFiles to be vault-wide and strip existing blocks ---
   // This version is more robust, handling all personal notes across the vault
   // and stripping existing blocks before re-inserting, which is crucial if notes are pulled.
