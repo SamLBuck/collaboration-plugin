@@ -2,7 +2,7 @@
 
 import { ItemView, WorkspaceLeaf, debounce, Notice, TFile, setIcon } from 'obsidian';
 import MyPlugin from '../main';
-import { PERSONAL_NOTES_VIEW_TYPE } from '../constants/viewTypes';
+import { AWS_PERSONAL_NOTES_VIEW_TYPE } from '../constants/viewTypes';
 
 export class PersonalNotesView extends ItemView {
     plugin: MyPlugin;
@@ -14,7 +14,7 @@ export class PersonalNotesView extends ItemView {
     }
 
     getViewType(): string {
-        return PERSONAL_NOTES_VIEW_TYPE;
+        return AWS_PERSONAL_NOTES_VIEW_TYPE;
     }
 
     getDisplayText(): string {

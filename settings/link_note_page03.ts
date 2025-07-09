@@ -1,11 +1,17 @@
-import { App, Modal, Setting, TextComponent, ButtonComponent, Notice, TFile } from 'obsidian';
+// views/LinkNoteModal.ts
+import {
+  App,
+  Modal,
+  Setting,
+  TextComponent,
+  ButtonComponent,
+  Notice,
+  TFile
+} from 'obsidian';
 import type MyPlugin from '../main';
 import { KeyItem } from '../main';
 import { fetchMaster } from '../utils/api';
 
-/**
- * Inline modal for confirming destructive actions
- */
 class ConfirmationModal extends Modal {
   private message: string;
   private callback: (ok: boolean) => void;
@@ -17,19 +23,25 @@ class ConfirmationModal extends Modal {
   }
 
   onOpen() {
-    const { contentEl } = this;
-    contentEl.empty();
-    contentEl.createEl('h2', { text: 'Confirm' });
-    contentEl.createEl('p', { text: this.message });
-
-    new Setting(contentEl)
-      .addButton(btn => btn
-        .setButtonText('Yes')
-        .setWarning()
-        .onClick(() => { this.callback(true); this.close(); }))
-      .addButton(btn => btn
-        .setButtonText('No')
-        .onClick(() => { this.callback(false); this.close(); }));
+    this.contentEl.empty();
+    this.contentEl.createEl('h2', { text: 'Confirm' });
+    this.contentEl.createEl('p', { text: this.message });
+    new Setting(this.contentEl)
+      .addButton((btn) =>
+        btn
+          .setButtonText('Yes')
+          .setWarning()
+          .onClick(() => {
+            this.callback(true);
+            this.close();
+          })
+      )
+      .addButton((btn) =>
+        btn.setButtonText('No').onClick(() => {
+          this.callback(false);
+          this.close();
+        })
+      );
   }
 
   onClose() {
@@ -41,6 +53,7 @@ export class LinkNoteModal extends Modal {
   private plugin: MyPlugin;
   private keyInput!: TextComponent;
   private listContainer!: HTMLElement;
+  private wrapper!: HTMLDivElement;
 
   constructor(app: App, plugin: MyPlugin) {
     super(app);
@@ -48,34 +61,40 @@ export class LinkNoteModal extends Modal {
   }
 
   async onOpen() {
-    const { contentEl } = this;
-    contentEl.empty();
+    // 1) clear previous
+    this.contentEl.empty();
+    // 2) create AWS-scoped wrapper
+    this.wrapper = this.contentEl.createDiv({ cls: 'aws-collab-wrapper' });
 
     // Title & instructions
-    contentEl.createEl('h2', { text: 'Link Collaborative Note' });
-    contentEl.createEl('p', { text: 'Enter a collaboration key in the form noteKey:apiKey|noteName to pull and link a note.' });
+    this.wrapper.createEl('h2', { text: 'Link Collaborative Note' });
+    this.wrapper.createEl('p', {
+      text:
+        'Enter a collaboration key in the form noteKey:apiKey|noteName to pull and link a note.'
+    });
 
     // Key entry
-    new Setting(contentEl)
+    new Setting(this.wrapper)
       .setName('Collaboration Key')
       .setDesc('Format: noteKey:apiKey|noteName')
-      .addText(text => {
+      .addText((text) => {
         this.keyInput = text;
         text.setPlaceholder('e.g. 1ba4dd0f-...:58a378e4-...|MyNote');
       });
 
     // Pull & Link button
-    new Setting(contentEl)
-      .addButton(btn =>
-        btn
-          .setButtonText('Pull & Link')
-          .setCta()
-          .onClick(() => this.handlePullAndLink())
-      );
+    new Setting(this.wrapper).addButton((btn) =>
+      btn
+        .setButtonText('Pull & Link')
+        .setCta()
+        .onClick(() => this.handlePullAndLink())
+    );
 
     // List of linked keys
-    contentEl.createEl('h3', { text: 'My Linked Keys' });
-    this.listContainer = contentEl.createDiv({ cls: 'linked-keys-container' });
+    this.wrapper.createEl('h3', { text: 'My Linked Keys' });
+    this.listContainer = this.wrapper.createDiv({
+      cls: 'linked-keys-container'
+    });
     this.renderLinkedList();
   }
 
@@ -83,17 +102,12 @@ export class LinkNoteModal extends Modal {
     this.contentEl.empty();
   }
 
-  /**
-   * Pulls a note by raw key input (noteKey:apiKey|noteName) and records it in settings.linkedKeys
-   */
   private async handlePullAndLink() {
     const raw = this.keyInput.getValue().trim();
     if (!raw) {
       new Notice('Please enter a collaboration key first.', 3000);
       return;
     }
-
-    // Split off optional noteName after '|'
     const [rawKey, providedName] = raw.split('|');
     const [noteKey, ...apiParts] = rawKey.split(':');
     const apiKey = apiParts.join(':');
@@ -102,7 +116,6 @@ export class LinkNoteModal extends Modal {
       return;
     }
 
-    // Fetch master content
     let content: string;
     try {
       content = await fetchMaster(
@@ -116,15 +129,15 @@ export class LinkNoteModal extends Modal {
       return;
     }
 
-    // Determine file path: use provided noteName or fallback to noteKey
     const name = (providedName || noteKey).trim();
     const filePath = `${name}.md`;
     const vault = this.app.vault;
-    const existing = vault.getAbstractFileByPath(filePath) as TFile | null;
+    const existing = vault.getAbstractFileByPath(
+      filePath
+    ) as TFile | null;
 
-    // Confirm overwrite if it exists
     if (existing) {
-      const ok = await new Promise<boolean>(resolve =>
+      const ok = await new Promise<boolean>((resolve) =>
         new ConfirmationModal(
           this.app,
           `File "${filePath}" already exists. Overwrite?`,
@@ -140,48 +153,52 @@ export class LinkNoteModal extends Modal {
       await vault.create(filePath, content);
     }
 
-    // Open the pulled note
-    const file = vault.getAbstractFileByPath(filePath) as TFile;
+    const file = vault.getAbstractFileByPath(filePath) as TFile | null;
     if (file) {
       await this.app.workspace.getLeaf(true).openFile(file);
       new Notice(`Pulled and opened ${file.basename}`, 3000);
     }
 
-    // Record in linkedKeys
+    // record in linkedKeys & keys
     this.plugin.settings.linkedKeys = this.plugin.settings.linkedKeys || [];
     const linked = this.plugin.settings.linkedKeys;
     const keys = this.plugin.settings.keys || [];
-    // Only add if not already present
-    if (!linked.find(k => k.noteKey === noteKey && k.apiKey === apiKey && k.filePath === filePath)) {
+
+    if (
+      !linked.find(
+        (k) =>
+          k.noteKey === noteKey &&
+          k.apiKey === apiKey &&
+          k.filePath === filePath
+      )
+    ) {
       linked.push({ noteKey, apiKey, filePath } as KeyItem);
       keys.push({ noteKey, apiKey, filePath } as KeyItem);
-
       this.plugin.settings.activeKey = noteKey;
-
       await this.plugin.saveSettings();
       this.plugin.events.trigger('collaboration-key-updated');
-
     }
 
-    // Refresh list and close modal
     this.renderLinkedList();
     this.close();
   }
 
-  /**
-   * Renders the list of successful linked keys, showing the full original input key
-   */
   private renderLinkedList() {
     this.listContainer.empty();
     const linked = this.plugin.settings.linkedKeys || [];
 
     if (!linked.length) {
-      this.listContainer.createEl('p', { text: 'No linked keys yet.', cls: 'empty-list-message' });
+      this.listContainer.createEl('p', {
+        text: 'No linked keys yet.',
+        cls: 'empty-list-message'
+      });
       return;
     }
 
     // Header
-    const header = this.listContainer.createDiv({ cls: 'linked-header' });
+    const header = this.listContainer.createDiv({
+      cls: 'linked-header'
+    });
     header.style.display = 'grid';
     header.style.gridTemplateColumns = '3fr 1fr 1fr';
     header.createSpan({ text: 'Full Key' });
@@ -189,17 +206,28 @@ export class LinkNoteModal extends Modal {
     header.createSpan({ text: 'Actions' });
 
     // Rows
-    linked.forEach(item => {
-      const row = this.listContainer.createDiv({ cls: 'linked-row' });
+    linked.forEach((item) => {
+      const row = this.listContainer.createDiv({
+        cls: 'linked-row'
+      });
       row.style.display = 'grid';
       row.style.gridTemplateColumns = '3fr 1fr 1fr';
 
-      // show the entire reconstructed key
-      const displayKey = `${item.noteKey}:${item.apiKey}|${item.filePath.replace(/\.md$/, '')}`;
-      row.createDiv({ text: displayKey, cls: 'field-content-box' });
-      row.createDiv({ text: item.filePath, cls: 'field-content-box' });
+      const displayKey = `${item.noteKey}:${item.apiKey}|${item.filePath.replace(
+        /\.md$/,
+        ''
+      )}`;
+      row.createDiv({
+        text: displayKey,
+        cls: 'field-content-box'
+      });
+      row.createDiv({
+        text: item.filePath,
+        cls: 'field-content-box'
+      });
 
       const actions = row.createDiv({ cls: 'linked-actions' });
+
       new ButtonComponent(actions)
         .setIcon('copy')
         .setTooltip('Copy full key')
@@ -207,14 +235,21 @@ export class LinkNoteModal extends Modal {
           await navigator.clipboard.writeText(displayKey);
           new Notice('Full key copied');
         });
+
       new ButtonComponent(actions)
         .setIcon('trash')
         .setWarning()
         .setTooltip('Remove key')
         .onClick(async () => {
-          this.plugin.settings.linkedKeys = this.plugin.settings.linkedKeys!.filter(
-            k => !(k.noteKey === item.noteKey && k.apiKey === item.apiKey && k.filePath === item.filePath)
-          );
+          this.plugin.settings.linkedKeys =
+            this.plugin.settings.linkedKeys!.filter(
+              (k) =>
+                !(
+                  k.noteKey === item.noteKey &&
+                  k.apiKey === item.apiKey &&
+                  k.filePath === item.filePath
+                )
+            );
           if (this.plugin.settings.activeKey === item.noteKey) {
             this.plugin.settings.activeKey = undefined;
           }

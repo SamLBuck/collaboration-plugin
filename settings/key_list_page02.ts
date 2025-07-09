@@ -1,4 +1,4 @@
-import { App, Modal, Setting, ButtonComponent, Notice, TFile } from 'obsidian';
+import { App, Modal, Setting, ButtonComponent, Notice } from 'obsidian';
 import type MyPlugin from '../main';
 import { KeyItem } from '../main';
 
@@ -20,13 +20,21 @@ class ConfirmationModal extends Modal {
     contentEl.createEl('p', { text: this.message });
     new Setting(contentEl)
       .addButton(btn =>
-        btn.setButtonText('Confirm')
+        btn
+          .setButtonText('Confirm')
           .setCta()
           .setClass('mod-warning')
-          .onClick(() => { this.callback(true); this.close(); }))
+          .onClick(() => {
+            this.callback(true);
+            this.close();
+          })
+      )
       .addButton(btn =>
-        btn.setButtonText('Cancel')
-          .onClick(() => { this.callback(false); this.close(); }));
+        btn.setButtonText('Cancel').onClick(() => {
+          this.callback(false);
+          this.close();
+        })
+      );
   }
 
   onClose() {
@@ -37,6 +45,7 @@ class ConfirmationModal extends Modal {
 
 export class KeyListModal extends Modal {
   plugin: MyPlugin;
+  private wrapper: HTMLDivElement;
   private keyListContainer: HTMLElement;
 
   constructor(app: App, plugin: MyPlugin) {
@@ -45,10 +54,17 @@ export class KeyListModal extends Modal {
   }
 
   async onOpen() {
-    const { contentEl } = this;
-    contentEl.empty();
-    contentEl.createEl('h2', { text: 'All Collaboration Keys' });
-    this.keyListContainer = contentEl.createDiv({ cls: 'key-list-container' });
+    // 1) Clear out any previous content
+    this.contentEl.empty();
+
+    // 2) Create the AWS-scoped wrapper
+    this.wrapper = this.contentEl.createDiv({ cls: 'aws-collab-wrapper' });
+
+    // 3) Header + container inside the wrapper
+    this.wrapper.createEl('h2', { text: 'All Collaboration Keys' });
+    this.keyListContainer = this.wrapper.createDiv({ cls: 'key-list-container' });
+
+    // 4) Populate the list
     await this.renderKeyListContent(this.keyListContainer);
   }
 
@@ -57,14 +73,20 @@ export class KeyListModal extends Modal {
   }
 
   private async renderKeyListContent(container: HTMLElement): Promise<void> {
+    // Clear just the list container
     container.empty();
+
+    // Grab valid keys
     const keys = this.plugin.settings.keys.filter(
-      k => k?.noteKey && k?.apiKey && k?.filePath
+      (k) => k?.noteKey && k?.apiKey && k?.filePath
     );
-  
-  
+
+    // If none, show message in the container
     if (!keys.length) {
-      container.createEl('p', { text: 'No collaboration keys stored.', cls: 'empty-list-message' });
+      container.createEl('p', {
+        text: 'No collaboration keys stored.',
+        cls: 'empty-list-message',
+      });
       return;
     }
 
@@ -77,21 +99,23 @@ export class KeyListModal extends Modal {
     header.createSpan({ text: 'Actions' });
 
     // Data rows
-    keys.forEach(keyItem => {
+    keys.forEach((keyItem: KeyItem) => {
       const row = container.createDiv({ cls: 'key-list-row' });
       row.style.display = 'grid';
       row.style.gridTemplateColumns = '3fr 1fr 1fr';
 
-      // Construct display string: noteKey:apiKey|basename
+      // Build display string
       const basename = keyItem.filePath.split('/').pop() || '';
       const displayKey = `${keyItem.noteKey}:${keyItem.apiKey}|${basename}`;
+
+      // Cells
       row.createDiv({ text: displayKey, cls: ['field-content-box'] });
       row.createDiv({ text: basename, cls: ['field-content-box'] });
 
-      // Actions
+      // Actions cell
       const actions = row.createDiv({ cls: 'key-actions' });
 
-      // Copy full key
+      // Copy button
       new ButtonComponent(actions)
         .setIcon('copy')
         .setTooltip('Copy full key')
@@ -100,7 +124,7 @@ export class KeyListModal extends Modal {
           new Notice('Full key copied to clipboard', 2000);
         });
 
-      // Delete key
+      // Delete button
       new ButtonComponent(actions)
         .setIcon('trash')
         .setWarning()
@@ -109,16 +133,24 @@ export class KeyListModal extends Modal {
           new ConfirmationModal(
             this.app,
             `Delete key ${displayKey}?`,
-            async confirmed => {
+            async (confirmed) => {
               if (confirmed) {
+                // Remove and save
                 this.plugin.settings.keys = this.plugin.settings.keys.filter(
-                  k => !(k.noteKey === keyItem.noteKey && k.apiKey === keyItem.apiKey && k.filePath === keyItem.filePath)
+                  (k) =>
+                    !(
+                      k.noteKey === keyItem.noteKey &&
+                      k.apiKey === keyItem.apiKey &&
+                      k.filePath === keyItem.filePath
+                    )
                 );
                 if (this.plugin.settings.activeKey === keyItem.noteKey) {
                   this.plugin.settings.activeKey = undefined;
                 }
                 await this.plugin.saveSettings();
                 new Notice('Key deleted', 2000);
+
+                // Re-render list
                 await this.renderKeyListContent(container);
               } else {
                 new Notice('Deletion cancelled', 2000);

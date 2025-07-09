@@ -2,14 +2,14 @@ import { App, Plugin, Notice, TFile, MarkdownView, WorkspaceLeaf, WorkspaceSided
 
 // Utils
 import { stripPersonalNoteBlocks } from './utils/stripPersonalNotes';
-import { registerPersonalNotePostProcessor } from './utils/pnpp';
+// import { registerPersonalNotePostProcessor } from './utils/pnpp';
 import { updatePersonalNoteLocations } from './utils/updatePersonalNoteLocations';
 import { PluginSettingsTab } from './settings/plugin_setting_tab';
 
 // Views & Types
 import { CollaborationPanelView } from './views/CollaborationPanelView';
 import { PersonalNotesView } from './views/PersonalNotesView';
-import { COLLABORATION_VIEW_TYPE, PERSONAL_NOTES_VIEW_TYPE } from './constants/viewTypes';
+import { AWS_COLLABORATION_VIEW_TYPE, AWS_PERSONAL_NOTES_VIEW_TYPE } from './constants/viewTypes';
 import { createNote, fetchMaster, getOffers, pushOffer, resolveMaster, testWrite } from './utils/api';
 import { ReceivedPushConfirmation } from './settings/ReceivedPushConfirmation';
 import { ResolveConfirmation } from './settings/ResolveConfirmation';
@@ -84,8 +84,8 @@ export default class MyPlugin extends Plugin {
     this.addSettingTab(new PluginSettingsTab(this.app, this));
 
     // Register views
-    this.registerView(COLLABORATION_VIEW_TYPE, leaf => new CollaborationPanelView(leaf, this));
-    this.registerView(PERSONAL_NOTES_VIEW_TYPE, leaf => new PersonalNotesView(leaf, this));
+    this.registerView(AWS_COLLABORATION_VIEW_TYPE, leaf => new CollaborationPanelView(leaf, this));
+    this.registerView(AWS_PERSONAL_NOTES_VIEW_TYPE, leaf => new PersonalNotesView(leaf, this));
 
     // Ribbon icons
     this.addRibbonIcon('columns-3', 'Open Collaboration Panel', () =>
@@ -94,7 +94,7 @@ export default class MyPlugin extends Plugin {
     
     //  User-visible command (optional but nice)
     this.addCommand({
-      id: 'open-collab-panel',
+      id: 'aws-open-collab-panel',
       name: 'Open Collaboration Panel',
       callback: () => this.activateCollabView(),
     });
@@ -105,75 +105,75 @@ export default class MyPlugin extends Plugin {
         });
         
     // Personal notes processing
-    registerPersonalNotePostProcessor(this);
-    this.registerEvent(
-      this.app.vault.on('modify', (file) => {
-        if (file instanceof TFile) {
-          this.updatePersonalLocations(file);
-        }
-      })
-    );
+    // registerPersonalNotePostProcessor(this);
+    // this.registerEvent(
+    //   this.app.vault.on('modify', (file) => {
+    //     if (file instanceof TFile) {
+    //       this.updatePersonalLocations(file);
+    //     }
+    //   })
+    // );
     this.addCommand({
-      id: 'pull-master-note',
+      id: 'aws-pull-master-note',
       name: 'Pull master note from server',
       callback: () => this.pullMasterNote()
     });
     this.addCommand({
-      id: 'create-collab-note',
+      id: 'aws-create-collab-note',
       name: 'Create Collaboration Note',
       callback: () => this.createCollabNote()
     });
         
     this.addCommand({
-      id: 'push-offer',
+      id: 'aws-push-offer',
       name: 'Push Offer to Server',
       callback: () => this.pushOfferToServer()
     });
 
     this.addCommand({
-      id: 'make-current-master',
+      id: 'aws-make-current-master',
       name: 'Promote current note as master',
       callback: () => this.promoteCurrentNoteAsMaster()
     });
 
     this.addCommand({
-      id: 'import-collab-note',
+      id: 'aws-import-collab-note',
       name: 'Import Collaboration Note by Key',
       callback: () => this.openImportCollabModal()
     });
     
     this.addCommand({
-      id: 'activate-current-file-note',
+      id: 'aws-activate-current-file-note',
       name: 'Activate Collaboration Note for Current File',
       callback: () => this.activateCurrentFileNote()
     });
     
     this.addCommand({
-      id: 'clear-all-collab-keys',
+      id: 'aws-clear-all-collab-keys',
       name: 'Clear All Collaboration Keys',
       callback: () => this.clearAllCollabKeys()
     });  
 
       this.addCommand({
-        id: 'unbind-current-file-collab-key',
+        id: 'aws-unbind-current-file-collab-key',
         name: 'Unbind Collaboration Key from Current File',
         callback: () => this.unbindCurrentFileCollabKey()
       });
       
       this.addCommand({
-        id: 'resolve-master-note',
+        id: 'aws-resolve-master-note',
         name: 'Merge & Publish Master from Offers',
         callback: () => this.resolveMasterNote()
       });
       
       this.addCommand({
-        id: 'copy-active-note-key',
+        id: 'aws-copy-active-note-key',
         name: 'Copy Active Collaboration Note Key',
         callback: () => this.copyActiveNoteKey()
       });
 
       this.addCommand({
-        id: 'copy-active-api-key',
+        id: 'aws-copy-active-api-key',
         name: 'Copy API Key for Active Collaboration Note',
         callback: () => this.copyActiveApiKey()
       });
@@ -200,8 +200,8 @@ export default class MyPlugin extends Plugin {
 
   onunload() {
     console.log('[Plugin] Unloading collaboration plugin...');
-    this.app.workspace.detachLeavesOfType(COLLABORATION_VIEW_TYPE);
-    this.app.workspace.detachLeavesOfType(PERSONAL_NOTES_VIEW_TYPE);
+    this.app.workspace.detachLeavesOfType(AWS_COLLABORATION_VIEW_TYPE);
+    this.app.workspace.detachLeavesOfType(AWS_PERSONAL_NOTES_VIEW_TYPE);
   }
   async loadSettings() {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
@@ -683,7 +683,7 @@ public async clearAllCollabKeys(): Promise<void> {
 /** Ensure the Collaboration Panel exists on the right sidebar and reveal it. */
 async activateCollabView(): Promise<void> {
   // 1 reuse if it already exists 
-  let leaf = this.app.workspace.getLeavesOfType(COLLABORATION_VIEW_TYPE)[0];
+  let leaf = this.app.workspace.getLeavesOfType(AWS_COLLABORATION_VIEW_TYPE)[0];
 
   if (!leaf) {
     // 2 otherwise create one in the right dock
@@ -691,7 +691,7 @@ async activateCollabView(): Promise<void> {
     if (!leaf) {
       throw new Error('Failed to create or retrieve a workspace leaf.');
     }
-    await leaf.setViewState({ type: COLLABORATION_VIEW_TYPE, active: true });
+    await leaf.setViewState({ type: AWS_COLLABORATION_VIEW_TYPE, active: true });
   }
 
   // 3 bring it to the front
