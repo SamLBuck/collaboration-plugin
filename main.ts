@@ -462,7 +462,6 @@ export default class MyPlugin extends Plugin {
     });
 
 
-    this.addSettingTab(new PluginSettingsTab(this.app, this));
 
     // --- MODIFIED: Activate the Collaboration Panel AFTER layout is ready ---
     this.app.workspace.onLayoutReady(() => {
