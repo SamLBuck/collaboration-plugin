@@ -29,7 +29,7 @@ export class ReceivedPushConfirmation extends Modal {
         // Set wider modal dimensions
         this.modalEl.style.minWidth = "1200px";
     
-        contentEl.createEl("h2", { text: "Incoming Push Note" });
+        contentEl.createEl("h2", { text: "Incoming Master Note" });
         contentEl.createEl("p", { text: this.message });
     
         const container = contentEl.createDiv();
