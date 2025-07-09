@@ -241,14 +241,33 @@ export default class MyPlugin extends Plugin {
     });
 
 
+    this.registerView(COLLABORATION_VIEW_TYPE, leaf => new CollaborationPanelView(leaf, this));
+    this.registerView(KEY_LIST_VIEW_TYPE,       leaf => new KeyListView(leaf, this));
+    this.registerView(LINK_NOTE_VIEW_TYPE,      leaf => new LinkNoteView(leaf, this));
+    this.registerView(PERSONAL_NOTES_VIEW_TYPE, leaf => new PersonalNotesView(leaf, this));
+
+
     this.addCommand({
       id: 'open-collab-panel',      // <- this ID you can call programmatically
       name: 'Open Collaboration Panel',
       callback: () => this.activateView(COLLABORATION_VIEW_TYPE)
     });
 
-    await (this.app as any).commands.executeCommandById('open-collab-panel');
 
+    
+    this.app.workspace.onLayoutReady(() => {
+      // Activate your collab panel (this can call your existing activateView method)
+      this.activateView(COLLABORATION_VIEW_TYPE);
+    });
+
+
+
+    this.addRibbonIcon("columns-3", "Open Collaboration Panel", () =>
+      this.activateView(COLLABORATION_VIEW_TYPE)
+    );
+    this.addSettingTab(new PluginSettingsTab(this.app, this));
+    registerPersonalNotePostProcessor(this);
+    // …all your other commands and event registrations go here
 
 
 
@@ -339,27 +358,6 @@ export default class MyPlugin extends Plugin {
       },
     });
 
-    // Register all Collaboration Panel Views
-    this.registerView(
-      COLLABORATION_VIEW_TYPE,
-      (leaf) => new CollaborationPanelView(leaf, this)
-    );
-    this.registerView(
-      KEY_LIST_VIEW_TYPE,
-      (leaf) => new KeyListView(leaf, this)
-    );
-    this.registerView(
-      LINK_NOTE_VIEW_TYPE,
-      (leaf) => new LinkNoteView(leaf, this)
-    );
-    // --- NEW: Register the Personal Notes Panel View ---
-    this.registerView(
-      PERSONAL_NOTES_VIEW_TYPE,
-      (leaf) => new PersonalNotesView(leaf, this)
-    );
-    // --- END NEW ---
-
-
     this.addCommand({
       id: "manually start websocket",
       name: "Manually start websocket",
@@ -368,12 +366,6 @@ export default class MyPlugin extends Plugin {
         const key = "TestNote"; // Replace with your test note name (without `.md`)
         waitForWebSocketConnection("ws://localhost:3010", this);
       }
-    });
-
-    // Ribbon icon to open your Collaboration Panel
-    this.addRibbonIcon('columns-3', 'Open Collaboration Panel', () => {
-      console.log("Ribbon icon clicked! Calling activateView for Collaboration Panel")
-      this.activateView(COLLABORATION_VIEW_TYPE); // Open the main control panel
     });
 
     this.addRibbonIcon('file-user', 'Open Personal Notes Panel', () => {
@@ -435,7 +427,7 @@ export default class MyPlugin extends Plugin {
     });
 
     // --- Register Markdown Post Processor for rendering personal notes in Reading View
-    registerPersonalNotePostProcessor(this);
+    // registerPersonalNotePostProcessor(this);
     this.registerEvent(this.app.vault.on('modify', async (file) => {
       if (file instanceof TFile && file.extension === 'md') {
         if (this._debounceUpdateLocationsTimeout) {
@@ -651,15 +643,10 @@ export default class MyPlugin extends Plugin {
       targetLeaf = workspace.activeLeaf;
       console.log(`[ActivateView] Reusing active leaf in right sidebar for view type: ${viewType}`);
     }
-
-    // 4. If still no leaf, get a new leaf specifically for the right sidebar.
-    //    getRightLeaf(true) will create it if it's doesn't exist and ensures it's in the right sidebar.
     if (!targetLeaf) {
       console.log(`[ActivateView] No suitable leaf found or reused. Getting a new leaf for the right sidebar for view type: ${viewType}`);
       targetLeaf = workspace.getRightLeaf(false);
     }
-
-    // 5. Final check and set view state
     if (targetLeaf) {
       console.log(`[ActivateView] Setting view state for leaf. Parent: ${targetLeaf.parent?.constructor.name}`);
       await targetLeaf.setViewState({
@@ -673,8 +660,7 @@ export default class MyPlugin extends Plugin {
       new Notice(`Failed to open ${viewType} panel. Could not find or create a suitable pane.`, 6000);
     }
   }
-
-  // --- MODIFIED: restorePersonalNotesIntoFiles to be vault-wide and strip existing blocks ---
+  //restorePersonalNotesIntoFiles to be vault-wide and strip existing blocks ---
   // This version is more robust, handling all personal notes across the vault
   // and stripping existing blocks before re-inserting, which is crucial if notes are pulled.
   async restorePersonalNotesIntoFiles(): Promise<void> {

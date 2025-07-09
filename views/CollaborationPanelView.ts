@@ -128,9 +128,6 @@ export class CollaborationPanelView extends ItemView {
 
     private renderPanelContent(): void {
         this.contentEl.empty();
-
-        this.contentEl.createEl('h1', { text: `Control Panel` });
-        
         let displayNoteTypeName: string;
         switch (this.noteType) {
             case 'none':
