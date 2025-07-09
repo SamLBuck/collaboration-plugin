@@ -149,29 +149,35 @@ import {
           t.setPlaceholder('Suggest Current Note…').setValue(this.activeNoteFile?.basename || '');
         })
         .addButton((btn) =>
-          btn
-            .setButtonText('Generate')
-            .setCta()
-            .onClick(async () => {
-              const name = this.noteInput.getValue().trim();
-              if (!name) {
-                new Notice('Please enter a note name.', 4000);
-                return;
-              }
-              const file = this.app.vault.getAbstractFileByPath(`${name}.md`) as TFile;
-              if (!file) {
-                new Notice(`File "${name}" not found.`, 4000);
-                return;
-              }
-              const newKeyItem = await this.plugin.createCollabNoteWithFile(file);
-              if (!newKeyItem) return;
-              const noteName = newKeyItem.filePath.replace(/\.md$/, '');
-              const outKey = `${newKeyItem.noteKey}:${newKeyItem.apiKey}|${noteName}`;
-              new Notice(`New key: ${outKey}`, 8000);
-              await navigator.clipboard.writeText(outKey);
-              await this.renderPanelContent();
-            })
-        );
+            btn
+        .setButtonText('Generate')
+        .setCta()
+        .onClick(async () => {
+          const name = this.noteInput.getValue().trim();
+          // … validation …
+          if (!this.activeNoteFile) {
+            new Notice('No active note file found.', 3000);
+            return;
+          }
+          const newKeyItem = await this.plugin.createCollabNoteWithFile(this.activeNoteFile);
+          if (!newKeyItem) return;
+      
+          // **1**: point the panel at the newly-shared file
+          this.activeNoteFile = this.activeNoteFile;
+      
+          // **2**: mark ourselves as the owner
+          this.noteType = 'owner';
+      
+          // **3**: re-draw the entire view (now owner UI)
+          await this.renderPanelContent();
+      
+          // **4**: copy the key and notify
+          const noteName = newKeyItem.filePath.replace(/\.md$/, '');
+          const outKey = `${newKeyItem.noteKey}:${newKeyItem.apiKey}|${noteName}`;
+          await navigator.clipboard.writeText(outKey);
+          new Notice(`New key: ${outKey}`, 8000);
+        })
+              );
   
       new Setting(w)
         .setName('Pull a Shared Note')
