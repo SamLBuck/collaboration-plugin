@@ -12,7 +12,7 @@ export class NoteKeyModal extends Modal {
 	onOpen() {
 		const { contentEl } = this;
 		contentEl.empty();
-		contentEl.createEl('h2', { text: '🔑 Note Key' });
+		contentEl.createEl('h2', { text: 'Note Key' });
 		contentEl.createEl('p', {
 			text: this.noteKey,
 			attr: {

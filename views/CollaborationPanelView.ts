@@ -9,6 +9,7 @@ import { KEY_LIST_VIEW_TYPE } from './KeyListView';
 import { LINK_NOTE_VIEW_TYPE } from './LinkNoteView';
 import { parseKey } from '../utils/parse_key';
 import { pullNoteFromPeerNewNote, rewriteExistingNote } from '../utils/pull_note_command';
+import { NoteKeyModal } from '../settings/noteKeyModal.ts';
 
 // --- INLINED: ConfirmationModal class definition (consistent with other views) ---
 class ConfirmationModal extends Modal {
@@ -402,6 +403,18 @@ export class CollaborationPanelView extends ItemView {
                             new Notice('View Key copied to clipboard');
                         })
                 );
+
+            new Setting(this.contentEl)
+                  .setName('Display Note Key')
+                  .setDesc('Show your view key in a popup for easy sharing.')
+                  .addButton(button =>
+                      button
+                          .setButtonText('Show Note Key')
+                          .setCta()
+                          .onClick(() => {
+                              new NoteKeyModal(this.app, viewKey.ip).open();
+                          })
+                  );    
         }
         
         if (editKey) {
