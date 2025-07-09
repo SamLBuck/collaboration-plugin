@@ -384,3 +384,16 @@
     border-radius: 6px;
     color: var(--text-error);
 }
+
+.aws-collab-wrapper .setting-item {
+    display: flex;
+    flex-wrap: wrap;
+  }
+  
+  .aws-collab-wrapper .setting-item-control {
+    width: 100%;
+    margin-top: 0.5em;
+    display: flex;
+    justify-content: flex-start;
+  }
+  

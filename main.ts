@@ -98,7 +98,7 @@ export default class MyPlugin extends Plugin {
       name: 'Open Collaboration Panel',
       callback: () => this.activateCollabView(),
     });
-        this.addRibbonIcon('file-user', 'Open Personal Notes', () => this.activateView(PERSONAL_NOTES_VIEW_TYPE));
+        // this.addRibbonIcon('file-user', 'Open Personal Notes', () => this.activateView(PERSONAL_NOTES_VIEW_TYPE));
 
         this.app.workspace.onLayoutReady(() => {
           this.activateCollabView();
