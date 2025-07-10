@@ -287,7 +287,7 @@ import {
         .setDesc('Sends your changes to your friend')
         .addButton((btn) =>
           btn
-            .setButtonText('Send Note Changes')
+            .setButtonText('Offer')
             .setCta()
             .onClick(() => this.plugin.pushOfferToServer())
         );
@@ -297,7 +297,7 @@ import {
         .setDesc('Merge your version with your friend’s before sending')
         .addButton((btn) =>
           btn
-            .setButtonText('Resolve Conflicts')
+            .setButtonText('Resolve')
             .setCta()
             .onClick(async () => {
               await this.plugin.resolveMasterNote();
@@ -309,7 +309,7 @@ import {
   
       new Setting(w)
         .setName('Get Note Changes')
-        .setDesc("Pull your friend's newest version")
+        .setDesc("Pull Master")
         .addButton((btn) =>
           btn
             .setButtonText('Get Note Changes')
@@ -319,7 +319,7 @@ import {
   
       new Setting(w)
         .setName('Stop Collaboration')
-        .setDesc('Remove the collaboration key for this note')
+        .setDesc('Unlink')
         .addButton((btn) =>
           btn
             .setButtonText('Stop Collaboration')

@@ -86,6 +86,16 @@ export class ResolveConfirmation extends Modal {
       .addButton((b) =>
         b.setButtonText('Skip Offer').onClick(() => this.nextOrFinish())
       )
+      .addButton(b =>
+        b
+          .setButtonText('Accept Offer')
+          .setCta()  // setCta() styles it as a primary button
+          // you could also chain `.setWarning()` if you want it styled differently
+          .onClick(() => {
+            this.currentContent = incTA.value;   // pull in the incoming text
+            this.nextOrFinish();                 // advance to the next offer
+          })
+      )
       .addButton((b) =>
         b
           .setButtonText('Update Master')
