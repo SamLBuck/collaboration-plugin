@@ -49,6 +49,8 @@ export class ReceivedPushConfirmation extends Modal {
         currentTextarea.style.width = "100%";
         currentTextarea.style.height = "400px";
         currentTextarea.style.whiteSpace = "pre-wrap";
+        currentTextarea.setAttribute("wrap", "off");      // ← preserve blank lines exactly
+
         
         this.incomingBoxEl = container.createDiv();
         const incomingBox = this.incomingBoxEl;
@@ -64,6 +66,8 @@ export class ReceivedPushConfirmation extends Modal {
         incomingTextarea.style.width = "100%";
         incomingTextarea.style.height = "400px";
         incomingTextarea.style.whiteSpace = "pre-wrap";
+        incomingTextarea.setAttribute("wrap", "off");      // ← preserve blank lines exactly
+
             
 new Setting(contentEl)
 	.addButton((btn) =>

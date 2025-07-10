@@ -132,17 +132,6 @@ export class KeyListModal extends Modal {
                         }
                     });
                 
-                new ButtonComponent(actionsDiv)
-                    .setIcon('file-text')
-                    .setTooltip('Open Associated Note')
-                    .onClick(async () => {
-                        const file = this.app.vault.getMarkdownFiles().find(f => f.basename === keyItem.note);
-                        if (file) {
-                            this.app.workspace.openLinkText(file.path, '');
-                        } else {
-                            new Notice(`Note '${keyItem.note}' not found in your vault.`);
-                        }
-                    });
             });
         }
     }

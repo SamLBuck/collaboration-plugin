@@ -98,7 +98,7 @@ export function registerPersonalNotePostProcessor(plugin: MyPlugin) {
             // Parse the source content of the code block to extract the UUID
             const lines = source.split('\n');
             if (lines.length > 0) {
-                const firstLine = lines[0].trim();
+                const firstLine = lines[0];
                 const idRegex = /^id:([a-f0-9-]+)$/i; // Regex to find "id:UUID"
                 const match = firstLine.match(idRegex);
 
@@ -138,7 +138,7 @@ if (!personalNote) {
 		const match = fileContent.match(blockRegex);
 
 		if (match) {
-			const blockContent = match[1].trim();
+			const blockContent = match[1];
 			const rebuiltNote: PersonalNote = {
 				id: noteId,
 				targetFilePath: ctx.sourcePath,
